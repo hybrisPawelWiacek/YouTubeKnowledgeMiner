@@ -1,9 +1,10 @@
 import { 
-  users, categories, videos, collections, collection_videos, saved_searches, 
+  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations,
   type User, type InsertUser, type InsertCategory, type Category, 
   type Video, type InsertVideo, type Collection, type InsertCollection,
   type CollectionVideo, type InsertCollectionVideo, type SavedSearch,
-  type InsertSavedSearch, type SearchParams
+  type InsertSavedSearch, type SearchParams, type QAConversation, type InsertQAConversation,
+  type QAMessage, type QAQuestion
 } from "@shared/schema";
 
 export interface IStorage {
@@ -44,6 +45,14 @@ export interface IStorage {
   getSavedSearchesByUserId(userId: number): Promise<SavedSearch[]>;
   createSavedSearch(search: InsertSavedSearch): Promise<SavedSearch>;
   deleteSavedSearch(id: number): Promise<boolean>;
+  
+  // Q&A Conversations methods
+  getQAConversation(id: number): Promise<QAConversation | undefined>;
+  getQAConversationsByVideoId(videoId: number): Promise<QAConversation[]>;
+  getQAConversationsByUserId(userId: number): Promise<QAConversation[]>;
+  createQAConversation(conversation: InsertQAConversation): Promise<QAConversation>;
+  updateQAConversation(id: number, messages: QAMessage[]): Promise<QAConversation | undefined>;
+  deleteQAConversation(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -53,11 +62,13 @@ export class MemStorage implements IStorage {
   private collections: Map<number, Collection>;
   private collectionVideos: Map<string, CollectionVideo>;
   private savedSearches: Map<number, SavedSearch>;
+  private qaConversations: Map<number, QAConversation>;
   private userIdCounter: number;
   private categoryIdCounter: number;
   private videoIdCounter: number;
   private collectionIdCounter: number;
   private savedSearchIdCounter: number;
+  private qaConversationIdCounter: number;
 
   constructor() {
     this.users = new Map();
@@ -66,11 +77,13 @@ export class MemStorage implements IStorage {
     this.collections = new Map();
     this.collectionVideos = new Map();
     this.savedSearches = new Map();
+    this.qaConversations = new Map();
     this.userIdCounter = 1;
     this.categoryIdCounter = 1;
     this.videoIdCounter = 1;
     this.collectionIdCounter = 1;
     this.savedSearchIdCounter = 1;
+    this.qaConversationIdCounter = 1;
   }
 
   // User methods

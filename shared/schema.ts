@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -69,6 +69,17 @@ export const saved_searches = pgTable("saved_searches", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Q&A conversations for videos
+export const qa_conversations = pgTable("qa_conversations", {
+  id: serial("id").primaryKey(),
+  video_id: integer("video_id").references(() => videos.id).notNull(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  messages: jsonb("messages").notNull(), // Array of {role: 'user'|'assistant', content: string}
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -96,6 +107,12 @@ export const insertCollectionVideoSchema = createInsertSchema(collection_videos)
 export const insertSavedSearchSchema = createInsertSchema(saved_searches).omit({
   id: true,
   created_at: true,
+});
+
+export const insertQAConversationSchema = createInsertSchema(qa_conversations).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
 });
 
 // YouTube API related schemas
@@ -134,6 +151,20 @@ export const searchParamsSchema = z.object({
   is_favorite: z.boolean().optional(),
 });
 
+// Q&A Message schema
+export const qaMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+  timestamp: z.date().optional(),
+});
+
+// Q&A Request schema
+export const qaQuestionSchema = z.object({
+  video_id: z.number(),
+  question: z.string().min(3),
+  conversation_id: z.number().optional(),
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
@@ -147,6 +178,10 @@ export type Video = typeof videos.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type CollectionVideo = typeof collection_videos.$inferSelect;
 export type SavedSearch = typeof saved_searches.$inferSelect;
+export type QAConversation = typeof qa_conversations.$inferSelect;
+export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
+export type QAMessage = z.infer<typeof qaMessageSchema>;
+export type QAQuestion = z.infer<typeof qaQuestionSchema>;
 export type YoutubeUrlRequest = z.infer<typeof youtubeUrlSchema>;
 export type VideoMetadataRequest = z.infer<typeof videoMetadataSchema>;
 export type SearchParams = z.infer<typeof searchParamsSchema>;
