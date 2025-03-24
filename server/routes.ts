@@ -636,8 +636,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real app, get user_id from session
       const userId = 1; // This would come from session
       
+      console.log("Creating Q&A conversation with body:", req.body);
+      
       // Validate with schema
       const validatedData = insertQAConversationSchema.parse(req.body);
+      
+      console.log("Validated data:", validatedData);
       
       // Create the conversation
       const conversation = await dbStorage.createQAConversation({
