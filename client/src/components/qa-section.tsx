@@ -54,11 +54,16 @@ export function QASection({ videoId }: QASectionProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch conversations for this video
-  const { data, isLoading: isLoadingConversations } = useQuery({
+  const { data, isLoading: isLoadingConversations } = useQuery<Conversation[]>({
     queryKey: ['/api/videos', videoId, 'qa'],
     queryFn: async () => {
-      const result = await apiRequest('GET', `/api/videos/${videoId}/qa`);
-      return Array.isArray(result) ? result : [];
+      try {
+        const result = await apiRequest('GET', `/api/videos/${videoId}/qa`);
+        return Array.isArray(result) ? result : [];
+      } catch (error) {
+        console.error("Error fetching conversations:", error);
+        return [];
+      }
     },
   });
   
@@ -66,31 +71,80 @@ export function QASection({ videoId }: QASectionProps) {
   const conversations: Conversation[] = Array.isArray(data) ? data : [];
 
   // Fetch current conversation if one is active
-  const { data: conversationData, isLoading: isLoadingConversation } = useQuery({
+  const { data: conversationData, isLoading: isLoadingConversation } = useQuery<Conversation>({
     queryKey: ['/api/qa', activeConversation],
     queryFn: async () => {
-      if (activeConversation === null) return { messages: [] };
+      if (activeConversation === null) return { 
+        id: 0,
+        title: '',
+        video_id: videoId,
+        user_id: 0,
+        messages: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
       try {
         const result = await apiRequest('GET', `/api/qa/${activeConversation}`);
         // Ensure the result is an object with a messages array
         if (result && typeof result === 'object') {
-          // Check if messages exists and is an array, otherwise use empty array
-          const messages = result.messages && Array.isArray(result.messages) ? result.messages : [];
-          return { ...result, messages };
+          // Create a properly typed conversation object with a safe messages array
+          const safeResult = result as Partial<Conversation>;
+          const messages = safeResult.messages && Array.isArray(safeResult.messages) 
+            ? safeResult.messages 
+            : [];
+            
+          return {
+            id: typeof safeResult.id === 'number' ? safeResult.id : 0,
+            title: safeResult.title || '',
+            video_id: typeof safeResult.video_id === 'number' ? safeResult.video_id : videoId,
+            user_id: typeof safeResult.user_id === 'number' ? safeResult.user_id : 0,
+            messages: messages,
+            created_at: safeResult.created_at || new Date().toISOString(),
+            updated_at: safeResult.updated_at || new Date().toISOString()
+          };
         }
-        return { messages: [] };
+        
+        // Return a default conversation if result is not valid
+        return { 
+          id: 0,
+          title: '',
+          video_id: videoId,
+          user_id: 0,
+          messages: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       } catch (error) {
         console.error("Error fetching conversation:", error);
-        return { messages: [] };
+        // Return a default conversation on error
+        return { 
+          id: 0,
+          title: '',
+          video_id: videoId,
+          user_id: 0,
+          messages: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       }
     },
     enabled: activeConversation !== null,
   });
   
   // Ensure currentConversation is properly initialized with default values
-  const currentConversation = conversationData || { messages: [] };
+  const currentConversation: Conversation = conversationData || { 
+    id: 0,
+    title: '',
+    video_id: videoId,
+    user_id: 0,
+    messages: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  
   // Ensure messages is always an array
-  const messages = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
+  const messages: Message[] = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
 
   // Mutation to create a new conversation
   const createConversationMutation = useMutation({
