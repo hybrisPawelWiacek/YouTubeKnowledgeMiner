@@ -5,6 +5,11 @@ import { log } from '../vite';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 
+// Log whether we have credentials (without exposing the values)
+console.log(`Supabase URL exists: ${Boolean(SUPABASE_URL)}`);
+console.log(`Supabase Key exists: ${Boolean(SUPABASE_KEY)}`);
+console.log(`Environment vars available: ${Object.keys(process.env).filter(k => !k.includes('KEY') && !k.includes('SECRET')).join(', ')}`);
+
 // Create Supabase client
 export const supabase = SUPABASE_URL && SUPABASE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_KEY)

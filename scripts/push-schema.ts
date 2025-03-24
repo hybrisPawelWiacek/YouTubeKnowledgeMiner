@@ -20,6 +20,14 @@ async function pushSchema() {
     await db.query.users.findMany();
     await db.query.categories.findMany();
     await db.query.videos.findMany();
+    await db.query.collections.findMany();
+    await db.query.collection_videos.findMany();
+    await db.query.saved_searches.findMany();
+    await db.query.qa_conversations.findMany();
+    
+    // Create new embedding-related tables
+    await db.query.embeddings.findMany();
+    await db.query.search_history.findMany();
     
     console.log('Schema pushed successfully!');
   } catch (error) {

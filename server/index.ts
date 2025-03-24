@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+// Import and immediately configure environment variables
+import { config } from "dotenv";
+config();
 
 const app = express();
 // Parse JSON and URL-encoded bodies
