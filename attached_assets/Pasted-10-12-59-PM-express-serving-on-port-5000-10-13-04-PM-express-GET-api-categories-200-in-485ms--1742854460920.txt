@@ -1,0 +1,103 @@
+10:12:59 PM [express] serving on port 5000
+10:13:04 PM [express] GET /api/categories 200 in 485ms :: [{"id":2,"name":"Educational","user_id":1}]
+Error fetching videos: error: column "is_favorite" does not exist
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/node_modules/src/node-postgres/session.ts:104:19)
+    at async DatabaseStorage.searchVideos (/home/runner/workspace/server/database-storage.ts:136:12)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:191:24) {
+  length: 112,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '200',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3722',
+  routine: 'errorMissingColumn'
+}
+10:13:04 PM [express] GET /api/videos 500 in 536ms :: {"message":"Failed to fetch videos"}
+Error fetching collections: error: relation "collections" does not exist
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/node_modules/src/node-postgres/session.ts:104:19)
+    at async DatabaseStorage.getCollectionsByUserId (/home/runner/workspace/server/database-storage.ts:189:12)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:373:27) {
+  length: 110,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '66',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+10:13:04 PM [express] GET /api/collections 500 in 510ms :: {"message":"Failed to fetch collections"}
+Error fetching videos: error: column "is_favorite" does not exist
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/node_modules/src/node-postgres/session.ts:104:19)
+    at async DatabaseStorage.searchVideos (/home/runner/workspace/server/database-storage.ts:136:12)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:191:24) {
+  length: 112,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '200',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3722',
+  routine: 'errorMissingColumn'
+}
+10:13:07 PM [express] GET /api/videos 500 in 65ms :: {"message":"Failed to fetch videos"}
+Error fetching collections: error: relation "collections" does not exist
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/node_modules/src/node-postgres/session.ts:104:19)
+    at async DatabaseStorage.getCollectionsByUserId (/home/runner/workspace/server/database-storage.ts:189:12)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:373:27) {
+  length: 110,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '66',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+10:13:08 PM [express] GET /api/collections 500 in 465ms :: {"message":"Failed to fetch collections"}
+10:13:08 PM [express] GET /api/categories 304 in 464ms :: [{"id":2,"name":"Educational","user_id":1}]
