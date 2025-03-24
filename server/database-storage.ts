@@ -2,8 +2,8 @@ import { eq, and, or, like, ilike, sql, desc, asc, inArray } from 'drizzle-orm';
 import { 
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
-  SavedSearch, InsertSavedSearch, SearchParams, 
-  users, categories, videos, collections, collection_videos, saved_searches
+  SavedSearch, InsertSavedSearch, SearchParams, QAConversation, InsertQAConversation,
+  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations
 } from '@shared/schema';
 import { db } from './db';
 import { IStorage } from './storage';

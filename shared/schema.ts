@@ -75,7 +75,7 @@ export const qa_conversations = pgTable("qa_conversations", {
   video_id: integer("video_id").references(() => videos.id).notNull(),
   user_id: integer("user_id").references(() => users.id).notNull(),
   title: text("title").notNull(),
-  messages: jsonb("messages").notNull(), // Array of {role: 'user'|'assistant', content: string}
+  messages: jsonb("messages").notNull().default([]), // Array of {role: 'user'|'assistant', content: string}
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });

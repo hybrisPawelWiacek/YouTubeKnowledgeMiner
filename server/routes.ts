@@ -648,7 +648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         video_id: videoId,
         user_id: userId,
-        messages: []
+        messages: validatedData.messages || []
       });
       
       return res.status(201).json(conversation);
