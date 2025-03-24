@@ -1,0 +1,62 @@
+# YouTube Buddy App - Phase 1: Setup & Transcription Flow
+
+## Project Overview
+I'm building a YouTube video library and summary application called "YouTube Buddy" with a dark-themed UI. For this first phase, I need to establish the core infrastructure and implement the basic functionality for adding videos and generating transcripts.
+
+## Phase 1 Technical Requirements
+- Frontend: React with responsive design (mobile, tablet, desktop)
+- Backend: Node.js with Express
+- Database: Supabase setup and configuration
+- Authentication: Basic Supabase Auth implementation
+- API Integration: 
+  - YouTube Data API for video metadata
+  - YouTube Transcript API (https://github.com/jdepoix/youtube-transcript-api)
+
+## Phase 1 Features to Implement
+
+### 1. Project Infrastructure
+- Set up React frontend with responsive dark theme
+- Configure Node.js/Express backend
+- Establish Supabase connection and database schema
+- Implement basic authentication flow
+
+### 2. Video Addition & Processing
+- Create input field for YouTube URL with "Analyze" button and Enter key support
+- Implement YouTube Data API integration to fetch:
+  - Video title, channel name, duration
+  - Thumbnail image
+  - Video publish date
+- Integrate YouTube Transcript API to extract video transcripts
+- Implement error handling for videos without transcripts
+- Display basic loading states during processing
+
+### 3. Video Storage
+- Store processed video data in Supabase including:
+  - YouTube video metadata (id, title, channel, etc.)
+  - Full transcript text
+  - User-added metadata (initially just timestamp)
+- Create simple form to add:
+  - User comments/notes about the video
+  - Category selection (dropdown + option to add new category)
+  - Video rating (1-5 stars)
+
+### 4. Basic UI Implementation
+- Header with app title and logo
+- Main video input area
+- Basic video display with thumbnail and metadata
+- Simple form for adding user metadata
+- Responsive layout for all screen sizes
+
+## Data Model (Initial Implementation)
+- Videos table
+- Categories table
+- Basic user authentication table
+
+Please provide a comprehensive implementation plan for this first phase, including:
+1. Project setup and folder structure
+2. Supabase schema design
+3. API integration approach
+4. Component architecture
+5. Responsive design strategy
+
+Focus on creating a solid foundation that can be expanded in later phases.
