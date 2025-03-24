@@ -1,0 +1,51 @@
+# YouTube Buddy App - Phase 1: Setup & Core Functionality
+
+## Project Overview
+I'm building a YouTube video library application called "YouTube Buddy" with a dark-themed UI. For this first phase, I need to establish the core infrastructure and implement the basic functionality for adding and processing videos.
+
+## Phase 1 Technical Requirements
+- Frontend: React with responsive design
+- Backend: Node.js with Express
+- Database: Supabase setup and configuration
+- Authentication: Basic Supabase Auth implementation
+- API Integration: 
+  - YouTube Data API for video metadata
+  - YouTube Transcript API (https://github.com/jdepoix/youtube-transcript-api)
+  - OpenAI API for initial summary generation
+
+## Phase 1 Features to Implement
+
+### 1. Project Infrastructure
+- Set up React frontend with responsive dark theme
+- Configure Node.js/Express backend
+- Establish Supabase connection and initial database schema
+- Implement basic authentication flow
+
+### 2. Video Processing Pipeline
+- Create input field for YouTube URL with "Analyze" button and Enter key support
+- Implement YouTube Data API integration to fetch video metadata
+- Integrate YouTube Transcript API to extract video transcripts
+- Connect with OpenAI API to generate initial 5-7 bullet point summaries
+- Implement error handling for each step of this pipeline
+
+### 3. Basic Video Storage & Display
+- Store processed video data in Supabase including:
+  - YouTube video metadata (id, title, channel, duration, etc.)
+  - Full transcript text
+  - Generated summary points
+  - User-added metadata (notes, category, rating)
+- Create simple form interface for adding user metadata
+- Implement basic video detail view with summary display
+
+### 4. User Interface Foundation
+- Create responsive layout framework that works on mobile, tablet, and desktop
+- Implement dark theme with consistent styling
+- Design basic navigation structure
+
+## Data Model (Initial Implementation)
+- Users table (for authentication)
+- Videos table (metadata, transcript, summary)
+- Categories table (for organizing videos)
+- User_Videos table (for user-specific metadata like notes and ratings)
+
+Please provide a detailed implementation plan focusing on creating a solid foundation with clean architecture that can be easily expanded in later phases.

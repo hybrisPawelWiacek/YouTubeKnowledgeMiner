@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { dbStorage } from "./database-storage";
 import { processYoutubeVideo, getYoutubeTranscript } from "./services/youtube";
 import { ZodError } from "zod";
 import { VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema } from "@shared/schema";
@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = 1; // This would come from session in real implementation
       
       // Save to database through storage interface
-      const video = await storage.insertVideo({
+      const video = await dbStorage.insertVideo({
         youtube_id: youtubeId,
         title,
         channel,
@@ -87,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real app, get user_id from session
       const userId = 1; // This would come from session
       
-      const categories = await storage.getCategoriesByUserId(userId);
+      const categories = await dbStorage.getCategoriesByUserId(userId);
       return res.status(200).json(categories);
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -106,7 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real app, get user_id from session
       const userId = 1; // This would come from session
       
-      const category = await storage.createCategory({
+      const category = await dbStorage.createCategory({
         name,
         user_id: userId
       });
