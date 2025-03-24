@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { dbStorage } from "./database-storage"; // Using database storage
 import { processYoutubeVideo, getYoutubeTranscript, generateTranscriptSummary } from "./services/youtube";
@@ -11,10 +11,12 @@ import {
 } from "@shared/schema";
 import { 
   processTranscriptEmbeddings, 
+  processSummaryEmbeddings,
+  processNotesEmbeddings,
   performSemanticSearch, 
   saveSearchHistory
 } from "./services/embeddings";
-import { initializeVectorFunctions } from "./services/supabase";
+import { initializeVectorFunctions, isSupabaseConfigured } from "./services/supabase";
 import { log } from "./vite";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -885,7 +887,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error checking database status:", error);
       res.status(500).json({ 
         database: 'error',
-        message: error.message
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Supabase status and config endpoint for frontend
+  app.get('/api/supabase-config', async (req, res) => {
+    try {
+      // Return Supabase initialization status
+      const status = {
+        initialized: isSupabaseConfigured(),
+        keyExists: Boolean(process.env.SUPABASE_KEY),
+        urlExists: Boolean(process.env.SUPABASE_URL),
+      };
+      
+      res.json(status);
+    } catch (error) {
+      console.error("Error checking Supabase status:", error);
+      res.status(500).json({ 
+        initialized: false,
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
