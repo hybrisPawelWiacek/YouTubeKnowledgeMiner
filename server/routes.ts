@@ -18,6 +18,18 @@ import { initializeVectorFunctions } from "./services/supabase";
 import { log } from "./vite";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize Supabase and vector functions
+  try {
+    log("Initializing Supabase vector functions...", "routes");
+    const initialized = await initializeVectorFunctions();
+    if (initialized) {
+      log("Supabase vector functions initialized successfully", "routes");
+    } else {
+      log("Failed to initialize Supabase vector functions", "routes");
+    }
+  } catch (error) {
+    log(`Error initializing Supabase: ${error}`, "routes");
+  }
   // User login route
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -175,6 +187,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata.collection_ids[0], 
           [video.id]
         );
+      }
+      
+      // Process transcript for embeddings if available
+      if (video.id && transcript) {
+        try {
+          log(`Processing transcript embeddings for video ${video.id}`, 'routes');
+          await processTranscriptEmbeddings(video.id, userId, transcript);
+        } catch (embeddingError) {
+          log(`Error processing transcript embeddings: ${embeddingError}`, 'routes');
+          // Non-critical, continue
+        }
+      }
+      
+      // Process summary for embeddings if available
+      if (video.id && summary && summary.length > 0) {
+        try {
+          log(`Processing summary embeddings for video ${video.id}`, 'routes');
+          await processSummaryEmbeddings(video.id, userId, summary);
+        } catch (embeddingError) {
+          log(`Error processing summary embeddings: ${embeddingError}`, 'routes');
+          // Non-critical, continue
+        }
+      }
+      
+      // Process notes for embeddings if available
+      if (video.id && metadata.notes) {
+        try {
+          log(`Processing notes embeddings for video ${video.id}`, 'routes');
+          await processNotesEmbeddings(video.id, userId, metadata.notes);
+        } catch (embeddingError) {
+          log(`Error processing notes embeddings: ${embeddingError}`, 'routes');
+          // Non-critical, continue
+        }
       }
       
       return res.status(201).json(video);
