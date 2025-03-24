@@ -93,9 +93,9 @@ export default function Auth() {
                   <TabsTrigger value="register">Register</TabsTrigger>
                 </TabsList>
               </div>
-              <CardTitle className="text-center">YouTube Buddy</CardTitle>
+              <CardTitle className="text-center">YouTubeKnowledgeMiner</CardTitle>
               <CardDescription className="text-center">
-                Your personal YouTube video library
+                Mine knowledge from your YouTube videos
               </CardDescription>
             </CardHeader>
             
