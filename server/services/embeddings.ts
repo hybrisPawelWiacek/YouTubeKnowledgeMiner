@@ -1,9 +1,9 @@
 import { db } from '../db';
 import { log } from '../vite';
 import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history } from '@shared/schema';
-import { supabase } from './supabase';
+import { calculateCosineSimilarity } from './supabase';
 import { chunkText, generateEmbeddingsBatch } from './openai';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 
 // Maximum number of text chunks to process in a single batch
 const MAX_BATCH_SIZE = 20;
@@ -173,84 +173,115 @@ export async function performSemanticSearch(
   similarity: number;
   metadata: any;
 }[]> {
-  if (!supabase) {
-    throw new Error('Supabase client not initialized');
-  }
-  
   try {
     // Generate embedding for the query
-    const queryEmbedding = await generateEmbeddingsBatch([query]);
-    if (!queryEmbedding || queryEmbedding.length === 0) {
+    const queryEmbeddingsArray = await generateEmbeddingsBatch([query]);
+    if (!queryEmbeddingsArray || queryEmbeddingsArray.length === 0) {
       throw new Error('Failed to generate embedding for query');
     }
+    const queryEmbedding = queryEmbeddingsArray[0];
     
-    // Since we're storing the embeddings as jsonb, we need to use supabase directly
-    // for vector similarity search instead of drizzle-orm
-    let query = supabase
-      .from('embeddings')
-      .select(`
-        id,
-        video_id,
-        content,
-        content_type,
-        metadata,
-        videos(id, title, category_id, is_favorite)
-      `)
-      .eq('user_id', userId)
-      .order('metadata->similarity', { ascending: false })
-      .limit(limit);
+    // Execute the initial search
+    let conditions = [eq(embeddings.user_id, userId)];
     
-    // Apply content type filter if specified
-    if (filters.contentTypes && filters.contentTypes.length > 0) {
-      query = query.in('content_type', filters.contentTypes);
-    }
-    
-    // Apply video filter if specified
     if (filters.videoId) {
-      query = query.eq('video_id', filters.videoId);
+      conditions.push(eq(embeddings.video_id, filters.videoId));
     }
     
-    // Need to filter post-query for category and favorite since these are in the videos table
-    const { data, error } = await query;
-    
-    if (error) {
-      log(`Error in semantic search: ${error.message}`, 'embeddings');
-      throw error;
+    if (filters.contentTypes && filters.contentTypes.length > 0) {
+      conditions.push(inArray(embeddings.content_type, filters.contentTypes as any[]));
     }
     
-    // Apply additional filtering that couldn't be done in the query
-    let results = data;
+    // Get results from our database
+    const embeddingsResults = await db.query.embeddings.findMany({
+      where: and(...conditions),
+      limit: 100, // Get more than needed for post-filtering
+    });
     
+    if (!embeddingsResults || embeddingsResults.length === 0) {
+      return [];
+    }
+    
+    // Additional filtering for category and collection
+    let filteredResults = [...embeddingsResults];
+    
+    // If we're filtering by category, get videos with that category
     if (filters.categoryId) {
-      results = results.filter(r => r.videos?.category_id === filters.categoryId);
-    }
-    
-    if (filters.isFavorite !== undefined) {
-      results = results.filter(r => r.videos?.is_favorite === filters.isFavorite);
-    }
-    
-    // For collection filtering, we need a separate query
-    if (filters.collectionId) {
-      const { data: collectionVideos } = await supabase
-        .from('collection_videos')
-        .select('video_id')
-        .eq('collection_id', filters.collectionId);
+      const videosInCategory = await db.query.videos.findMany({
+        where: eq(embeddings.user_id, userId),
+        columns: {
+          id: true
+        },
+        with: {
+          category: true
+        }
+      });
       
-      if (collectionVideos) {
-        const collectionVideoIds = collectionVideos.map(cv => cv.video_id);
-        results = results.filter(r => collectionVideoIds.includes(r.video_id));
-      }
+      const videoIdsInCategory = videosInCategory
+        .filter(v => v.category?.id === filters.categoryId)
+        .map(v => v.id);
+      
+      filteredResults = filteredResults.filter(r => videoIdsInCategory.includes(r.video_id));
     }
     
-    // Map results to the expected format
-    return results.map(r => ({
-      id: r.id,
-      video_id: r.video_id,
-      content: r.content,
-      content_type: r.content_type as typeof contentTypeEnum.enumValues[number],
-      similarity: r.metadata?.similarity || 0,
-      metadata: r.metadata || {},
-    }));
+    // If we're filtering by collection, get videos in that collection
+    if (filters.collectionId) {
+      const videoIdsInCollection = await db.query.collection_videos.findMany({
+        where: eq(embeddings.user_id, userId),
+        columns: {
+          video_id: true
+        }
+      });
+      
+      const collectionVideoIds = videoIdsInCollection.map(v => v.video_id);
+      filteredResults = filteredResults.filter(r => collectionVideoIds.includes(r.video_id));
+    }
+    
+    // If we're filtering by favorite status, get favorite videos
+    if (filters.isFavorite) {
+      const favoriteVideos = await db.query.videos.findMany({
+        where: and(
+          eq(embeddings.user_id, userId),
+          eq(embeddings.user_id, filters.isFavorite)
+        ),
+        columns: {
+          id: true
+        }
+      });
+      
+      const favoriteVideoIds = favoriteVideos.map(v => v.id);
+      filteredResults = filteredResults.filter(r => favoriteVideoIds.includes(r.video_id));
+    }
+    
+    // Calculate similarity for each embedding
+    const resultsWithSimilarity = filteredResults.map(item => {
+      const embedding = item.embedding as unknown as number[];
+      const similarity = calculateCosineSimilarity(queryEmbedding, embedding);
+      
+      // Create metadata including similarity
+      const updatedMetadata = {
+        ...(item.metadata as any || {}),
+        similarity
+      };
+      
+      return {
+        id: item.id,
+        video_id: item.video_id,
+        content: item.content,
+        content_type: item.content_type,
+        similarity,
+        metadata: updatedMetadata
+      };
+    });
+    
+    // Sort by similarity (highest first)
+    resultsWithSimilarity.sort((a, b) => b.similarity - a.similarity);
+    
+    // Apply similarity threshold and return top results
+    const threshold = 0.5;
+    return resultsWithSimilarity
+      .filter(item => item.similarity >= threshold)
+      .slice(0, limit);
     
   } catch (error) {
     log(`Error in semantic search: ${error}`, 'embeddings');

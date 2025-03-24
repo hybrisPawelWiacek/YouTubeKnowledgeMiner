@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { log } from '../vite';
+import { db } from '../db';
+import { embeddings } from '@shared/schema';
 
 // Supabase credentials from environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -21,41 +23,31 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Initialize pgvector extension and tables in Supabase
+ * Calculate cosine similarity between two vectors
  */
-export async function initializeSupabaseVector() {
-  if (!supabase) {
-    log('Supabase credentials not found in environment variables', 'supabase');
-    return false;
+export function calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length) return 0;
+  
+  let dotProduct = 0;
+  let magnitudeA = 0;
+  let magnitudeB = 0;
+  
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    magnitudeA += vecA[i] * vecA[i];
+    magnitudeB += vecB[i] * vecB[i];
   }
   
-  try {
-    // First, enable the pgvector extension on the database
-    const { error: extensionError } = await supabase.rpc('enable_pgvector');
-    
-    if (extensionError) {
-      // If the extension is already enabled, this might fail but that's ok
-      log(`Warning during pgvector initialization: ${extensionError.message}`, 'supabase');
-    }
-    
-    // Create embeddings index for faster similarity search
-    const { error: indexError } = await supabase.rpc('create_embedding_index');
-    
-    if (indexError) {
-      log(`Error creating embedding index: ${indexError.message}`, 'supabase');
-      return false;
-    }
-    
-    log('Supabase pgvector successfully initialized', 'supabase');
-    return true;
-  } catch (error) {
-    log(`Error initializing Supabase pgvector: ${error}`, 'supabase');
-    return false;
-  }
+  magnitudeA = Math.sqrt(magnitudeA);
+  magnitudeB = Math.sqrt(magnitudeB);
+  
+  if (magnitudeA === 0 || magnitudeB === 0) return 0;
+  
+  return dotProduct / (magnitudeA * magnitudeB);
 }
 
 /**
- * Search for embeddings by similarity to a query vector
+ * Search for embeddings by similarity to a query vector using in-memory calculation
  * @param queryEmbedding Query vector to compare against
  * @param filters Additional filters to apply
  * @param limit Maximum number of results to return
@@ -64,107 +56,63 @@ export async function initializeSupabaseVector() {
 export async function similaritySearch(
   queryEmbedding: number[],
   filters: {
-    userId?: number;
+    userId: number;
     contentTypes?: string[];
     videoId?: number;
-  } = {},
+  },
   limit: number = 10
 ) {
-  if (!supabase) {
-    throw new Error('Supabase client not initialized');
-  }
-  
   try {
-    // Start building the query
-    let query = supabase
-      .from('embeddings')
-      .select(`
-        id,
-        video_id,
-        content,
-        content_type,
-        metadata,
-        user_id
-      `)
-      .limit(limit);
+    // Get embeddings from our PostgreSQL database
+    const embeddingsResult = await db.query.embeddings.findMany({
+      where: (eb, { eq, and, inArray }) => {
+        const conditions = [eq(eb.user_id, filters.userId)];
+        
+        if (filters.videoId) {
+          conditions.push(eq(eb.video_id, filters.videoId));
+        }
+        
+        if (filters.contentTypes && filters.contentTypes.length > 0) {
+          conditions.push(inArray(eb.content_type, filters.contentTypes as any[]));
+        }
+        
+        return and(...conditions);
+      },
+      limit: 100  // Get more than we need for better similarity selection
+    });
     
-    // Apply user filter if specified (almost always provided)
-    if (filters.userId) {
-      query = query.eq('user_id', filters.userId);
-    }
-    
-    // Apply content type filter if specified
-    if (filters.contentTypes && filters.contentTypes.length > 0) {
-      query = query.in('content_type', filters.contentTypes);
-    }
-    
-    // Apply video filter if specified
-    if (filters.videoId) {
-      query = query.eq('video_id', filters.videoId);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      log(`Error in similarity search: ${error.message}`, 'supabase');
-      throw error;
-    }
-    
-    if (!data || data.length === 0) {
+    if (!embeddingsResult || embeddingsResult.length === 0) {
       return [];
     }
     
-    // Calculate similarity scores client-side
-    // This is less efficient than doing it in the database but doesn't require custom SQL functions
-    const resultsWithSimilarity = data.map((item: any) => {
-      // Calculate cosine similarity if we have embeddings
-      let similarity = 0;
+    // Calculate similarity for each embedding
+    const resultsWithSimilarity = embeddingsResult.map(item => {
+      const embedding = item.embedding as unknown as number[];
+      const similarity = calculateCosineSimilarity(queryEmbedding, embedding);
       
-      if (item.embedding && Array.isArray(item.embedding) && queryEmbedding.length === item.embedding.length) {
-        // Cosine similarity calculation
-        let dotProduct = 0;
-        let magnitudeA = 0;
-        let magnitudeB = 0;
-        
-        for (let i = 0; i < queryEmbedding.length; i++) {
-          dotProduct += queryEmbedding[i] * item.embedding[i];
-          magnitudeA += queryEmbedding[i] * queryEmbedding[i];
-          magnitudeB += item.embedding[i] * item.embedding[i];
-        }
-        
-        magnitudeA = Math.sqrt(magnitudeA);
-        magnitudeB = Math.sqrt(magnitudeB);
-        
-        if (magnitudeA > 0 && magnitudeB > 0) {
-          similarity = dotProduct / (magnitudeA * magnitudeB);
-        }
-      }
-      
-      // Add similarity to metadata for sorting
-      if (!item.metadata) {
-        item.metadata = {};
-      }
-      item.metadata.similarity = similarity;
+      // Include similarity in metadata for reference
+      const updatedMetadata = {
+        ...(item.metadata as any || {}),
+        similarity
+      };
       
       return {
         id: item.id,
         video_id: item.video_id,
         content: item.content,
         content_type: item.content_type,
-        similarity: similarity,
-        metadata: item.metadata || {}
+        similarity,
+        metadata: updatedMetadata
       };
     });
     
-    // Sort by similarity score (highest first)
-    resultsWithSimilarity.sort((a, b) => 
-      (b.similarity || 0) - (a.similarity || 0)
-    );
+    // Sort by similarity (highest first)
+    resultsWithSimilarity.sort((a, b) => b.similarity - a.similarity);
     
-    // Apply minimum similarity threshold
+    // Apply similarity threshold and return top results
     const threshold = 0.5;
     return resultsWithSimilarity
-      .filter(item => (item.similarity || 0) >= threshold)
+      .filter(item => item.similarity >= threshold)
       .slice(0, limit);
     
   } catch (error) {
@@ -174,32 +122,28 @@ export async function similaritySearch(
 }
 
 /**
- * Initialize Supabase with required functions for vector search
- * This creates stored procedures in the database to handle vector operations
+ * Initialize connection and validate everything is ready for semantic search
  */
 export async function initializeVectorFunctions() {
-  if (!supabase) {
-    log('Supabase credentials not found in environment variables', 'supabase');
-    return false;
-  }
-  
   try {
-    // Check if JSONB columns can be used directly for the semantic search
-    const { data: testData, error: testError } = await supabase
-      .from('embeddings')
-      .select('id')
-      .limit(1);
-      
-    if (testError) {
-      log(`Error connecting to Supabase: ${testError.message}`, 'supabase');
-    } else {
-      log('Successfully connected to Supabase database', 'supabase');
+    // Try to access the embeddings table to confirm it exists
+    let tableExists = false;
+    try {
+      const result = await db.query.embeddings.findFirst();
+      tableExists = true;
+      log('Embeddings table found in the database', 'supabase');
+    } catch (err) {
+      log(`Error checking embeddings table: ${err}`, 'supabase');
+      tableExists = false;
     }
     
-    // Set up simple approach for semantic search without custom functions
-    // This uses the built-in PostgreSQL operators directly without needing pgvector extension
+    if (supabase) {
+      log('Supabase client initialized successfully', 'supabase');
+    } else {
+      log('Supabase not configured, but we can still use local similarity search', 'supabase');
+    }
     
-    log('Supabase connection is ready for semantic search operations', 'supabase');
+    log('Semantic search operations are ready', 'supabase');
     return true;
   } catch (error) {
     log(`Error initializing vector functions: ${error}`, 'supabase');
