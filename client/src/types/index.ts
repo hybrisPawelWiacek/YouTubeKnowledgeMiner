@@ -7,6 +7,7 @@ export interface YoutubeVideo {
   publishDate: string;
   url: string;
   transcript?: string;
+  summary?: string[];
   description?: string;
   tags?: string[];
   viewCount?: string;

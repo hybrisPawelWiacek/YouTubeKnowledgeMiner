@@ -1,6 +1,8 @@
 import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { generateSummary, isOpenAIConfigured } from './openai';
+import { log } from '../vite';
 
 // Get directory name
 const __filename = fileURLToPath(import.meta.url);
