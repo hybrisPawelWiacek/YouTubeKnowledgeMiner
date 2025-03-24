@@ -657,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: error.errors[0].message });
       }
       console.error("Error creating Q&A conversation:", error);
-      return res.status(500).json({ message: "Failed to create Q&A conversation" });
+      return res.status(500).json({ message: `Failed to create Q&A conversation: ${error}` });
     }
   });
   
@@ -686,10 +686,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Build the conversation history from existing messages
       const messages = conversation.messages || [];
-      const conversationHistory = messages.map(message => ({
+      const conversationHistory = Array.isArray(messages) ? messages.map((message: any) => ({
         role: message.role as 'user' | 'assistant',
         content: message.content
-      }));
+      })) : [];
       
       // Generate an answer using OpenAI
       const answer = await generateAnswer(
@@ -700,8 +700,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Add the new question and answer to the messages
-      const updatedMessages = [
+      const updatedMessages = Array.isArray(messages) ? [
         ...messages,
+        { role: 'user', content: question },
+        { role: 'assistant', content: answer }
+      ] : [
         { role: 'user', content: question },
         { role: 'assistant', content: answer }
       ];

@@ -312,6 +312,61 @@ export class DatabaseStorage implements IStorage {
     
     return result.length > 0;
   }
+
+  // Q&A Conversation methods
+  async getQAConversation(id: number): Promise<QAConversation | undefined> {
+    const result = await db
+      .select()
+      .from(qa_conversations)
+      .where(eq(qa_conversations.id, id));
+    
+    return result[0];
+  }
+
+  async getQAConversationsByVideoId(videoId: number): Promise<QAConversation[]> {
+    return await db
+      .select()
+      .from(qa_conversations)
+      .where(eq(qa_conversations.video_id, videoId));
+  }
+
+  async getQAConversationsByUserId(userId: number): Promise<QAConversation[]> {
+    return await db
+      .select()
+      .from(qa_conversations)
+      .where(eq(qa_conversations.user_id, userId));
+  }
+
+  async createQAConversation(conversation: InsertQAConversation): Promise<QAConversation> {
+    const result = await db
+      .insert(qa_conversations)
+      .values(conversation)
+      .returning();
+    
+    return result[0];
+  }
+
+  async updateQAConversation(id: number, messages: any[]): Promise<QAConversation | undefined> {
+    const result = await db
+      .update(qa_conversations)
+      .set({ 
+        messages,
+        updated_at: new Date() 
+      })
+      .where(eq(qa_conversations.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deleteQAConversation(id: number): Promise<boolean> {
+    const result = await db
+      .delete(qa_conversations)
+      .where(eq(qa_conversations.id, id))
+      .returning();
+    
+    return result.length > 0;
+  }
 }
 
 // Export an instance of the DatabaseStorage
