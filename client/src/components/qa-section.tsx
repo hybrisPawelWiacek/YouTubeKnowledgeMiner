@@ -83,7 +83,7 @@ export function QASection({ videoId }: QASectionProps) {
     mutationFn: (title: string) => apiRequest(
       'POST',
       `/api/videos/${videoId}/qa`,
-      { title, messages: [] }
+      { title, messages: [] } // Using 'messages' to match server schema
     ),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
