@@ -1,6 +1,4 @@
 import axios from 'axios';
-import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -53,49 +51,71 @@ export async function processYoutubeVideo(videoId: string) {
 // Function to get transcript from YouTube video
 export async function getYoutubeTranscript(videoId: string) {
   try {
-    // Create a temporary Python script to use youtube-transcript-api
-    const scriptPath = path.join(__dirname, 'temp_transcript_script.py');
-    const scriptContent = `
-import sys
-import json
-from youtube_transcript_api import YouTubeTranscriptApi
-
-try:
-    transcript_list = YouTubeTranscriptApi.get_transcript("${videoId}")
-    print(json.dumps(transcript_list))
-except Exception as e:
-    sys.stderr.write(str(e))
-    sys.exit(1)
-`;
+    // Direct fetch approach using the YouTube transcript endpoint
+    const response = await axios.get(`https://www.youtube.com/watch?v=${videoId}`);
+    const html = response.data;
     
-    writeFileSync(scriptPath, scriptContent);
+    // Extract the transcript data from the HTML
+    // This regex pattern looks for the captions track data in the YouTube page HTML
+    const regex = /"captionTracks":\[.*?"baseUrl":"([^"]+)"/;
+    const match = html.match(regex);
     
-    try {
-      // Execute the Python script
-      const output = execSync(`python ${scriptPath}`).toString();
-      
-      // Parse the transcript
-      const transcriptData = JSON.parse(output);
-      
-      // Format the transcript into a readable format with timestamps
-      const formattedTranscript = transcriptData.map((item: any) => {
-        const timestamp = formatTimestamp(item.start);
-        return `<p class="mb-3"><span class="text-gray-400">[${timestamp}]</span> ${item.text}</p>`;
-      }).join('');
-      
-      return formattedTranscript;
-    } finally {
-      // Clean up the temporary script
-      try {
-        unlinkSync(scriptPath);
-      } catch (err) {
-        console.error('Error deleting temporary script:', err);
-      }
+    if (!match || !match[1]) {
+      throw new Error('No captions found for this video');
     }
+    
+    // The URL needs to be decoded since it's HTML encoded in the source
+    const captionUrl = match[1].replace(/\\u0026/g, '&');
+    
+    // Fetch the actual transcript data
+    const transcriptResponse = await axios.get(captionUrl);
+    const transcriptData = transcriptResponse.data;
+    
+    // Parse the XML transcript
+    const transcriptItems = parseTranscriptXml(transcriptData);
+    
+    // Format the transcript into a readable format with timestamps
+    const formattedTranscript = transcriptItems.map(item => {
+      const timestamp = formatTimestamp(item.start);
+      return `<p class="mb-3"><span class="text-gray-400">[${timestamp}]</span> ${item.text}</p>`;
+    }).join('');
+    
+    return formattedTranscript;
   } catch (error) {
     console.error('Error fetching YouTube transcript:', error);
     throw new Error('Failed to fetch transcript');
   }
+}
+
+// Helper function to parse the XML transcript data
+function parseTranscriptXml(xmlData: string) {
+  // Simple XML parser for the transcript format
+  const transcriptItems = [];
+  const regex = /<text start="([\d.]+)" dur="([\d.]+)".*?>(.*?)<\/text>/g;
+  
+  let match;
+  while ((match = regex.exec(xmlData)) !== null) {
+    transcriptItems.push({
+      start: parseFloat(match[1]),
+      duration: parseFloat(match[2]),
+      text: decodeHtmlEntities(match[3])
+    });
+  }
+  
+  return transcriptItems;
+}
+
+// Helper function to decode HTML entities
+function decodeHtmlEntities(html: string): string {
+  const entities: Record<string, string> = {
+    '&lt;': '<',
+    '&gt;': '>',
+    '&amp;': '&',
+    '&quot;': '"',
+    '&#39;': "'"
+  };
+  
+  return html.replace(/&lt;|&gt;|&amp;|&quot;|&#39;/g, match => entities[match] || match);
 }
 
 // Helper function to format ISO 8601 duration to human-readable format
