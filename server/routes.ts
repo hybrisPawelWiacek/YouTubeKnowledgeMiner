@@ -7,8 +7,14 @@ import { ZodError } from "zod";
 import { 
   VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema, 
   insertCollectionSchema, insertSavedSearchSchema, searchParamsSchema, 
-  qaQuestionSchema, insertQAConversationSchema
+  qaQuestionSchema, insertQAConversationSchema, semanticSearchSchema
 } from "@shared/schema";
+import { 
+  processTranscriptEmbeddings, 
+  performSemanticSearch, 
+  saveSearchHistory
+} from "./services/embeddings";
+import { initializeVectorFunctions } from "./services/supabase";
 import { log } from "./vite";
 
 export async function registerRoutes(app: Express): Promise<Server> {

@@ -1,6 +1,34 @@
-import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// For pgvector, we'll use a simpler approach - we'll just use jsonb for now
+// and use Supabase's vector operations directly via SQL
+
+export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note']);
+
+// Table for storing text chunks and their vector embeddings
+export const embeddings = pgTable("embeddings", {
+  id: serial("id").primaryKey(),
+  video_id: integer("video_id").references(() => videos.id).notNull(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  content_type: contentTypeEnum("content_type").notNull(),
+  chunk_index: integer("chunk_index").notNull(), // Position in the original content
+  content: text("content").notNull(), // The actual text chunk
+  embedding: jsonb("embedding").notNull(), // Store OpenAI's embedding vectors as JSON array
+  metadata: jsonb("metadata"), // Additional metadata like timestamps, etc.
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Table to track search history
+export const search_history = pgTable("search_history", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  query: text("query").notNull(),
+  filter_params: jsonb("filter_params"),
+  results_count: integer("results_count"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -165,6 +193,30 @@ export const qaQuestionSchema = z.object({
   conversation_id: z.number().optional(),
 });
 
+// Semantic search schema
+export const semanticSearchSchema = z.object({
+  query: z.string().min(3),
+  filter: z.object({
+    content_types: z.array(z.enum(['transcript', 'summary', 'note'])).optional(),
+    video_id: z.number().optional(),
+    category_id: z.number().optional(),
+    collection_id: z.number().optional(),
+    is_favorite: z.boolean().optional(),
+  }).optional(),
+  limit: z.number().min(1).max(100).default(10),
+});
+
+// Insert schemas for new tables
+export const insertEmbeddingSchema = createInsertSchema(embeddings).omit({
+  id: true,
+  created_at: true,
+});
+
+export const insertSearchHistorySchema = createInsertSchema(search_history).omit({
+  id: true,
+  created_at: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
@@ -172,6 +224,8 @@ export type InsertVideo = z.infer<typeof insertVideoSchema>;
 export type InsertCollection = z.infer<typeof insertCollectionSchema>;
 export type InsertCollectionVideo = z.infer<typeof insertCollectionVideoSchema>;
 export type InsertSavedSearch = z.infer<typeof insertSavedSearchSchema>;
+export type InsertEmbedding = z.infer<typeof insertEmbeddingSchema>;
+export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Video = typeof videos.$inferSelect;
@@ -179,9 +233,12 @@ export type Collection = typeof collections.$inferSelect;
 export type CollectionVideo = typeof collection_videos.$inferSelect;
 export type SavedSearch = typeof saved_searches.$inferSelect;
 export type QAConversation = typeof qa_conversations.$inferSelect;
+export type Embedding = typeof embeddings.$inferSelect;
+export type SearchHistory = typeof search_history.$inferSelect;
 export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
 export type QAMessage = z.infer<typeof qaMessageSchema>;
 export type QAQuestion = z.infer<typeof qaQuestionSchema>;
 export type YoutubeUrlRequest = z.infer<typeof youtubeUrlSchema>;
 export type VideoMetadataRequest = z.infer<typeof videoMetadataSchema>;
 export type SearchParams = z.infer<typeof searchParamsSchema>;
+export type SemanticSearchParams = z.infer<typeof semanticSearchSchema>;

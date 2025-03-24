@@ -2,6 +2,10 @@ import { OpenAI } from 'openai';
 import { log } from '../vite';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const EMBEDDING_MODEL = 'text-embedding-ada-002'; // Default embedding model
+const EMBEDDING_DIMENSION = 1536; // Dimensionality of the embedding vectors
+const MAX_CHUNK_SIZE = 512; // Split text into chunks of this size for embeddings
+const CHUNK_OVERLAP = 50; // Overlap between consecutive chunks for context
 
 // Check if OpenAI API key is available
 export function isOpenAIConfigured(): boolean {
@@ -12,6 +16,79 @@ export function isOpenAIConfigured(): boolean {
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
+
+// Helper function to split text into chunks of appropriate size for embedding
+export function chunkText(text: string, maxLength = MAX_CHUNK_SIZE, overlap = CHUNK_OVERLAP): string[] {
+  if (!text) return [];
+  
+  // Simple split by sentences first (not perfect but works for most cases)
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const chunks: string[] = [];
+  let currentChunk = '';
+  
+  for (const sentence of sentences) {
+    // If adding this sentence would exceed max length, save current chunk and start a new one
+    if (currentChunk.length + sentence.length > maxLength && currentChunk.length > 0) {
+      chunks.push(currentChunk.trim());
+      // Start new chunk with overlap from previous chunk if possible
+      const words = currentChunk.split(' ');
+      if (words.length > overlap) {
+        currentChunk = words.slice(-overlap).join(' ') + ' ';
+      } else {
+        currentChunk = '';
+      }
+    }
+    
+    currentChunk += sentence + ' ';
+  }
+  
+  // Add the last chunk if it's not empty
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return chunks;
+}
+
+// Generate embeddings for a single text input
+export async function generateEmbedding(text: string): Promise<number[]> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('OpenAI API key not configured');
+  }
+  
+  try {
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: text.replace(/\n/g, ' '), // Replace newlines with spaces for better quality
+    });
+    
+    return response.data[0].embedding;
+  } catch (error) {
+    log(`Error generating embedding: ${error}`, 'openai');
+    throw error;
+  }
+}
+
+// Generate embeddings for multiple text inputs in batch
+export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+  if (!isOpenAIConfigured()) {
+    throw new Error('OpenAI API key not configured');
+  }
+  
+  if (texts.length === 0) return [];
+  
+  try {
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: texts.map(t => t.replace(/\n/g, ' ')),
+    });
+    
+    return response.data.map(item => item.embedding);
+  } catch (error) {
+    log(`Error generating embeddings batch: ${error}`, 'openai');
+    throw error;
+  }
+}
 
 /**
  * Generates a summary of a transcript using OpenAI
