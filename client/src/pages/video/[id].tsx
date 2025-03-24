@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { TranscriptSection } from "@/components/transcript-section";
 import { SummarySection } from "@/components/summary-section";
+import { QASection } from "@/components/qa-section";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Video, Category } from "@/types";
@@ -449,9 +450,10 @@ export default function VideoDetailPage() {
           {/* Tabs for transcript and summary */}
           <div className="mt-8">
             <Tabs defaultValue="summary" className="w-full">
-              <TabsList className="w-full grid grid-cols-2 mb-6">
+              <TabsList className="w-full grid grid-cols-3 mb-6">
                 <TabsTrigger value="summary">Summary</TabsTrigger>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                <TabsTrigger value="qa">Q&A</TabsTrigger>
               </TabsList>
               
               <Separator className="mb-6" />
@@ -479,6 +481,21 @@ export default function VideoDetailPage() {
                     <h3 className="text-xl font-medium mb-2">No Transcript Available</h3>
                     <p className="text-gray-400 max-w-xl mx-auto">
                       This video doesn't have a transcript available. Transcripts are extracted during the video processing stage.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="qa">
+                {video.transcript ? (
+                  <QASection videoId={video.id} />
+                ) : (
+                  <div className="text-center py-12">
+                    <Bookmark className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-medium mb-2">Q&A Not Available</h3>
+                    <p className="text-gray-400 max-w-xl mx-auto">
+                      This video doesn't have a transcript available, which is required for Q&A functionality.
+                      Transcripts are extracted during the video processing stage.
                     </p>
                   </div>
                 )}
