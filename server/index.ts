@@ -7,9 +7,10 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Set appropriate headers for API responses
+// Ensure API routes are not intercepted by Vite
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-API-Route', 'true'); // Add marker header for API routes
   next();
 });
 
@@ -44,8 +45,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Create a server first, then register the API routes
   const server = await registerRoutes(app);
 
+  // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -54,10 +57,23 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Special route to check the API status - for debugging
+  app.get('/api/status', (req, res) => {
+    res.json({ status: 'API is working' });
+  });
+
+  // Setup Vite in development after API routes
   if (app.get("env") === "development") {
+    // Add middleware to conditionally bypass Vite for API calls
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        // Skip Vite for API requests
+        res.setHeader('Content-Type', 'application/json');
+        return next('route');
+      }
+      next();
+    });
+    
     await setupVite(app, server);
   } else {
     serveStatic(app);
