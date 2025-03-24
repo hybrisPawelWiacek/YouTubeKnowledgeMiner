@@ -58,7 +58,11 @@ export async function initializeSupabaseVector() {
  */
 export async function similaritySearch(
   queryEmbedding: number[],
-  filters: Record<string, any> = {},
+  filters: {
+    userId?: number;
+    contentTypes?: string[];
+    videoId?: number;
+  } = {},
   limit: number = 10
 ) {
   if (!supabase) {
@@ -66,20 +70,98 @@ export async function similaritySearch(
   }
   
   try {
-    // Build the RPC call with proper parameters
-    const { data, error } = await supabase.rpc('match_embeddings', {
-      query_embedding: queryEmbedding,
-      match_threshold: 0.7, // Minimum similarity threshold
-      match_count: limit,
-      filter_json: filters
-    });
+    // Start building the query
+    let query = supabase
+      .from('embeddings')
+      .select(`
+        id,
+        video_id,
+        content,
+        content_type,
+        metadata,
+        user_id
+      `)
+      .limit(limit);
+    
+    // Apply user filter if specified (almost always provided)
+    if (filters.userId) {
+      query = query.eq('user_id', filters.userId);
+    }
+    
+    // Apply content type filter if specified
+    if (filters.contentTypes && filters.contentTypes.length > 0) {
+      query = query.in('content_type', filters.contentTypes);
+    }
+    
+    // Apply video filter if specified
+    if (filters.videoId) {
+      query = query.eq('video_id', filters.videoId);
+    }
+    
+    const { data, error } = await query;
     
     if (error) {
       log(`Error in similarity search: ${error.message}`, 'supabase');
       throw error;
     }
     
-    return data;
+    if (!data || data.length === 0) {
+      return [];
+    }
+    
+    // Calculate similarity scores client-side
+    // This is less efficient than doing it in the database but doesn't require custom SQL functions
+    const resultsWithSimilarity = data.map((item: any) => {
+      // Calculate cosine similarity if we have embeddings
+      let similarity = 0;
+      
+      if (item.embedding && Array.isArray(item.embedding) && queryEmbedding.length === item.embedding.length) {
+        // Cosine similarity calculation
+        let dotProduct = 0;
+        let magnitudeA = 0;
+        let magnitudeB = 0;
+        
+        for (let i = 0; i < queryEmbedding.length; i++) {
+          dotProduct += queryEmbedding[i] * item.embedding[i];
+          magnitudeA += queryEmbedding[i] * queryEmbedding[i];
+          magnitudeB += item.embedding[i] * item.embedding[i];
+        }
+        
+        magnitudeA = Math.sqrt(magnitudeA);
+        magnitudeB = Math.sqrt(magnitudeB);
+        
+        if (magnitudeA > 0 && magnitudeB > 0) {
+          similarity = dotProduct / (magnitudeA * magnitudeB);
+        }
+      }
+      
+      // Add similarity to metadata for sorting
+      if (!item.metadata) {
+        item.metadata = {};
+      }
+      item.metadata.similarity = similarity;
+      
+      return {
+        id: item.id,
+        video_id: item.video_id,
+        content: item.content,
+        content_type: item.content_type,
+        similarity: similarity,
+        metadata: item.metadata || {}
+      };
+    });
+    
+    // Sort by similarity score (highest first)
+    resultsWithSimilarity.sort((a, b) => 
+      (b.similarity || 0) - (a.similarity || 0)
+    );
+    
+    // Apply minimum similarity threshold
+    const threshold = 0.5;
+    return resultsWithSimilarity
+      .filter(item => (item.similarity || 0) >= threshold)
+      .slice(0, limit);
+    
   } catch (error) {
     log(`Error in similarity search: ${error}`, 'supabase');
     throw error;
