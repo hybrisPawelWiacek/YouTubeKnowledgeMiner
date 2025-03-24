@@ -69,14 +69,28 @@ export function QASection({ videoId }: QASectionProps) {
   const { data: conversationData, isLoading: isLoadingConversation } = useQuery({
     queryKey: ['/api/qa', activeConversation],
     queryFn: async () => {
-      const result = await apiRequest('GET', `/api/qa/${activeConversation}`);
-      return result || { messages: [] };
+      if (activeConversation === null) return { messages: [] };
+      try {
+        const result = await apiRequest('GET', `/api/qa/${activeConversation}`);
+        // Ensure the result is an object with a messages array
+        if (result && typeof result === 'object') {
+          // Check if messages exists and is an array, otherwise use empty array
+          const messages = result.messages && Array.isArray(result.messages) ? result.messages : [];
+          return { ...result, messages };
+        }
+        return { messages: [] };
+      } catch (error) {
+        console.error("Error fetching conversation:", error);
+        return { messages: [] };
+      }
     },
     enabled: activeConversation !== null,
   });
   
   // Ensure currentConversation is properly initialized with default values
   const currentConversation = conversationData || { messages: [] };
+  // Ensure messages is always an array
+  const messages = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
 
   // Mutation to create a new conversation
   const createConversationMutation = useMutation({
@@ -87,7 +101,7 @@ export function QASection({ videoId }: QASectionProps) {
     ),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
-      if (data && typeof data === 'object' && 'id' in data) {
+      if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
         setActiveConversation(data.id);
       }
       setIsCreatingConversation(false);
@@ -311,9 +325,9 @@ export function QASection({ videoId }: QASectionProps) {
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              ) : currentConversation?.messages?.length ? (
+              ) : messages.length > 0 ? (
                 <div className="space-y-6">
-                  {currentConversation.messages.map((message: Message, index: number) => (
+                  {messages.map((message: Message, index: number) => (
                     <div
                       key={index}
                       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
