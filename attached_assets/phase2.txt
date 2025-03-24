@@ -1,0 +1,57 @@
+# YouTube Buddy App - Phase 2: Library Management & Organization
+
+## Project Overview
+Building on Phase 1 of the YouTube Buddy app, I now need to implement comprehensive library management features and content organization capabilities.
+
+## Phase 2 Technical Requirements
+- Enhance the existing React frontend
+- Expand Supabase schema for content organization
+- Implement filtering, sorting, and search functionality
+
+## Phase 2 Features to Implement
+
+### 1. Video Library Views
+- Implement dual-view video library:
+  - Grid/Tile view with thumbnails (default)
+  - List view as an alternative
+- Create view toggle controls
+- Ensure both views display key video metadata
+- Implement responsive design for all screen sizes
+
+### 2. Advanced Search & Filtering
+- Create comprehensive search functionality:
+  - Full-text search across video titles, descriptions, and transcripts
+  - Category-based filtering
+  - Rating-based filtering (1-5 stars)
+  - Date range filtering
+- Implement combined filters (e.g., category + rating)
+- Add sorting options (alphabetical, date, rating)
+- Create "saved searches" functionality
+
+### 3. Video Collection Organization
+- Implement playlist/collection feature:
+  - Create named collections of videos
+  - Add/remove videos from collections
+  - Display collection membership on video cards
+- Enable bulk operations on videos:
+  - Multi-select videos for batch categorization
+  - Bulk delete with confirmation
+  - Bulk add to collections
+- Implement drag-and-drop organization (optional)
+
+### 4. Video Management
+- Create comprehensive video edit capabilities:
+  - Update notes/comments
+  - Change category or collection assignments
+  - Modify ratings
+  - Add timestamps or highlights
+- Implement video deletion with recovery option
+- Add favorite/bookmark functionality
+
+## Data Model Enhancements
+- Collections table
+- Collection_Videos junction table
+- Saved_Searches table
+- Enhanced indexing for search functionality
+
+Please provide a detailed implementation plan for these library management features, including component structure, state management approach, and database design considerations.
