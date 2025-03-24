@@ -638,8 +638,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Creating Q&A conversation with body:", req.body);
       
+      // Ensure messages is in the request body
+      const requestWithDefaultMessages = {
+        ...req.body,
+        messages: req.body.messages || []
+      };
+      
       // Validate with schema
-      const validatedData = insertQAConversationSchema.parse(req.body);
+      const validatedData = insertQAConversationSchema.parse(requestWithDefaultMessages);
       
       console.log("Validated data:", validatedData);
       
@@ -647,8 +653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversation = await dbStorage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: userId,
-        messages: validatedData.messages || []
+        user_id: userId
       });
       
       return res.status(201).json(conversation);
