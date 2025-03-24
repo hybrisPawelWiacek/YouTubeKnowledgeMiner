@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StarRating } from "@/components/ui/star-rating";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { YoutubeVideo, VideoMetadata, Category } from "@/types";
+import { 
+  User, Calendar, Link, ThumbsUp, Eye, Clock, 
+  Tag as TagIcon, Info 
+} from "lucide-react";
 
 interface VideoResultProps {
   video: YoutubeVideo;
@@ -17,6 +22,7 @@ export function VideoResult({ video }: VideoResultProps) {
   const [notes, setNotes] = useState("");
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
   const [rating, setRating] = useState(0);
+  const [showDescription, setShowDescription] = useState(false);
   const { toast } = useToast();
 
   // Fetch categories
@@ -75,75 +81,83 @@ export function VideoResult({ video }: VideoResultProps) {
             {/* Video Thumbnail */}
             <div className="w-full md:w-1/3">
               <div className="relative bg-zinc-800 rounded-lg overflow-hidden">
-                <img
-                  src={video.thumbnail}
-                  alt={video.title}
-                  className="w-full aspect-video object-cover"
-                />
-                <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 px-2 py-1 rounded text-xs">
-                  <span>{video.duration}</span>
-                </div>
+                <a 
+                  href={video.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    className="w-full aspect-video object-cover"
+                  />
+                  <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 px-2 py-1 rounded text-xs">
+                    <span>{video.duration}</span>
+                  </div>
+                </a>
               </div>
+              
+              {/* Video Stats */}
+              {(video.viewCount || video.likeCount) && (
+                <div className="mt-3 space-y-2 bg-zinc-800 p-3 rounded-lg">
+                  {video.viewCount && (
+                    <div className="flex items-center text-sm text-gray-300">
+                      <Eye className="w-4 h-4 mr-2" />
+                      <span>{video.viewCount} views</span>
+                    </div>
+                  )}
+                  {video.likeCount && (
+                    <div className="flex items-center text-sm text-gray-300">
+                      <ThumbsUp className="w-4 h-4 mr-2" />
+                      <span>{video.likeCount} likes</span>
+                    </div>
+                  )}
+                  <div className="flex items-center text-sm text-gray-300">
+                    <Clock className="w-4 h-4 mr-2" />
+                    <span>{video.duration} duration</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Tags */}
+              {video.tags && video.tags.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center mb-2">
+                    <TagIcon className="w-4 h-4 mr-1" />
+                    <span className="text-sm font-medium">Tags</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {video.tags.slice(0, 8).map((tag, index) => (
+                      <Badge key={index} variant="outline" className="bg-zinc-800 text-gray-300 border-zinc-700">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {video.tags.length > 8 && (
+                      <Badge variant="outline" className="bg-zinc-800 text-gray-300 border-zinc-700">
+                        +{video.tags.length - 8} more
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Video Metadata */}
             <div className="flex-1">
               <h3 className="text-xl font-semibold mb-2">{video.title}</h3>
+              
               <div className="text-gray-400 text-sm mb-4">
                 <div className="flex items-center mb-1">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-2"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+                  <User className="w-4 h-4 mr-2" />
                   <span>{video.channel}</span>
                 </div>
                 <div className="flex items-center mb-1">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-2"
-                  >
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                  </svg>
+                  <Calendar className="w-4 h-4 mr-2" />
                   <span>{video.publishDate}</span>
                 </div>
                 <div className="flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-2"
-                  >
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
+                  <Link className="w-4 h-4 mr-2" />
                   <a
                     href={video.url}
                     target="_blank"
@@ -154,6 +168,24 @@ export function VideoResult({ video }: VideoResultProps) {
                   </a>
                 </div>
               </div>
+              
+              {/* Description */}
+              {video.description && (
+                <div className="mb-4 bg-zinc-800 p-3 rounded-lg">
+                  <div 
+                    className="flex items-center mb-2 cursor-pointer" 
+                    onClick={() => setShowDescription(!showDescription)}
+                  >
+                    <Info className="w-4 h-4 mr-1" />
+                    <span className="text-sm font-medium">
+                      {showDescription ? "Hide Description" : "Show Description"}
+                    </span>
+                  </div>
+                  {showDescription && (
+                    <p className="text-sm text-gray-300">{video.description}</p>
+                  )}
+                </div>
+              )}
               
               {/* Video Metadata Form */}
               <form className="space-y-4 bg-zinc-800 p-4 rounded-md">

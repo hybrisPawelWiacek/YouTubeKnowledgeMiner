@@ -7,6 +7,10 @@ export interface YoutubeVideo {
   publishDate: string;
   url: string;
   transcript?: string;
+  description?: string;
+  tags?: string[];
+  viewCount?: string;
+  likeCount?: string;
 }
 
 export interface VideoMetadata {
