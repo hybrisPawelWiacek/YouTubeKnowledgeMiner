@@ -69,8 +69,8 @@ export function QASection({ videoId }: QASectionProps) {
   // Mutation to create a new conversation
   const createConversationMutation = useMutation({
     mutationFn: (title: string) => apiRequest(
-      `/api/videos/${videoId}/qa`,
       'POST',
+      `/api/videos/${videoId}/qa`,
       { title }
     ),
     onSuccess: (data) => {
@@ -95,8 +95,8 @@ export function QASection({ videoId }: QASectionProps) {
   // Mutation to delete a conversation
   const deleteConversationMutation = useMutation({
     mutationFn: (conversationId: number) => apiRequest(
-      `/api/qa/${conversationId}`,
-      'DELETE'
+      'DELETE',
+      `/api/qa/${conversationId}`
     ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
@@ -118,8 +118,8 @@ export function QASection({ videoId }: QASectionProps) {
   // Mutation to ask a question
   const askQuestionMutation = useMutation({
     mutationFn: (data: { conversationId: number, question: string }) => apiRequest(
-      `/api/qa/${data.conversationId}/ask`,
       'POST',
+      `/api/qa/${data.conversationId}/ask`,
       { question: data.question }
     ),
     onSuccess: (data) => {
