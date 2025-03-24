@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { log } from '../vite';
-import { ContentTypeEnum, Embedding, InsertEmbedding, contentTypeEnum, embeddings } from '@shared/schema';
+import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history } from '@shared/schema';
 import { supabase } from './supabase';
 import { chunkText, generateEmbeddingsBatch } from './openai';
 import { eq, and, sql } from 'drizzle-orm';
@@ -85,7 +85,7 @@ async function processContentEmbeddings(
   videoId: number,
   userId: number,
   textChunks: string[],
-  contentType: ContentTypeEnum
+  contentType: typeof contentTypeEnum.enumValues[number]
 ): Promise<number[]> {
   const embeddingIds: number[] = [];
   const validChunks = textChunks.filter(chunk => chunk.trim().length > 0);
@@ -158,7 +158,7 @@ export async function performSemanticSearch(
   userId: number,
   query: string,
   filters: {
-    contentTypes?: ContentTypeEnum[];
+    contentTypes?: Array<typeof contentTypeEnum.enumValues[number]>;
     videoId?: number;
     categoryId?: number;
     collectionId?: number;
@@ -169,7 +169,7 @@ export async function performSemanticSearch(
   id: number;
   video_id: number;
   content: string;
-  content_type: ContentTypeEnum;
+  content_type: typeof contentTypeEnum.enumValues[number];
   similarity: number;
   metadata: any;
 }[]> {
@@ -247,7 +247,7 @@ export async function performSemanticSearch(
       id: r.id,
       video_id: r.video_id,
       content: r.content,
-      content_type: r.content_type as ContentTypeEnum,
+      content_type: r.content_type as typeof contentTypeEnum.enumValues[number],
       similarity: r.metadata?.similarity || 0,
       metadata: r.metadata || {},
     }));
@@ -272,7 +272,7 @@ export async function saveSearchHistory(
   resultsCount: number = 0
 ): Promise<void> {
   try {
-    await db.insert(embeddings).values({
+    await db.insert(search_history).values({
       user_id: userId,
       query,
       filter_params: filterParams,

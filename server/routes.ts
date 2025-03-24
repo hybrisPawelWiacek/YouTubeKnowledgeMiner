@@ -593,6 +593,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Semantic Search API route
+  app.post("/api/semantic-search", async (req, res) => {
+    try {
+      const { query, filter, limit } = semanticSearchSchema.parse(req.body);
+      
+      // Initialize Supabase vector functions if not already done
+      await initializeVectorFunctions();
+      
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      // Execute semantic search
+      const results = await performSemanticSearch(
+        userId,
+        query,
+        {
+          contentTypes: filter?.content_types,
+          videoId: filter?.video_id,
+          categoryId: filter?.category_id,
+          collectionId: filter?.collection_id,
+          isFavorite: filter?.is_favorite
+        },
+        limit
+      );
+      
+      // Save search to history
+      try {
+        await saveSearchHistory(userId, query, filter, results.length);
+      } catch (error) {
+        // Non-critical, log but continue
+        log(`Error saving search history: ${error}`, 'routes');
+      }
+      
+      return res.status(200).json(results);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      log(`Error performing semantic search: ${error}`, 'routes');
+      return res.status(500).json({ message: "Failed to perform semantic search" });
+    }
+  });
+  
   // Q&A Conversations API routes
   
   // Get all Q&A conversations for a video
