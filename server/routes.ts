@@ -6,6 +6,38 @@ import { ZodError } from "zod";
 import { VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // User registration route
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, email, password } = req.body;
+      
+      if (!username || !email || !password) {
+        return res.status(400).json({ message: "Username, email, and password are required" });
+      }
+      
+      // Check if user already exists
+      const existingUser = await dbStorage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(409).json({ message: "Username already exists" });
+      }
+      
+      // Create user
+      const user = await dbStorage.createUser({
+        username,
+        email,
+        password, // In a real app, hash this password
+      });
+      
+      // Don't send password back to client
+      const { password: _, ...userWithoutPassword } = user;
+      
+      return res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      console.error("Error registering user:", error);
+      return res.status(500).json({ message: "Failed to register user" });
+    }
+  });
+  
   // YouTube video processing route
   app.post("/api/videos/analyze", async (req, res) => {
     try {

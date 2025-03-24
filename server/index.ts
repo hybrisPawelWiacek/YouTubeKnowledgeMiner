@@ -3,8 +3,15 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+// Parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Set appropriate headers for API responses
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json');
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
