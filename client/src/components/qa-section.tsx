@@ -54,17 +54,29 @@ export function QASection({ videoId }: QASectionProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch conversations for this video
-  const { data: conversations = [], isLoading: isLoadingConversations } = useQuery({
+  const { data, isLoading: isLoadingConversations } = useQuery({
     queryKey: ['/api/videos', videoId, 'qa'],
-    queryFn: () => apiRequest('GET', `/api/videos/${videoId}/qa`),
+    queryFn: async () => {
+      const result = await apiRequest('GET', `/api/videos/${videoId}/qa`);
+      return Array.isArray(result) ? result : [];
+    },
   });
+  
+  // Ensure conversations is always an array
+  const conversations: Conversation[] = Array.isArray(data) ? data : [];
 
   // Fetch current conversation if one is active
-  const { data: currentConversation, isLoading: isLoadingConversation } = useQuery({
+  const { data: conversationData, isLoading: isLoadingConversation } = useQuery({
     queryKey: ['/api/qa', activeConversation],
-    queryFn: () => apiRequest('GET', `/api/qa/${activeConversation}`),
+    queryFn: async () => {
+      const result = await apiRequest('GET', `/api/qa/${activeConversation}`);
+      return result || { messages: [] };
+    },
     enabled: activeConversation !== null,
   });
+  
+  // Ensure currentConversation is properly initialized with default values
+  const currentConversation = conversationData || { messages: [] };
 
   // Mutation to create a new conversation
   const createConversationMutation = useMutation({
@@ -75,7 +87,9 @@ export function QASection({ videoId }: QASectionProps) {
     ),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
-      setActiveConversation(data.id);
+      if (data && typeof data === 'object' && 'id' in data) {
+        setActiveConversation(data.id);
+      }
       setIsCreatingConversation(false);
       setNewConversationTitle("");
       toast({
