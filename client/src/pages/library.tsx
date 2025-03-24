@@ -1,186 +1,445 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
-} from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
 import { VideoCard } from "@/components/library/video-card";
 import { VideoListItem } from "@/components/library/video-list-item";
 import { FilterSidebar } from "@/components/library/filter-sidebar";
 import { CreateCollectionDialog } from "@/components/library/create-collection-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Video, Category, Collection } from "@/types";
-import { SearchX, Grid, List, Filter, Plus, Search, Trash, FolderPlus } from "lucide-react";
+import {
+  Filter,
+  LayoutGrid,
+  List,
+  Search,
+  Trash2,
+  Heart,
+  FolderPlus,
+  Loader2,
+  Plus,
+} from "lucide-react";
 
 export default function Library() {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  // State
+  const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
+  const [isGridView, setIsGridView] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
+  const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
+  
+  // Filters
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
   const [selectedCollection, setSelectedCollection] = useState<number | undefined>(undefined);
   const [selectedRating, setSelectedRating] = useState<number | undefined>(undefined);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "title" | "rating">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [showSidebarOnMobile, setShowSidebarOnMobile] = useState(false);
-  const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
-  const [showCollectionDialog, setShowCollectionDialog] = useState(false);
-
-  // Get videos with filters applied
+  
+  // Hooks
+  const { toast } = useToast();
+  const isMobile = useIsMobile();
+  
+  // Queries
   const videosQuery = useQuery({
-    queryKey: ["/api/videos", searchQuery, selectedCategory, selectedCollection, selectedRating, sortBy, sortOrder, showFavoritesOnly],
+    queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      let url = "/api/videos?";
       
-      if (searchQuery) params.append("query", searchQuery);
-      if (selectedCategory) params.append("category_id", selectedCategory.toString());
-      if (selectedCollection) params.append("collection_id", selectedCollection.toString());
-      if (selectedRating) params.append("rating_min", selectedRating.toString());
+      // Add search query if present
+      if (searchQuery) {
+        url += `query=${encodeURIComponent(searchQuery)}&`;
+      }
       
-      params.append("sort_by", sortBy);
-      params.append("sort_order", sortOrder);
+      // Add filters
+      if (selectedCategory) {
+        url += `category_id=${selectedCategory}&`;
+      }
       
-      if (showFavoritesOnly) params.append("is_favorite", "true");
+      if (selectedCollection) {
+        url += `collection_id=${selectedCollection}&`;
+      }
       
-      const response = await fetch(`/api/videos?${params.toString()}`);
+      if (selectedRating) {
+        url += `rating_min=${selectedRating}&`;
+      }
+      
+      if (showFavoritesOnly) {
+        url += "is_favorite=true&";
+      }
+      
+      // Add sorting
+      url += `sort_by=${sortBy}&sort_order=${sortOrder}`;
+      
+      const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
-    }
+    },
   });
-
-  // Get categories
+  
   const categoriesQuery = useQuery({
     queryKey: ["/api/categories"],
   });
-
-  // Get collections
+  
   const collectionsQuery = useQuery({
     queryKey: ["/api/collections"],
   });
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // The query is already updated via the input, so we just need to refresh
-    videosQuery.refetch();
-  };
-
-  const toggleVideoSelection = (videoId: number) => {
-    setSelectedVideos(prev => {
-      if (prev.includes(videoId)) {
-        return prev.filter(id => id !== videoId);
-      } else {
-        return [...prev, videoId];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (!videosQuery.data) return;
-    
-    if (selectedVideos.length === videosQuery.data.length) {
-      // Deselect all
+  
+  // Mutations
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Videos deleted",
+        description: `${selectedVideos.length} videos have been deleted from your library.`,
+      });
+      setSelectedVideos([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "There was an error deleting the videos. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const bulkToggleFavoriteMutation = useMutation({
+    mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
+      const response = await apiRequest("PATCH", "/api/videos/bulk", { 
+        ids, 
+        data: { is_favorite: isFavorite } 
+      });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: variables.isFavorite ? "Added to favorites" : "Removed from favorites",
+        description: `${selectedVideos.length} videos have been ${variables.isFavorite ? "added to" : "removed from"} your favorites.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "There was an error updating the videos. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const addToCollectionMutation = useMutation({
+    mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
+      const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
+        video_ids: videoIds
+      });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      const collection = collectionsQuery.data?.find((c: Collection) => c.id === variables.collectionId);
+      toast({
+        title: "Added to collection",
+        description: `${selectedVideos.length} videos have been added to "${collection?.name}" collection.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/collections"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "There was an error adding videos to the collection. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Effect to close sidebar on mobile when navigating away
+  useEffect(() => {
+    if (isMobile) {
+      setIsFilterSidebarOpen(false);
+    }
+  }, [isMobile]);
+  
+  // Toggle select all videos
+  const toggleSelectAll = () => {
+    if (selectedVideos.length === videosQuery.data?.length) {
       setSelectedVideos([]);
     } else {
-      // Select all
       setSelectedVideos(videosQuery.data.map((video: Video) => video.id));
     }
   };
-
-  const handleBulkDelete = async () => {
-    if (selectedVideos.length === 0 || !confirm(`Delete ${selectedVideos.length} selected videos?`)) return;
-    
-    // Implement bulk delete
-    // This will be a series of API calls to delete each video
-    try {
-      await Promise.all(selectedVideos.map(id => 
-        fetch(`/api/videos/${id}`, { method: 'DELETE' })
-      ));
-      
-      // Refresh video list
-      videosQuery.refetch();
-      
-      // Clear selection
-      setSelectedVideos([]);
-    } catch (error) {
-      console.error("Error deleting videos:", error);
-      alert("Failed to delete videos");
+  
+  // Toggle selection of a single video
+  const toggleSelectVideo = (videoId: number) => {
+    if (selectedVideos.includes(videoId)) {
+      setSelectedVideos(selectedVideos.filter(id => id !== videoId));
+    } else {
+      setSelectedVideos([...selectedVideos, videoId]);
     }
   };
-
-  const handleBulkAddToCollection = (collectionId: number) => {
+  
+  // Handle bulk actions
+  const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
     
-    // Implement bulk add to collection
-    fetch(`/api/collections/${collectionId}/videos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video_ids: selectedVideos })
-    })
-      .then(() => {
-        // Refresh collection contents
-        collectionsQuery.refetch();
-        
-        // Clear selection
-        setSelectedVideos([]);
-      })
-      .catch(error => {
-        console.error("Error adding videos to collection:", error);
-        alert("Failed to add videos to collection");
-      });
+    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
+      bulkDeleteMutation.mutate(selectedVideos);
+    }
   };
-
+  
+  const handleToggleFavorite = (isFavorite: boolean) => {
+    if (selectedVideos.length === 0) return;
+    bulkToggleFavoriteMutation.mutate({ ids: selectedVideos, isFavorite });
+  };
+  
+  const handleAddToCollection = (collectionId: number) => {
+    if (selectedVideos.length === 0) return;
+    addToCollectionMutation.mutate({ videoIds: selectedVideos, collectionId });
+  };
+  
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory(undefined);
+    setSelectedCollection(undefined);
+    setSelectedRating(undefined);
+    setShowFavoritesOnly(false);
+    setSortBy("date");
+    setSortOrder("desc");
+  };
+  
+  // Render loading skeleton
+  const renderSkeletons = () => {
+    return Array.from({ length: 6 }).map((_, index) => (
+      <div key={index} className="bg-zinc-900 rounded-lg overflow-hidden">
+        <div className="aspect-video bg-zinc-800">
+          <Skeleton className="h-full w-full" />
+        </div>
+        <div className="p-3 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+        </div>
+      </div>
+    ));
+  };
+  
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
       
-      <main className="flex-grow py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold">Video Library</h1>
+      <main className="flex-grow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Page Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Video Library</h1>
+              <p className="text-gray-400 mt-1">
+                Manage and organize your saved YouTube videos
+              </p>
+            </div>
             
-            <div className="flex items-center space-x-2">
-              {/* View Toggle */}
-              <div className="bg-zinc-800 rounded-md p-1">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className="rounded-md"
-                >
-                  <Grid className="h-4 w-4 mr-1" />
-                  Grid
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="rounded-md"
-                >
-                  <List className="h-4 w-4 mr-1" />
-                  List
-                </Button>
-              </div>
-              
-              {/* Filter button (mobile only) */}
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                className="md:hidden"
-                onClick={() => setShowSidebarOnMobile(!showSidebarOnMobile)}
+                size="sm"
+                onClick={() => setIsFilterSidebarOpen(true)}
+                className="flex items-center gap-1"
               >
-                <Filter className="h-4 w-4 mr-1" />
-                Filter
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filters</span>
               </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateCollectionOpen(true)}
+                className="flex items-center gap-1"
+              >
+                <FolderPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">New Collection</span>
+              </Button>
+              
+              <div className="flex border rounded-md overflow-hidden">
+                <Button
+                  variant={isGridView ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setIsGridView(true)}
+                  className="rounded-none px-2"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={!isGridView ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setIsGridView(false)}
+                  className="rounded-none px-2"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Filter Sidebar */}
+          {/* Search and Selection Bar */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-grow">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                type="text"
+                placeholder="Search videos by title, channel, or content..."
+                className="pl-9 bg-zinc-900 border-zinc-800"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            {/* Active Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(selectedCategory || selectedCollection || selectedRating || showFavoritesOnly || searchQuery || sortBy !== "date" || sortOrder !== "desc") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="h-9 bg-red-900/20 text-red-400 border-red-900 hover:bg-red-900/30 hover:text-red-300"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {/* Bulk Actions (when videos are selected) */}
+          {selectedVideos.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+              <div className="flex items-center mr-2">
+                <span className="text-sm font-medium">
+                  {selectedVideos.length} {selectedVideos.length === 1 ? "video" : "videos"} selected
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleFavorite(true)}
+                  className="flex items-center gap-1"
+                >
+                  <Heart className="h-4 w-4" />
+                  <span>Add to Favorites</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleFavorite(false)}
+                  className="flex items-center gap-1"
+                >
+                  <Heart className="h-4 w-4 fill-current" />
+                  <span>Remove from Favorites</span>
+                </Button>
+                
+                {/* Add to Collection Dropdown */}
+                <div className="relative group">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    <span>Add to Collection</span>
+                  </Button>
+                  
+                  {/* Dropdown Menu */}
+                  <div className="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-zinc-900 border border-zinc-800 hidden group-hover:block z-10">
+                    <div className="py-1">
+                      {collectionsQuery.data?.map((collection: Collection) => (
+                        <button
+                          key={collection.id}
+                          className="block w-full text-left px-4 py-2 text-sm hover:bg-zinc-800"
+                          onClick={() => handleAddToCollection(collection.id)}
+                        >
+                          {collection.name}
+                        </button>
+                      ))}
+                      
+                      {(!collectionsQuery.data || collectionsQuery.data.length === 0) && (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          No collections available
+                        </div>
+                      )}
+                      
+                      <div className="border-t border-zinc-800 mt-1 pt-1">
+                        <button
+                          className="flex items-center gap-1 w-full text-left px-4 py-2 text-sm text-primary hover:bg-zinc-800"
+                          onClick={() => setIsCreateCollectionOpen(true)}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Create New Collection
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  className="flex items-center gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedVideos([])}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {/* Main Content */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Sidebar for filters (desktop) */}
+            <div className="hidden lg:block">
+              <FilterSidebar
+                categories={categoriesQuery.data || []}
+                collections={collectionsQuery.data || []}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedCollection={selectedCollection}
+                setSelectedCollection={setSelectedCollection}
+                selectedRating={selectedRating}
+                setSelectedRating={setSelectedRating}
+                showFavoritesOnly={showFavoritesOnly}
+                setShowFavoritesOnly={setShowFavoritesOnly}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOrder={sortOrder}
+                setSortOrder={setSortOrder}
+                isVisible={true}
+                onClose={() => {}}
+                onCreateCollection={() => setIsCreateCollectionOpen(true)}
+              />
+            </div>
+            
+            {/* Sidebar for filters (mobile) */}
             <FilterSidebar
               categories={categoriesQuery.data || []}
               collections={collectionsQuery.data || []}
@@ -196,161 +455,86 @@ export default function Library() {
               setSortBy={setSortBy}
               sortOrder={sortOrder}
               setSortOrder={setSortOrder}
-              isVisible={showSidebarOnMobile}
-              onClose={() => setShowSidebarOnMobile(false)}
-              onCreateCollection={() => setShowCollectionDialog(true)}
+              isVisible={isFilterSidebarOpen}
+              onClose={() => setIsFilterSidebarOpen(false)}
+              onCreateCollection={() => setIsCreateCollectionOpen(true)}
             />
             
-            {/* Main Content */}
-            <div className="flex-1">
-              {/* Search Bar */}
-              <form onSubmit={handleSearch} className="mb-6">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      type="search"
-                      placeholder="Search videos..."
-                      className="pl-10 bg-zinc-800 border-zinc-700"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                  <Button type="submit">Search</Button>
-                </div>
-              </form>
-              
-              {/* Bulk Actions (visible when videos are selected) */}
-              {selectedVideos.length > 0 && (
-                <div className="mb-4 p-3 bg-zinc-800 rounded-md flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium mr-2">
-                    {selectedVideos.length} videos selected
-                  </span>
-                  
-                  <div className="flex-1 flex flex-wrap gap-2">
-                    {/* Add to Collection dropdown */}
-                    <Select onValueChange={(value) => handleBulkAddToCollection(parseInt(value))}>
-                      <SelectTrigger className="w-auto bg-zinc-700 border-zinc-600">
-                        <div className="flex items-center">
-                          <FolderPlus className="h-4 w-4 mr-1" />
-                          <span>Add to Collection</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-800 border-zinc-700">
-                        {(collectionsQuery.data || []).map((collection: Collection) => (
-                          <SelectItem 
-                            key={collection.id} 
-                            value={collection.id.toString()}
-                          >
-                            {collection.name}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="new">
-                          <div className="flex items-center">
-                            <Plus className="h-4 w-4 mr-1" />
-                            <span>Create New Collection</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    {/* Delete Selected */}
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
-                      onClick={handleBulkDelete}
-                    >
-                      <Trash className="h-4 w-4 mr-1" />
-                      Delete Selected
-                    </Button>
-                  </div>
-                  
-                  {/* Cancel Selection */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSelectedVideos([])}
-                  >
-                    Cancel
-                  </Button>
+            {/* Main Content Area */}
+            <div className="flex-grow">
+              {/* Loading State */}
+              {videosQuery.isLoading && (
+                <div className={isGridView ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
+                  {renderSkeletons()}
                 </div>
               )}
               
-              {/* Video List/Grid */}
-              {videosQuery.isLoading ? (
-                // Loading state
-                <div className={`grid ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : ""} gap-6`}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="bg-zinc-800 rounded-lg overflow-hidden">
-                      <Skeleton className="h-40 w-full" />
-                      <div className="p-4 space-y-2">
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </div>
-                    </div>
+              {/* Empty State */}
+              {!videosQuery.isLoading && (!videosQuery.data || videosQuery.data.length === 0) && (
+                <div className="text-center py-10">
+                  <div className="inline-flex items-center justify-center p-4 bg-zinc-900 rounded-full mb-4">
+                    <Search className="h-6 w-6 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-medium mb-2">No videos found</h3>
+                  <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                    {searchQuery || selectedCategory || selectedCollection || selectedRating || showFavoritesOnly
+                      ? "No videos match your current filters. Try adjusting your search criteria."
+                      : "Your video library is currently empty. Process YouTube videos to add them to your library."}
+                  </p>
+                  
+                  {(searchQuery || selectedCategory || selectedCollection || selectedRating || showFavoritesOnly) && (
+                    <Button onClick={handleClearFilters}>
+                      Clear All Filters
+                    </Button>
+                  )}
+                </div>
+              )}
+              
+              {/* Grid View */}
+              {!videosQuery.isLoading && videosQuery.data && videosQuery.data.length > 0 && isGridView && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {videosQuery.data.map((video: Video) => (
+                    <VideoCard
+                      key={video.id}
+                      video={video}
+                      isSelected={selectedVideos.includes(video.id)}
+                      onToggleSelect={() => toggleSelectVideo(video.id)}
+                      categories={categoriesQuery.data || []}
+                    />
                   ))}
                 </div>
-              ) : videosQuery.data?.length > 0 ? (
-                <>
-                  {/* Select All checkbox */}
-                  <div className="mb-4 flex items-center">
-                    <Checkbox 
-                      id="selectAll" 
-                      checked={selectedVideos.length > 0 && selectedVideos.length === videosQuery.data.length}
-                      onCheckedChange={handleSelectAll} 
-                    />
-                    <label htmlFor="selectAll" className="ml-2 text-sm">
-                      {selectedVideos.length === videosQuery.data.length 
-                        ? "Deselect All" 
-                        : "Select All"}
-                    </label>
+              )}
+              
+              {/* List View */}
+              {!videosQuery.isLoading && videosQuery.data && videosQuery.data.length > 0 && !isGridView && (
+                <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+                  <div className="flex items-center p-3 border-b border-zinc-800 bg-zinc-800/50">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedVideos.length === videosQuery.data.length}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-zinc-600"
+                      />
+                      <span className="text-sm font-medium">
+                        {selectedVideos.length > 0
+                          ? `${selectedVideos.length} selected`
+                          : "Select All"}
+                      </span>
+                    </div>
                   </div>
                   
-                  {viewMode === "grid" ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {videosQuery.data.map((video: Video) => (
-                        <VideoCard
-                          key={video.id}
-                          video={video}
-                          isSelected={selectedVideos.includes(video.id)}
-                          onToggleSelect={() => toggleVideoSelection(video.id)}
-                          categories={categoriesQuery.data || []}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {videosQuery.data.map((video: Video) => (
-                        <VideoListItem
-                          key={video.id}
-                          video={video}
-                          isSelected={selectedVideos.includes(video.id)}
-                          onToggleSelect={() => toggleVideoSelection(video.id)}
-                          categories={categoriesQuery.data || []}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                // Empty state
-                <div className="text-center py-12 bg-zinc-800 rounded-lg">
-                  <SearchX className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-xl font-medium mb-2">No videos found</h3>
-                  <p className="text-gray-400 max-w-md mx-auto mb-6">
-                    Try changing your search or filter settings to find what you're looking for.
-                  </p>
-                  <Button onClick={() => {
-                    setSearchQuery("");
-                    setSelectedCategory(undefined);
-                    setSelectedCollection(undefined);
-                    setSelectedRating(undefined);
-                    setShowFavoritesOnly(false);
-                    setSortBy("date");
-                    setSortOrder("desc");
-                  }}>
-                    Clear All Filters
-                  </Button>
+                  <div>
+                    {videosQuery.data.map((video: Video) => (
+                      <VideoListItem
+                        key={video.id}
+                        video={video}
+                        isSelected={selectedVideos.includes(video.id)}
+                        onToggleSelect={() => toggleSelectVideo(video.id)}
+                        categories={categoriesQuery.data || []}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -360,13 +544,21 @@ export default function Library() {
       
       <Footer />
       
-      {/* Dialogs */}
-      <CreateCollectionDialog 
-        isOpen={showCollectionDialog}
-        onClose={() => setShowCollectionDialog(false)}
+      {/* Create Collection Dialog */}
+      <CreateCollectionDialog
+        isOpen={isCreateCollectionOpen}
+        onClose={() => setIsCreateCollectionOpen(false)}
         onSuccess={() => {
-          setShowCollectionDialog(false);
-          collectionsQuery.refetch();
+          if (selectedVideos.length > 0) {
+            // Get the latest collection ID and add selected videos to it
+            queryClient.invalidateQueries({ queryKey: ["/api/collections"] }).then(() => {
+              const collections = collectionsQuery.data || [];
+              if (collections.length > 0) {
+                const latestCollection = collections[collections.length - 1];
+                handleAddToCollection(latestCollection.id);
+              }
+            });
+          }
         }}
       />
     </div>

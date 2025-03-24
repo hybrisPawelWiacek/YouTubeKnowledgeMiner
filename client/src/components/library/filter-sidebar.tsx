@@ -123,7 +123,7 @@ export function FilterSidebar({
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categories?.map((category) => (
                     <SelectItem key={category.id} value={category.id.toString()}>
                       {category.name}
@@ -160,7 +160,7 @@ export function FilterSidebar({
                     <SelectValue placeholder="All Collections" />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
-                    <SelectItem value="">All Collections</SelectItem>
+                    <SelectItem value="all">All Collections</SelectItem>
                     {collections?.map((collection) => (
                       <SelectItem key={collection.id} value={collection.id.toString()}>
                         {collection.name}
