@@ -2,10 +2,12 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { dbStorage } from "./database-storage"; // Using database storage
 import { processYoutubeVideo, getYoutubeTranscript, generateTranscriptSummary } from "./services/youtube";
+import { generateAnswer } from "./services/openai";
 import { ZodError } from "zod";
 import { 
   VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema, 
-  insertCollectionSchema, insertSavedSearchSchema, searchParamsSchema 
+  insertCollectionSchema, insertSavedSearchSchema, searchParamsSchema, 
+  qaQuestionSchema, insertQAConversationSchema
 } from "@shared/schema";
 import { log } from "./vite";
 
@@ -582,6 +584,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting saved search:", error);
       return res.status(500).json({ message: "Failed to delete saved search" });
+    }
+  });
+  
+  // Q&A Conversations API routes
+  
+  // Get all Q&A conversations for a video
+  app.get("/api/videos/:id/qa", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      if (isNaN(videoId)) {
+        return res.status(400).json({ message: "Invalid video ID" });
+      }
+      
+      const conversations = await dbStorage.getQAConversationsByVideoId(videoId);
+      return res.status(200).json(conversations);
+    } catch (error) {
+      console.error("Error fetching Q&A conversations:", error);
+      return res.status(500).json({ message: "Failed to fetch Q&A conversations" });
+    }
+  });
+  
+  // Get a specific Q&A conversation
+  app.get("/api/qa/:id", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: "Invalid conversation ID" });
+      }
+      
+      const conversation = await dbStorage.getQAConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      return res.status(200).json(conversation);
+    } catch (error) {
+      console.error("Error fetching Q&A conversation:", error);
+      return res.status(500).json({ message: "Failed to fetch Q&A conversation" });
+    }
+  });
+  
+  // Create a new Q&A conversation
+  app.post("/api/videos/:id/qa", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      if (isNaN(videoId)) {
+        return res.status(400).json({ message: "Invalid video ID" });
+      }
+      
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      // Validate with schema
+      const validatedData = insertQAConversationSchema.parse(req.body);
+      
+      // Create the conversation
+      const conversation = await dbStorage.createQAConversation({
+        ...validatedData,
+        video_id: videoId,
+        user_id: userId,
+        messages: []
+      });
+      
+      return res.status(201).json(conversation);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      console.error("Error creating Q&A conversation:", error);
+      return res.status(500).json({ message: "Failed to create Q&A conversation" });
+    }
+  });
+  
+  // Ask a question in a Q&A conversation
+  app.post("/api/qa/:id/ask", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: "Invalid conversation ID" });
+      }
+      
+      // Validate the question
+      const { question } = qaQuestionSchema.parse(req.body);
+      
+      // Get the existing conversation
+      const conversation = await dbStorage.getQAConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      // Get the video for the transcript
+      const video = await dbStorage.getVideo(conversation.video_id);
+      if (!video || !video.transcript) {
+        return res.status(400).json({ message: "Video transcript not available for Q&A" });
+      }
+      
+      // Build the conversation history from existing messages
+      const messages = conversation.messages || [];
+      const conversationHistory = messages.map(message => ({
+        role: message.role as 'user' | 'assistant',
+        content: message.content
+      }));
+      
+      // Generate an answer using OpenAI
+      const answer = await generateAnswer(
+        video.transcript,
+        video.title,
+        question,
+        conversationHistory
+      );
+      
+      // Add the new question and answer to the messages
+      const updatedMessages = [
+        ...messages,
+        { role: 'user', content: question },
+        { role: 'assistant', content: answer }
+      ];
+      
+      // Update the conversation with the new messages
+      const updatedConversation = await dbStorage.updateQAConversation(
+        conversationId,
+        updatedMessages
+      );
+      
+      return res.status(200).json({
+        conversation: updatedConversation,
+        answer
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      console.error("Error processing question:", error);
+      return res.status(500).json({ message: "Failed to process question" });
+    }
+  });
+  
+  // Delete a Q&A conversation
+  app.delete("/api/qa/:id", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: "Invalid conversation ID" });
+      }
+      
+      const deleted = await dbStorage.deleteQAConversation(conversationId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      return res.status(204).end();
+    } catch (error) {
+      console.error("Error deleting Q&A conversation:", error);
+      return res.status(500).json({ message: "Failed to delete Q&A conversation" });
     }
   });
   

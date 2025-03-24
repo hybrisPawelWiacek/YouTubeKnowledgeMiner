@@ -372,6 +372,54 @@ export class MemStorage implements IStorage {
   async deleteSavedSearch(id: number): Promise<boolean> {
     return this.savedSearches.delete(id);
   }
+  
+  // Q&A Conversations methods
+  async getQAConversation(id: number): Promise<QAConversation | undefined> {
+    return this.qaConversations.get(id);
+  }
+  
+  async getQAConversationsByVideoId(videoId: number): Promise<QAConversation[]> {
+    return Array.from(this.qaConversations.values()).filter(
+      conversation => conversation.video_id === videoId
+    );
+  }
+  
+  async getQAConversationsByUserId(userId: number): Promise<QAConversation[]> {
+    return Array.from(this.qaConversations.values()).filter(
+      conversation => conversation.user_id === userId
+    );
+  }
+  
+  async createQAConversation(insertConversation: InsertQAConversation): Promise<QAConversation> {
+    const id = this.qaConversationIdCounter++;
+    const now = new Date();
+    const conversation: QAConversation = { 
+      ...insertConversation, 
+      id, 
+      created_at: now,
+      updated_at: now
+    };
+    this.qaConversations.set(id, conversation);
+    return conversation;
+  }
+  
+  async updateQAConversation(id: number, messages: QAMessage[]): Promise<QAConversation | undefined> {
+    const conversation = this.qaConversations.get(id);
+    if (!conversation) return undefined;
+    
+    const updatedConversation: QAConversation = {
+      ...conversation,
+      messages: messages as any, // Type casting as jsonb is complex in TypeScript
+      updated_at: new Date()
+    };
+    
+    this.qaConversations.set(id, updatedConversation);
+    return updatedConversation;
+  }
+  
+  async deleteQAConversation(id: number): Promise<boolean> {
+    return this.qaConversations.delete(id);
+  }
 }
 
 export const storage = new MemStorage();
