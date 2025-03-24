@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StarRating } from "@/components/ui/star-rating";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { SummarySection } from "@/components/summary-section";
 import { YoutubeVideo, VideoMetadata, Category } from "@/types";
 import { 
   User, Calendar, Link, ThumbsUp, Eye, Clock, 
@@ -62,6 +63,7 @@ export function VideoResult({ video }: VideoResultProps) {
     },
   });
 
+  // Handle saving the video with all metadata
   const handleSave = () => {
     const metadata: VideoMetadata = {
       notes: notes || undefined,
@@ -69,12 +71,26 @@ export function VideoResult({ video }: VideoResultProps) {
       rating: rating || undefined,
     };
     
-    saveVideo(metadata);
+    // Pass along the additional fields from the video to be saved in the database
+    saveVideo({
+      ...metadata,
+      viewCount: video.viewCount,
+      likeCount: video.likeCount,
+      description: video.description,
+      tags: video.tags,
+      summary: video.summary
+    });
   };
 
   return (
     <section className="mb-12">
       <h2 className="text-2xl font-bold mb-6">Video Information</h2>
+      
+      {/* Show AI-generated summary if available */}
+      {video.summary && video.summary.length > 0 && (
+        <SummarySection summary={video.summary} />
+      )}
+      
       <Card className="bg-zinc-900">
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">

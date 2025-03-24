@@ -18,6 +18,13 @@ export interface VideoMetadata {
   notes?: string;
   category_id?: number;
   rating?: number;
+  
+  // Additional metadata from YouTube API
+  viewCount?: string;
+  likeCount?: string;
+  description?: string;
+  tags?: string[];
+  summary?: string[];
 }
 
 export interface Category {

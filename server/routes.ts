@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { dbStorage } from "./database-storage"; // Using database storage
-import { processYoutubeVideo, getYoutubeTranscript } from "./services/youtube";
+import { processYoutubeVideo, getYoutubeTranscript, generateTranscriptSummary } from "./services/youtube";
 import { ZodError } from "zod";
 import { VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema } from "@shared/schema";
+import { log } from "./vite";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // User login route
@@ -91,9 +92,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Transcript error:", err);
       }
       
+      // Generate summary if transcript is available
+      let summary = null;
+      if (transcript) {
+        try {
+          log("Generating summary from transcript...", "routes");
+          summary = await generateTranscriptSummary(transcript, videoData.title);
+          log(`Summary generated: ${summary ? 'Success' : 'Failed'}`, "routes");
+        } catch (err) {
+          log(`Error generating summary: ${err}`, "routes");
+        }
+      }
+      
       return res.status(200).json({
         ...videoData,
         transcript,
+        summary,
         youtubeId: videoId
       });
     } catch (error) {
@@ -108,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save video to library
   app.post("/api/videos", async (req, res) => {
     try {
-      const { youtubeId, title, channel, duration, publishDate, thumbnail, transcript } = req.body;
+      const { youtubeId, title, channel, duration, publishDate, thumbnail, transcript, summary } = req.body;
       const metadata: VideoMetadataRequest = videoMetadataSchema.parse({
         notes: req.body.notes,
         category_id: req.body.category_id,
@@ -128,6 +142,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publish_date: publishDate,
         thumbnail,
         transcript,
+        summary, // Add summary to the video data
+        views: req.body.viewCount,
+        likes: req.body.likeCount,
+        description: req.body.description,
+        tags: req.body.tags,
         user_id: userId,
         notes: metadata.notes,
         category_id: metadata.category_id,

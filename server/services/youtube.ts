@@ -185,6 +185,29 @@ async function processTranscriptUrl(captionUrl: string): Promise<string> {
   }
 }
 
+// Function to generate summary from transcript using OpenAI
+export async function generateTranscriptSummary(transcript: string, videoTitle: string): Promise<string[] | null> {
+  try {
+    // Remove HTML from transcript to get clean text for the AI
+    const plainTranscript = transcript.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    if (!isOpenAIConfigured()) {
+      log('OpenAI API key not configured. Skipping summary generation.', 'youtube');
+      return null;
+    }
+    
+    // Generate summary using OpenAI
+    log(`Generating summary for video: ${videoTitle}`, 'youtube');
+    const summaryPoints = await generateSummary(plainTranscript, videoTitle);
+    log(`Successfully generated ${summaryPoints.length} summary points`, 'youtube');
+    
+    return summaryPoints;
+  } catch (error) {
+    log(`Error generating summary: ${error}`, 'youtube');
+    return null; // Return null instead of throwing to avoid breaking the flow
+  }
+}
+
 // Helper function to parse the XML transcript data
 function parseTranscriptXml(xmlData: string) {
   // Simple XML parser for the transcript format
