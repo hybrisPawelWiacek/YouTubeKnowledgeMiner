@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Auth from "@/pages/auth";
+import Library from "@/pages/library";
+import VideoDetailPage from "@/pages/video/[id]";
 import { SupabaseProvider } from "@/hooks/use-supabase";
 
 function Router() {
@@ -12,6 +14,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/auth" component={Auth} />
+      <Route path="/library" component={Library} />
+      <Route path="/video/:id" component={VideoDetailPage} />
       <Route component={NotFound} />
     </Switch>
   );
