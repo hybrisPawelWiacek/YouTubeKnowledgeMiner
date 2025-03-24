@@ -74,6 +74,16 @@ app.use((req, res, next) => {
       next();
     });
     
+    // Special middleware to handle direct API requests from curl
+    app.use('/api', (req, res, next) => {
+      if (req.headers['user-agent'] && req.headers['user-agent'].includes('curl')) {
+        // For direct API requests from curl, skip Vite
+        next('route');
+      } else {
+        next();
+      }
+    });
+    
     await setupVite(app, server);
   } else {
     serveStatic(app);

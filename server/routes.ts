@@ -1,11 +1,42 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { dbStorage } from "./database-storage";
+import { dbStorage } from "./database-storage"; // Using database storage
 import { processYoutubeVideo, getYoutubeTranscript } from "./services/youtube";
 import { ZodError } from "zod";
 import { VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // User login route
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+      
+      // Find user by username
+      const user = await dbStorage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // In a real app, we would hash the password and compare
+      // For this prototype, we'll do a direct comparison
+      if (user.password !== password) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // Don't send password back to client
+      const { password: _, ...userWithoutPassword } = user;
+      
+      return res.status(200).json(userWithoutPassword);
+    } catch (error) {
+      console.error("Error logging in:", error);
+      return res.status(500).json({ message: "Failed to log in" });
+    }
+  });
+
   // User registration route
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -110,6 +141,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error saving video:", error);
       return res.status(500).json({ message: "Failed to save video to library" });
+    }
+  });
+  
+  // Get videos for a user
+  app.get("/api/videos", async (req, res) => {
+    try {
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      const videos = await dbStorage.getVideosByUserId(userId);
+      return res.status(200).json(videos);
+    } catch (error) {
+      console.error("Error fetching videos:", error);
+      return res.status(500).json({ message: "Failed to fetch videos" });
     }
   });
   
