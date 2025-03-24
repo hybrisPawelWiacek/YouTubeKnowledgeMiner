@@ -858,6 +858,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Failed to delete Q&A conversation" });
     }
   });
+
+  // Database status check for debugging
+  app.get('/api/db-status', async (req, res) => {
+    try {
+      // Try to access various tables to verify they exist
+      const testQuery = `
+        SELECT 
+          (SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')) as users_exists,
+          (SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'videos')) as videos_exists,
+          (SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'embeddings')) as embeddings_exists,
+          (SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'search_history')) as search_history_exists
+      `;
+      
+      // Execute directly with pg client
+      const { Pool } = require('pg');
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const result = await pool.query(testQuery);
+      
+      // Return table existence status
+      res.json({ 
+        database: 'connected',
+        tables: result.rows[0]
+      });
+    } catch (error) {
+      console.error("Error checking database status:", error);
+      res.status(500).json({ 
+        database: 'error',
+        message: error.message
+      });
+    }
+  });
   
   const httpServer = createServer(app);
   
