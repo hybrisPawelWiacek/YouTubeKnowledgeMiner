@@ -638,25 +638,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Creating Q&A conversation with body:", req.body);
       
-      // Ensure messages is in the request body
-      const requestWithDefaultMessages = {
-        ...req.body,
-        messages: req.body.messages || []
-      };
-      
-      // Validate with schema
-      const validatedData = insertQAConversationSchema.parse(requestWithDefaultMessages);
-      
-      console.log("Validated data:", validatedData);
-      
-      // Create the conversation
-      const conversation = await dbStorage.createQAConversation({
-        ...validatedData,
-        video_id: videoId,
-        user_id: userId
-      });
-      
-      return res.status(201).json(conversation);
+      try {
+        // Validate schema requirements first
+        console.log("Schema requirements:", Object.keys(insertQAConversationSchema.shape));
+        
+        // Ensure all required fields are in the request body
+        const requestWithDefaults = {
+          ...req.body,
+          messages: req.body.messages || [],
+          video_id: videoId,
+          user_id: userId
+        };
+        
+        console.log("Modified request with defaults:", requestWithDefaults);
+        
+        // Validate with schema
+        const validatedData = insertQAConversationSchema.parse(requestWithDefaults);
+        
+        console.log("Validated data:", validatedData);
+        
+        // Create the conversation
+        const conversation = await dbStorage.createQAConversation({
+          ...validatedData,
+          video_id: videoId,
+          user_id: userId
+        });
+        
+        return res.status(201).json(conversation);
+      } catch (validationError) {
+        console.error("Validation error details:", validationError);
+        throw validationError;
+      }
     } catch (error) {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
