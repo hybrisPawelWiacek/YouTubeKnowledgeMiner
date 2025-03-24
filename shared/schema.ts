@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -34,6 +34,38 @@ export const videos = pgTable("videos", {
   notes: text("notes"),
   category_id: integer("category_id").references(() => categories.id),
   rating: integer("rating"),
+  is_favorite: boolean("is_favorite").default(false),
+  timestamps: text("timestamps").array(), // For adding custom timestamps/highlights
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+// New collections table for organizing videos
+export const collections = pgTable("collections", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Junction table for videos in collections
+export const collection_videos = pgTable("collection_videos", {
+  collection_id: integer("collection_id").references(() => collections.id).notNull(),
+  video_id: integer("video_id").references(() => videos.id).notNull(),
+  added_at: timestamp("added_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    pk: primaryKey({ columns: [table.collection_id, table.video_id] }),
+  };
+});
+
+// Saved searches for users
+export const saved_searches = pgTable("saved_searches", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  query: text("query").notNull(),
+  filters: text("filters"), // Stored as JSON string
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -48,6 +80,20 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 });
 
 export const insertVideoSchema = createInsertSchema(videos).omit({
+  id: true,
+  created_at: true,
+});
+
+export const insertCollectionSchema = createInsertSchema(collections).omit({
+  id: true,
+  created_at: true,
+});
+
+export const insertCollectionVideoSchema = createInsertSchema(collection_videos).omit({
+  added_at: true,
+});
+
+export const insertSavedSearchSchema = createInsertSchema(saved_searches).omit({
   id: true,
   created_at: true,
 });
@@ -69,14 +115,38 @@ export const videoMetadataSchema = z.object({
   notes: z.string().optional(),
   category_id: z.number().optional(),
   rating: z.number().min(1).max(5).optional(),
+  is_favorite: z.boolean().optional(),
+  timestamps: z.array(z.string()).optional(),
+  collection_ids: z.array(z.number()).optional(),
+});
+
+// Search params schema
+export const searchParamsSchema = z.object({
+  query: z.string().optional(),
+  category_id: z.number().optional(),
+  collection_id: z.number().optional(),
+  rating_min: z.number().optional(),
+  rating_max: z.number().optional(),
+  date_from: z.string().optional(), // ISO date string
+  date_to: z.string().optional(), // ISO date string
+  sort_by: z.enum(['title', 'date', 'rating']).optional(),
+  sort_order: z.enum(['asc', 'desc']).optional(),
+  is_favorite: z.boolean().optional(),
 });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type InsertVideo = z.infer<typeof insertVideoSchema>;
+export type InsertCollection = z.infer<typeof insertCollectionSchema>;
+export type InsertCollectionVideo = z.infer<typeof insertCollectionVideoSchema>;
+export type InsertSavedSearch = z.infer<typeof insertSavedSearchSchema>;
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Video = typeof videos.$inferSelect;
+export type Collection = typeof collections.$inferSelect;
+export type CollectionVideo = typeof collection_videos.$inferSelect;
+export type SavedSearch = typeof saved_searches.$inferSelect;
 export type YoutubeUrlRequest = z.infer<typeof youtubeUrlSchema>;
 export type VideoMetadataRequest = z.infer<typeof videoMetadataSchema>;
+export type SearchParams = z.infer<typeof searchParamsSchema>;
