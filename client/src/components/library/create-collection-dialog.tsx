@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { FolderPlus } from "lucide-react";
 
 interface CreateCollectionDialogProps {
   isOpen: boolean;
@@ -32,8 +33,10 @@ interface CreateCollectionDialogProps {
 }
 
 const formSchema = z.object({
-  name: z.string().min(1, "Collection name is required"),
-  description: z.string().optional(),
+  name: z.string()
+    .min(2, "Collection name must be at least 2 characters")
+    .max(50, "Collection name must be less than 50 characters"),
+  description: z.string().max(500, "Description must be less than 500 characters").optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -50,7 +53,7 @@ export function CreateCollectionDialog({ isOpen, onClose, onSuccess }: CreateCol
     },
   });
   
-  const { mutate: createCollection } = useMutation({
+  const createCollection = useMutation({
     mutationFn: async (data: FormValues) => {
       const response = await apiRequest("POST", "/api/collections", data);
       return response.json();
@@ -61,33 +64,42 @@ export function CreateCollectionDialog({ isOpen, onClose, onSuccess }: CreateCol
         description: "Your new collection has been created successfully.",
       });
       form.reset();
+      queryClient.invalidateQueries({ queryKey: ["/api/collections"] });
       onSuccess();
+      onClose();
     },
-    onError: () => {
+    onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to create collection. Please try again.",
+        title: "Failed to create collection",
+        description: "An error occurred while creating your collection. Please try again.",
         variant: "destructive",
       });
     },
     onSettled: () => {
       setIsSubmitting(false);
-    },
+    }
   });
   
   const onSubmit = (data: FormValues) => {
     setIsSubmitting(true);
-    createCollection(data);
+    createCollection.mutate(data);
   };
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-zinc-900 border-zinc-800">
+      <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
         <DialogHeader>
-          <DialogTitle>Create New Collection</DialogTitle>
-          <DialogDescription>
-            Create a collection to organize and group your videos.
-          </DialogDescription>
+          <div className="flex items-center gap-2">
+            <div className="bg-primary/10 p-2 rounded-lg">
+              <FolderPlus className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle>Create New Collection</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Collections help you organize your videos into meaningful groups.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
         
         <Form {...form}>
@@ -101,7 +113,7 @@ export function CreateCollectionDialog({ isOpen, onClose, onSuccess }: CreateCol
                   <FormControl>
                     <Input 
                       placeholder="Enter collection name" 
-                      {...field}
+                      {...field} 
                       className="bg-zinc-800 border-zinc-700"
                     />
                   </FormControl>
@@ -118,9 +130,9 @@ export function CreateCollectionDialog({ isOpen, onClose, onSuccess }: CreateCol
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Enter a description" 
-                      {...field}
-                      className="bg-zinc-800 border-zinc-700"
+                      placeholder="Enter a brief description" 
+                      {...field} 
+                      className="bg-zinc-800 border-zinc-700 resize-none"
                       rows={3}
                     />
                   </FormControl>
@@ -130,15 +142,18 @@ export function CreateCollectionDialog({ isOpen, onClose, onSuccess }: CreateCol
             />
             
             <DialogFooter className="pt-4">
-              <Button 
-                variant="outline" 
-                onClick={onClose} 
+              <Button
                 type="button"
-                disabled={isSubmitting}
+                variant="outline"
+                onClick={onClose}
+                className="bg-zinc-800 border-zinc-700"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? "Creating..." : "Create Collection"}
               </Button>
             </DialogFooter>
