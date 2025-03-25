@@ -158,19 +158,24 @@ export function QASection({ videoId }: QASectionProps) {
       setIsCreatingConversation(false);
       setNewConversationTitle("");
 
+      console.log("Conversation created:", data);
+
       // Ensure we have a valid conversation ID
       if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
-        // Set the active conversation ID
-        setActiveConversation(data.id);
-
-        // Force refetching the conversation list and the new conversation data
+        // Force refetching the conversation list first
         queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
+        
+        // Set the active conversation ID 
+        setActiveConversation(data.id);
+        
+        // Force refetch the specific conversation
         queryClient.invalidateQueries({ queryKey: ['/api/qa', data.id] });
 
-        // Explicitly force a refetch of the conversation data
+        // Explicitly force a refetch of the conversation data with a longer delay
         setTimeout(() => {
+          console.log("Refetching conversation:", data.id);
           refetchConversation();
-        }, 100);
+        }, 500);
       }
     },
     onError: (error: Error) => {
