@@ -151,23 +151,27 @@ export function QASection({ videoId }: QASectionProps) {
     mutationFn: (title: string) => apiRequest(
       'POST',
       `/api/videos/${videoId}/qa`,
-      { title, messages: [] } // Using 'messages' to match server schema
+      { title, messages: [] }
     ),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
-      if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
-        // Explicitly set the active conversation
-        setActiveConversation(data.id);
-
-        // Also trigger a query refetch for the new conversation
-        queryClient.invalidateQueries({ queryKey: ['/api/qa', data.id] });
-      }
+      // First clear the form state
       setIsCreatingConversation(false);
       setNewConversationTitle("");
-      toast({
-        title: "Conversation created",
-        description: "You can now start asking questions about this video.",
-      });
+
+      // Ensure we have a valid conversation ID
+      if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
+        // Set the active conversation ID
+        setActiveConversation(data.id);
+
+        // Force refetching the conversation list and the new conversation data
+        queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/qa', data.id] });
+
+        // Explicitly force a refetch of the conversation data
+        setTimeout(() => {
+          refetchConversation();
+        }, 100);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -228,7 +232,7 @@ export function QASection({ videoId }: QASectionProps) {
 
   // Handle sending a question
   const handleSendQuestion = () => {
-    if (!question.trim() || !activeConversation) return;
+    if (!question.trim() || activeConversation === null) return;
 
     askQuestionMutation.mutate({
       conversationId: activeConversation,
@@ -387,7 +391,7 @@ export function QASection({ videoId }: QASectionProps) {
 
       {/* Main conversation area */}
       <div className="flex-1 flex flex-col">
-        {activeConversation ? (
+        {activeConversation !== null && conversationData && (
           <>
             {/* Message display area */}
             <ScrollArea className="flex-1 h-[300px] border rounded-md p-4 mb-4">
@@ -430,12 +434,12 @@ export function QASection({ videoId }: QASectionProps) {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={askQuestionMutation.isPending}
+                disabled={activeConversation === null || askQuestionMutation.isPending}
                 className="flex-1"
               />
               <Button
                 onClick={handleSendQuestion}
-                disabled={!question.trim() || askQuestionMutation.isPending}
+                disabled={!question.trim() || activeConversation === null || askQuestionMutation.isPending}
               >
                 {askQuestionMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
