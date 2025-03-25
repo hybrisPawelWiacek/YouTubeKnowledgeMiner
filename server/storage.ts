@@ -1,10 +1,10 @@
 import { 
-  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations,
+  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations, export_preferences,
   type User, type InsertUser, type InsertCategory, type Category, 
   type Video, type InsertVideo, type Collection, type InsertCollection,
   type CollectionVideo, type InsertCollectionVideo, type SavedSearch,
   type InsertSavedSearch, type SearchParams, type QAConversation, type InsertQAConversation,
-  type QAMessage, type QAQuestion
+  type QAMessage, type QAQuestion, type ExportPreferences, type InsertExportPreferences
 } from "@shared/schema";
 
 export interface IStorage {
@@ -53,6 +53,11 @@ export interface IStorage {
   createQAConversation(conversation: InsertQAConversation): Promise<QAConversation>;
   updateQAConversation(id: number, messages: QAMessage[]): Promise<QAConversation | undefined>;
   deleteQAConversation(id: number): Promise<boolean>;
+  
+  // Export preferences methods
+  getExportPreferencesByUserId(userId: number): Promise<ExportPreferences | undefined>;
+  createExportPreferences(preferences: InsertExportPreferences): Promise<ExportPreferences>;
+  updateExportPreferences(id: number, data: Partial<ExportPreferences>): Promise<ExportPreferences | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -63,12 +68,14 @@ export class MemStorage implements IStorage {
   private collectionVideos: Map<string, CollectionVideo>;
   private savedSearches: Map<number, SavedSearch>;
   private qaConversations: Map<number, QAConversation>;
+  private exportPreferences: Map<number, ExportPreferences>;
   private userIdCounter: number;
   private categoryIdCounter: number;
   private videoIdCounter: number;
   private collectionIdCounter: number;
   private savedSearchIdCounter: number;
   private qaConversationIdCounter: number;
+  private exportPreferencesIdCounter: number;
 
   constructor() {
     this.users = new Map();

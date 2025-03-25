@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 
 // Using pgvector for native vector operations in PostgreSQL
 export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note']);
+export const exportFormatEnum = pgEnum('export_format', ['txt', 'csv', 'json']);
 
 // Table for storing text chunks and their vector embeddings
 export const embeddings = pgTable("embeddings", {
@@ -107,6 +108,15 @@ export const qa_conversations = pgTable("qa_conversations", {
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Export preferences for users
+export const export_preferences = pgTable("export_preferences", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  default_format: exportFormatEnum("default_format").notNull().default("txt"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -137,6 +147,12 @@ export const insertSavedSearchSchema = createInsertSchema(saved_searches).omit({
 });
 
 export const insertQAConversationSchema = createInsertSchema(qa_conversations).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export const insertExportPreferencesSchema = createInsertSchema(export_preferences).omit({
   id: true,
   created_at: true,
   updated_at: true,
@@ -176,6 +192,22 @@ export const searchParamsSchema = z.object({
   sort_by: z.enum(['title', 'date', 'rating']).optional(),
   sort_order: z.enum(['asc', 'desc']).optional(),
   is_favorite: z.boolean().optional(),
+});
+
+// Export formats enum is defined at the top of the file
+
+// Export request schema
+export const exportRequestSchema = z.object({
+  content_type: z.enum(['transcript', 'summary', 'qa']),
+  format: z.enum(['txt', 'csv', 'json']),
+  video_ids: z.array(z.number()),
+  qa_conversation_id: z.number().optional(),
+});
+
+// Export preferences schema
+export const exportPreferencesSchema = z.object({
+  default_format: z.enum(['txt', 'csv', 'json']).default('txt'),
+  user_id: z.number(),
 });
 
 // Q&A Message schema
@@ -235,9 +267,12 @@ export type QAConversation = typeof qa_conversations.$inferSelect;
 export type Embedding = typeof embeddings.$inferSelect;
 export type SearchHistory = typeof search_history.$inferSelect;
 export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
+export type InsertExportPreferences = z.infer<typeof insertExportPreferencesSchema>;
 export type QAMessage = z.infer<typeof qaMessageSchema>;
 export type QAQuestion = z.infer<typeof qaQuestionSchema>;
 export type YoutubeUrlRequest = z.infer<typeof youtubeUrlSchema>;
 export type VideoMetadataRequest = z.infer<typeof videoMetadataSchema>;
 export type SearchParams = z.infer<typeof searchParamsSchema>;
 export type SemanticSearchParams = z.infer<typeof semanticSearchSchema>;
+export type ExportPreferences = typeof export_preferences.$inferSelect;
+export type ExportRequest = z.infer<typeof exportRequestSchema>;
