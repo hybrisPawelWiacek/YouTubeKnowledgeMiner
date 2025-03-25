@@ -449,7 +449,9 @@ export function QASection({ videoId }: QASectionProps) {
               </Button>
             </div>
           </>
-        ) : (
+        )}
+        
+        {activeConversation === null && (
           <div className="flex flex-col items-center justify-center h-[400px] text-center border rounded-md p-4">
             <MessageCircle className="h-12 w-12 mb-4 opacity-20" />
             <h3 className="text-lg font-medium mb-2">No Active Conversation</h3>
