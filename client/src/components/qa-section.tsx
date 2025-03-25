@@ -142,6 +142,9 @@ export function QASection() {
     // Store the current question to use after conversation is created
     const initialQuestion = question;
     
+    // Clear the question input field immediately
+    setQuestion("");
+    
     createConversation.mutate(title, {
       onSuccess: (data) => {
         // After conversation is created successfully, send the initial question
@@ -170,9 +173,15 @@ export function QASection() {
       return;
     }
 
+    // Store question content before clearing
+    const currentQuestion = question;
+    
     // Add user message immediately to UI for better UX
-    const userMessage: Message = { role: 'user', content: question };
+    const userMessage: Message = { role: 'user', content: currentQuestion };
     setMessages([...messages, userMessage]);
+
+    // Clear the input immediately
+    setQuestion("");
 
     // Set loading state
     setIsSubmitting(true);
@@ -180,11 +189,8 @@ export function QASection() {
     // Send the question to the API
     await addMessage.mutateAsync({
       conversationId: activeConversation,
-      content: question
+      content: currentQuestion
     });
-
-    // Clear the input
-    setQuestion("");
   };
 
   const handleNewConversation = () => {
