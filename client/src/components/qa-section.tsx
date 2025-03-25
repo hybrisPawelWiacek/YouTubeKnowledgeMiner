@@ -85,8 +85,14 @@ export function QASection() {
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
       console.log(`Sending question to conversation ${conversationId}:`, content);
-      const response = await axios.post(`/api/qa/${conversationId}/ask`, { question: content });
-      return response.data;
+      try {
+        const response = await axios.post(`/api/qa/${conversationId}/ask`, { question: content });
+        console.log("Response from question:", response.data);
+        return response.data;
+      } catch (error) {
+        console.error("Error submitting question:", error);
+        throw error;
+      }
     },
     onSuccess: (data) => {
       console.log("Message added, response:", data);
