@@ -81,18 +81,14 @@ export function QASection() {
     }
   });
 
-  // Add message to conversation
+  // Mutation for adding a new message to a conversation
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
-      console.log(`Sending question to conversation ${conversationId}:`, content);
-      try {
-        const response = await axios.post(`/api/qa/${conversationId}/ask`, { question: content });
-        console.log("Response from question:", response.data);
-        return response.data;
-      } catch (error) {
-        console.error("Error submitting question:", error);
-        throw error;
-      }
+      const response = await axios.post(`/api/qa/${conversationId}/ask`, { 
+        question: content,
+        video_id: videoId
+      });
+      return response.data;
     },
     onSuccess: (data) => {
       console.log("Message added, response:", data);
@@ -103,6 +99,10 @@ export function QASection() {
       }
 
       // Make sure we're not still in loading state
+      setIsSubmitting(false);
+    },
+    onError: (error) => {
+      console.error("Failed to send message:", error);
       setIsSubmitting(false);
     }
   });
