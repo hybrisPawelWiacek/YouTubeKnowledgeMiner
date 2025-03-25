@@ -1,13 +1,39 @@
 import { useSupabase } from "@/hooks/use-supabase";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { FolderOpen, Home } from "lucide-react";
+import { FolderOpen, Home, User, LogOut, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 export function Header() {
   const { user, signOut } = useSupabase();
   const [location] = useLocation();
+  const { toast } = useToast();
 
   const isActive = (path: string) => location === path;
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed out",
+        description: "You have been successfully signed out",
+      });
+    } catch (error) {
+      console.error("Error signing out:", error);
+      toast({
+        title: "Sign out failed",
+        description: "There was a problem signing you out",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <header className="bg-zinc-900 shadow-md">
@@ -54,23 +80,41 @@ export function Header() {
 
           <div className="flex items-center">
             {user ? (
-              <div className="flex items-center">
-                <span className="text-sm mr-2 text-gray-300 hidden sm:inline">
-                  {user.email}
-                </span>
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center mr-2">
-                  <span className="text-white font-medium">
-                    {user.email ? user.email[0].toUpperCase() : "U"}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  onClick={() => signOut()}
-                  className="text-sm"
-                >
-                  Sign Out
-                </Button>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 px-2">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                        <span className="text-white font-medium">
+                          {user.email ? user.email[0].toUpperCase() : "U"}
+                        </span>
+                      </div>
+                      <span className="ml-2 text-sm text-gray-300 hidden sm:inline">
+                        {user.email}
+                      </span>
+                      <ChevronDown className="h-4 w-4 ml-1 text-gray-400" />
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Account
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={handleSignOut}
+                    className="cursor-pointer flex items-center text-red-600 dark:text-red-400"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <Link href="/auth">
                 <Button variant="secondary" size="sm">

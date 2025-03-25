@@ -14,6 +14,7 @@ type SupabaseContextType = {
   signInWithGoogle: () => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   getLocalData: () => any;
   setLocalData: (data: any) => void;
   migrateLocalData: () => Promise<void>;
@@ -28,6 +29,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   signInWithGoogle: async () => {},
   signUp: async () => {},
   signOut: async () => {},
+  resetPassword: async () => {},
   getLocalData: () => ({}),
   setLocalData: () => {},
   migrateLocalData: async () => {},
@@ -230,6 +232,39 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       toast({
         title: "Error",
         description: error.message || "Failed to sign out",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Password reset function
+  const resetPassword = async (email: string) => {
+    if (!supabase) {
+      toast({
+        title: "Error",
+        description: "Supabase client not initialized",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Please check your email for a password reset link",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Failed to send password reset email",
         variant: "destructive",
       });
     }
