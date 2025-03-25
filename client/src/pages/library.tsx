@@ -36,6 +36,7 @@ export default function Library() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
@@ -48,6 +49,9 @@ export default function Library() {
   // Hooks
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { user } = useSupabase();
+  const { promptAuth } = useAuthPrompt();
+  const [, navigate] = useLocation();
   
   // Queries
   const videosQuery = useQuery({
@@ -171,6 +175,14 @@ export default function Library() {
       setIsFilterSidebarOpen(false);
     }
   }, [isMobile]);
+  
+  // Check auth status on component mount
+  useEffect(() => {
+    if (!user) {
+      const shouldPrompt = promptAuth('access_library');
+      setShowAuthPrompt(shouldPrompt);
+    }
+  }, [user, promptAuth]);
   
   // Toggle select all videos
   const toggleSelectAll = () => {
