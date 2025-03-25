@@ -29,8 +29,9 @@ export function VideoResult({ video }: VideoResultProps) {
   const [showDescription, setShowDescription] = useState(false);
   const { toast } = useToast();
   const { user } = useSupabase();
-  const { showAuthPrompt, promptType, promptAuth, closePrompt } = useAuthPrompt();
+  const { showAuthPrompt, promptType, promptAuth, closePrompt, incrementEngagement } = useAuthPrompt();
   const [pendingMetadata, setPendingMetadata] = useState<VideoMetadata | null>(null);
+  const [interactionCount, setInteractionCount] = useState(0);
 
   // Fetch categories
   const { data: categories = [] } = useQuery<Category[]>({
@@ -245,7 +246,14 @@ export function VideoResult({ video }: VideoResultProps) {
                       id="userNotes"
                       placeholder="Add your notes about this video..."
                       value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
+                      onChange={(e) => {
+                        setNotes(e.target.value);
+                        // Track meaningful engagement (when typing notes)
+                        if (e.target.value.length > 10 && notes.length <= 10) {
+                          incrementEngagement();
+                          setInteractionCount(prev => prev + 1);
+                        }
+                      }}
                       className="resize-none bg-zinc-900 border-zinc-700"
                       rows={2}
                     />
@@ -256,7 +264,13 @@ export function VideoResult({ video }: VideoResultProps) {
                       <label htmlFor="videoCategory" className="block text-sm font-medium text-gray-300 mb-1">
                         Category
                       </label>
-                      <Select onValueChange={(value) => setCategoryId(Number(value))}>
+                      <Select 
+                        onValueChange={(value) => {
+                          setCategoryId(Number(value));
+                          incrementEngagement();
+                          setInteractionCount(prev => prev + 1);
+                        }}
+                      >
                         <SelectTrigger className="bg-zinc-900 border-zinc-700">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>

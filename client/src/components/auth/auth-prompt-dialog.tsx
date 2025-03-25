@@ -22,22 +22,40 @@ interface AuthPromptDialogProps {
   onContinueAsGuest?: () => void;
 }
 
-// Messages for different prompt types
+// Enhanced messages for different prompt types with specific benefits
 const promptMessages = {
   save_video: {
-    title: "Save Your Progress",
-    description: "Create an account to save your analyzed videos and access them anytime.",
-    buttonText: "Save and Create Account"
+    title: "Save Your Knowledge",
+    description: "Your video analysis is ready! Create an account to save this insight and build your personal knowledge base that syncs across all your devices.",
+    benefits: [
+      "Access your analyzed videos anytime, anywhere",
+      "Organize insights with collections and categories",
+      "Never lose valuable knowledge extracted from videos"
+    ],
+    buttonText: "Save and Create Account",
+    icon: "💾"
   },
   analyze_again: {
-    title: "Analyze More Videos",
-    description: "Create an account to analyze unlimited videos and build your knowledge library.",
-    buttonText: "Create Account"
+    title: "Unlock Unlimited Analysis",
+    description: "You've discovered how powerful our AI analysis is! Create an account to analyze unlimited videos and build a searchable knowledge library.",
+    benefits: [
+      "Analyze unlimited videos with advanced AI",
+      "Search across all your video transcripts and notes",
+      "Extract key insights automatically with our AI"
+    ],
+    buttonText: "Create Account & Continue",
+    icon: "🔍"
   },
   access_library: {
-    title: "Access Your Library",
-    description: "Create an account to save videos to your library and organize your knowledge.",
-    buttonText: "Create Account"
+    title: "Your Personal Knowledge Hub",
+    description: "Create an account to organize all your video insights in one searchable library. Your analyzed content will be stored securely in your account.",
+    benefits: [
+      "Create custom collections to organize videos",
+      "Tag and categorize videos for easy retrieval",
+      "Powerful search across all your saved content"
+    ],
+    buttonText: "Create Your Library",
+    icon: "📚"
   }
 };
 
@@ -85,13 +103,29 @@ export function AuthPromptDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{promptMessages[promptType].title}</DialogTitle>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl" aria-hidden="true">{promptMessages[promptType].icon}</span>
+            <DialogTitle>{promptMessages[promptType].title}</DialogTitle>
+          </div>
           <DialogDescription>
             {promptMessages[promptType].description}
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex flex-col gap-4 py-4">
+        {/* Benefits list */}
+        <div className="bg-muted/50 p-4 rounded-lg mb-4">
+          <p className="text-sm font-medium mb-2">Benefits:</p>
+          <ul className="space-y-2">
+            {promptMessages[promptType].benefits.map((benefit, index) => (
+              <li key={index} className="flex items-start gap-2 text-sm">
+                <span className="text-primary" aria-hidden="true">✓</span>
+                <span>{benefit}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        
+        <div className="flex flex-col gap-4 py-2">
           <Button
             variant="outline"
             className="w-full bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 h-10"
@@ -111,7 +145,7 @@ export function AuthPromptDialog({
             className="w-full"
             onClick={handleGoToAuth}
           >
-            Sign Up with Email
+            {promptMessages[promptType].buttonText}
           </Button>
         </div>
         
