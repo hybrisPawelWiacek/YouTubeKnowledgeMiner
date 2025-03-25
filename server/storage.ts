@@ -85,12 +85,14 @@ export class MemStorage implements IStorage {
     this.collectionVideos = new Map();
     this.savedSearches = new Map();
     this.qaConversations = new Map();
+    this.exportPreferences = new Map();
     this.userIdCounter = 1;
     this.categoryIdCounter = 1;
     this.videoIdCounter = 1;
     this.collectionIdCounter = 1;
     this.savedSearchIdCounter = 1;
     this.qaConversationIdCounter = 1;
+    this.exportPreferencesIdCounter = 1;
   }
 
   // User methods
@@ -426,6 +428,40 @@ export class MemStorage implements IStorage {
   
   async deleteQAConversation(id: number): Promise<boolean> {
     return this.qaConversations.delete(id);
+  }
+  
+  // Export preferences methods
+  async getExportPreferencesByUserId(userId: number): Promise<ExportPreferences | undefined> {
+    return Array.from(this.exportPreferences.values()).find(
+      prefs => prefs.user_id === userId
+    );
+  }
+  
+  async createExportPreferences(insertPreferences: InsertExportPreferences): Promise<ExportPreferences> {
+    const id = this.exportPreferencesIdCounter++;
+    const now = new Date();
+    const preferences: ExportPreferences = {
+      ...insertPreferences,
+      id,
+      created_at: now,
+      updated_at: now
+    };
+    this.exportPreferences.set(id, preferences);
+    return preferences;
+  }
+  
+  async updateExportPreferences(id: number, data: Partial<ExportPreferences>): Promise<ExportPreferences | undefined> {
+    const preferences = this.exportPreferences.get(id);
+    if (!preferences) return undefined;
+    
+    const updatedPreferences: ExportPreferences = {
+      ...preferences,
+      ...data,
+      updated_at: new Date()
+    };
+    
+    this.exportPreferences.set(id, updatedPreferences);
+    return updatedPreferences;
   }
 }
 

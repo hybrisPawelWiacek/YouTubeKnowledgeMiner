@@ -248,6 +248,7 @@ export const insertSearchHistorySchema = createInsertSchema(search_history).omit
   created_at: true,
 });
 
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;

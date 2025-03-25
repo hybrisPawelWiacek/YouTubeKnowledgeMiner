@@ -3,7 +3,9 @@ import {
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
   SavedSearch, InsertSavedSearch, SearchParams, QAConversation, InsertQAConversation,
-  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations
+  ExportPreferences, InsertExportPreferences,
+  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations,
+  export_preferences
 } from '@shared/schema';
 import { db } from './db';
 import { IStorage } from './storage';
@@ -366,6 +368,38 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return result.length > 0;
+  }
+  
+  // Export preferences methods
+  async getExportPreferencesByUserId(userId: number): Promise<ExportPreferences | undefined> {
+    const result = await db
+      .select()
+      .from(export_preferences)
+      .where(eq(export_preferences.user_id, userId));
+    
+    return result[0];
+  }
+  
+  async createExportPreferences(preferences: InsertExportPreferences): Promise<ExportPreferences> {
+    const result = await db
+      .insert(export_preferences)
+      .values(preferences)
+      .returning();
+    
+    return result[0];
+  }
+  
+  async updateExportPreferences(id: number, data: Partial<ExportPreferences>): Promise<ExportPreferences | undefined> {
+    const result = await db
+      .update(export_preferences)
+      .set({
+        ...data,
+        updated_at: new Date()
+      })
+      .where(eq(export_preferences.id, id))
+      .returning();
+    
+    return result[0];
   }
 }
 
