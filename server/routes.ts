@@ -895,11 +895,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Supabase status and config endpoint for frontend
   app.get('/api/supabase-config', async (req, res) => {
     try {
-      // Return Supabase initialization status
+      // Return Supabase initialization status and config details for the client
       const status = {
         initialized: isSupabaseConfigured(),
         keyExists: Boolean(process.env.SUPABASE_KEY),
         urlExists: Boolean(process.env.SUPABASE_URL),
+        // Provide minimal credentials needed for auth to work properly
+        url: process.env.SUPABASE_URL,
+        anonKey: process.env.SUPABASE_KEY
       };
       
       res.json(status);
@@ -907,6 +910,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error checking Supabase status:", error);
       res.status(500).json({ 
         initialized: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Auth callback route for OAuth redirect
+  app.get('/auth/callback', (req, res) => {
+    // This route handles the OAuth callback from Google
+    // Supabase JS client handles token exchange automatically
+    res.redirect('/');
+  });
+  
+  // API endpoint to import anonymous user data
+  app.post('/api/import-anonymous-data', async (req, res) => {
+    try {
+      const { userData, userId } = req.body;
+      
+      if (!userData || !userId) {
+        return res.status(400).json({ message: 'Missing user data or user ID' });
+      }
+      
+      // Process videos data if present
+      if (userData.videos && Array.isArray(userData.videos)) {
+        for (const video of userData.videos) {
+          try {
+            // First check if this video already exists for the user
+            // Since searchVideos doesn't have a direct filter for youtube_id, we'll search by title
+            // and then filter the results in memory
+            const existingVideos = await dbStorage.searchVideos(Number(userId), {
+              query: video.title || ''
+            });
+            
+            // Check if any of the found videos match our youtube_id
+            const existingVideo = existingVideos.filter(v => v.youtube_id === video.youtube_id);
+            
+            if (existingVideo.length === 0) {
+              // Add video to user's library
+              await dbStorage.insertVideo({
+                ...video,
+                user_id: Number(userId),
+                created_at: new Date().toISOString()
+              });
+            }
+          } catch (error) {
+            console.error(`Error importing video ${video.youtube_id}:`, error);
+            // Continue with next video rather than failing the whole import
+          }
+        }
+      }
+      
+      // Process collections data if present
+      if (userData.collections && Array.isArray(userData.collections)) {
+        for (const collection of userData.collections) {
+          try {
+            // First check if a collection with this name already exists
+            const existingCollections = await dbStorage.getCollectionsByUserId(Number(userId));
+            const matchingCollection = existingCollections.find(c => c.name === collection.name);
+            
+            let collectionId: number;
+            
+            if (!matchingCollection) {
+              // Create new collection
+              const newCollection = await dbStorage.createCollection({
+                name: collection.name,
+                description: collection.description || '',
+                user_id: Number(userId)
+              });
+              collectionId = newCollection.id;
+            } else {
+              collectionId = matchingCollection.id;
+            }
+            
+            // Add videos to collection if included
+            if (collection.videoIds && Array.isArray(collection.videoIds)) {
+              await dbStorage.bulkAddVideosToCollection(collectionId, collection.videoIds);
+            }
+          } catch (error) {
+            console.error(`Error importing collection ${collection.name}:`, error);
+            // Continue with next collection rather than failing the whole import
+          }
+        }
+      }
+      
+      return res.status(200).json({ message: 'Data imported successfully' });
+    } catch (error) {
+      console.error('Error importing anonymous data:', error);
+      return res.status(500).json({ 
+        message: 'Failed to import data', 
         error: error instanceof Error ? error.message : String(error)
       });
     }

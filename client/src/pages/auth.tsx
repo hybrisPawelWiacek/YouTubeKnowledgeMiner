@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { FcGoogle } from "react-icons/fc";
+import { Loader2 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { useSupabase } from "@/hooks/use-supabase";
 
 // Login schema
@@ -34,8 +37,9 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [_, setLocation] = useLocation();
-  const { signIn, signUp } = useSupabase();
+  const { signIn, signUp, signInWithGoogle } = useSupabase();
 
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -78,6 +82,20 @@ export default function Auth() {
       setIsLoading(false);
     }
   };
+  
+  // Handle Google authentication
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      // Redirect will be handled by the OAuth provider
+    } catch (error) {
+      console.error('Google sign in error:', error);
+    } finally {
+      // This might not execute immediately as the page will be redirected
+      setIsGoogleLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -98,6 +116,29 @@ export default function Auth() {
                 Mine knowledge from your YouTube videos
               </CardDescription>
             </CardHeader>
+            
+            {/* Google sign-in button for both tabs */}
+            <CardContent>
+              <Button 
+                variant="outline" 
+                className="w-full bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 h-10"
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading}
+              >
+                {isGoogleLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FcGoogle className="h-5 w-5" />
+                )}
+                <span>{isGoogleLoading ? "Signing in..." : "Sign in with Google"}</span>
+              </Button>
+              
+              <div className="flex items-center my-4">
+                <Separator className="flex-grow" />
+                <span className="px-3 text-sm text-gray-500">OR</span>
+                <Separator className="flex-grow" />
+              </div>
+            </CardContent>
             
             <TabsContent value="login">
               <Form {...loginForm}>
@@ -136,7 +177,7 @@ export default function Auth() {
                       className="w-full" 
                       disabled={isLoading}
                     >
-                      {isLoading ? "Logging in..." : "Login"}
+                      {isLoading ? "Logging in..." : "Login with Email"}
                     </Button>
                   </CardFooter>
                 </form>
