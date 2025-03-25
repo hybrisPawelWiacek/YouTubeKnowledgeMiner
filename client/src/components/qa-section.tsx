@@ -292,7 +292,13 @@ export function QASection() {
                             {conversation.title}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
-                            {new Date(conversation.createdAt).toLocaleDateString()}
+                            {new Date(conversation.createdAt).toLocaleString('en-US', {
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </div>
                         </div>
                         <button
