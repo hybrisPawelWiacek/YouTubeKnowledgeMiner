@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { VideoCard } from "@/components/library/video-card";
@@ -11,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSupabase } from "@/hooks/use-supabase";
+import { useAuthPrompt } from "@/hooks/use-auth-prompt";
+import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Video, Category, Collection } from "@/types";
 import {
