@@ -139,7 +139,21 @@ export function QASection() {
   const handleCreateNewConversation = () => {
     // Create new conversation with a placeholder title based on question
     const title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
-    createConversation.mutate(title);
+    // Store the current question to use after conversation is created
+    const initialQuestion = question;
+    
+    createConversation.mutate(title, {
+      onSuccess: (data) => {
+        // After conversation is created successfully, send the initial question
+        if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
+          // Send the initial question to get an answer
+          addMessage.mutate({
+            conversationId: data.id,
+            content: initialQuestion
+          });
+        }
+      }
+    });
   };
 
   const handleSelectConversation = (conversationId: number) => {
