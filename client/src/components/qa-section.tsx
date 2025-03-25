@@ -84,6 +84,7 @@ export function QASection() {
   // Add message to conversation
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
+      console.log(`Sending question to conversation ${conversationId}:`, content);
       const response = await axios.post(`/api/qa/${conversationId}/ask`, { question: content });
       return response.data;
     },
