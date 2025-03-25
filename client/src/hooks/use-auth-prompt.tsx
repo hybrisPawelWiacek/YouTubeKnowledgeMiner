@@ -98,15 +98,18 @@ export function useAuthPrompt() {
   }, [getPromptHistory]);
   
   // Function to prompt for authentication at strategic moments
-  const promptAuth = useCallback((type: AuthPromptType): boolean => {
+  // When checkOnly=true, function performs all checks but doesn't show the prompt or update history
+  const promptAuth = useCallback((type: AuthPromptType, checkOnly: boolean = false): boolean => {
     // Only show prompt if user is not authenticated
     if (loading || user) return false;
     
     // Skip if prompts are suppressed
     if (areSuppressed()) return false;
     
-    // Track engagement
-    const engagement = incrementEngagement();
+    // Track engagement (only if not in check-only mode)
+    if (!checkOnly) {
+      incrementEngagement();
+    }
     
     // Don't show prompts until minimum engagement threshold is reached
     if (!hasMinimumEngagement() && type !== 'save_video') {
@@ -120,9 +123,14 @@ export function useAuthPrompt() {
     if (getPromptHistory().length >= PROMPT_FREQUENCY.SESSION_LIMIT) {
       // If this would be the 4th prompt in a session, apply extended suppression
       if (!hasSeenPromptType(type)) {
-        setExtendedSuppression();
+        if (!checkOnly) setExtendedSuppression();
         return false;
       }
+    }
+    
+    // If we're only checking eligibility, return true without showing prompt
+    if (checkOnly) {
+      return true; // User is eligible for this prompt
     }
     
     // All checks passed, show the prompt

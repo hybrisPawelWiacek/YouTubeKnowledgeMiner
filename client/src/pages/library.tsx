@@ -181,12 +181,15 @@ export default function Library() {
   useEffect(() => {
     if (!user) {
       // Determine whether to show auth prompt based on user engagement
-      // Initial check with basic prompt logic
-      const shouldPrompt = libraryInteractions >= 3 
-        ? promptAuth('access_library') 
-        : false;
+      // Use different thresholds based on prompt history
+      const hasSeenPromptBefore = promptAuth('access_library', true);
+      const threshold = hasSeenPromptBefore ? 8 : 3;
       
-      setShowAuthPrompt(shouldPrompt);
+      // Only show prompt if we've reached the threshold
+      if (libraryInteractions >= threshold) {
+        const shouldPrompt = promptAuth('access_library');
+        setShowAuthPrompt(shouldPrompt);
+      }
     }
   }, [user, promptAuth, libraryInteractions]);
   
@@ -206,7 +209,9 @@ export default function Library() {
       
       // If user reaches engagement threshold, consider prompting
       // Different thresholds based on whether they've seen this prompt before
-      const effectiveThreshold = promptAuth('access_library', false) ? secondaryThreshold : primaryThreshold;
+      // Use checkOnly mode to query without triggering the prompt
+      const hasSeenPromptBefore = promptAuth('access_library', true);
+      const effectiveThreshold = hasSeenPromptBefore ? secondaryThreshold : primaryThreshold;
       
       if (libraryInteractions >= effectiveThreshold && !showAuthPrompt) {
         console.log(`Engagement threshold reached (${effectiveThreshold}), showing auth prompt`);
