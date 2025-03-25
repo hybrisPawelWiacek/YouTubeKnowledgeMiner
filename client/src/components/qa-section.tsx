@@ -7,7 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose } from "lucide-react";
+import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Define types for messages
 interface Message {
@@ -34,6 +42,7 @@ export function QASection() {
   const [question, setQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
 
   // CSS classes for the sidebar based on visibility
   const sidebarClasses = showSidebar
@@ -170,6 +179,38 @@ export function QASection() {
     setShowSidebar(false);
   };
 
+  // Delete conversation function
+  const deleteConversation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await axios.delete(`/api/qa/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      // If we're deleting the active conversation, reset the active conversation
+      if (activeConversation === conversationToDelete) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+      
+      // Force refetching conversations
+      refetchConversations();
+      
+      // Reset the conversation to delete
+      setConversationToDelete(null);
+    },
+    onError: (error) => {
+      console.error("Failed to delete conversation:", error);
+      // Reset the conversation to delete even on error
+      setConversationToDelete(null);
+    }
+  });
+
+  const handleDeleteConversation = () => {
+    if (conversationToDelete) {
+      deleteConversation.mutate(conversationToDelete);
+    }
+  };
+
   // Render the chat interface
   return (
     <div className="flex flex-col h-full">
@@ -230,23 +271,43 @@ export function QASection() {
               ) : conversations && conversations.length > 0 ? (
                 <div className="space-y-1.5">
                   {conversations.map((conversation) => (
+                    <div key={conversation.id} className="group">
                     <div
                       key={conversation.id}
-                      className={`px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-muted transition-colors ${
+                      className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${
                         activeConversation === conversation.id ? 'bg-muted' : ''
                       }`}
-                      onClick={() => {
-                        handleSelectConversation(conversation.id);
-                        if (window.innerWidth < 768) setShowSidebar(false);
-                      }}
                     >
-                      <div className="truncate">
-                        {conversation.title}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(conversation.createdAt).toLocaleDateString()}
+                      <div 
+                        className="flex justify-between items-start"
+                      >
+                        <div 
+                          className="flex-grow cursor-pointer"
+                          onClick={() => {
+                            handleSelectConversation(conversation.id);
+                            if (window.innerWidth < 768) setShowSidebar(false);
+                          }}
+                        >
+                          <div className="truncate">
+                            {conversation.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {new Date(conversation.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <button
+                          className="text-xs text-red-500 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted-foreground/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConversationToDelete(conversation.id);
+                          }}
+                          aria-label="Delete conversation"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
                       </div>
                     </div>
+                  </div>
                   ))}
                 </div>
               ) : (
@@ -349,6 +410,45 @@ export function QASection() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={conversationToDelete !== null} onOpenChange={(open) => !open && setConversationToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Conversation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConversationToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteConversation}
+              disabled={deleteConversation.isPending}
+            >
+              {deleteConversation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
