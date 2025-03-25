@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Loader2, Plus } from "lucide-react";
 
 // Define types for messages
 interface Message {
@@ -35,7 +35,7 @@ export function QASection() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch conversations for this video
-  const { data: conversations, isLoading: isLoadingConversations, refetch: refetchConversations } = 
+  const { data: conversations, isLoading: isLoadingConversations, refetch: refetchConversations } =
     useQuery({
       queryKey: ['/api/videos', videoId, 'qa'],
       queryFn: async () => {
@@ -46,7 +46,7 @@ export function QASection() {
     });
 
   // Fetch active conversation if set
-  const { data: conversationData, isLoading: isLoadingConversation, refetch: refetchConversation } = 
+  const { data: conversationData, isLoading: isLoadingConversation, refetch: refetchConversation } =
     useQuery({
       queryKey: ['/api/qa', activeConversation],
       queryFn: async () => {
@@ -84,7 +84,7 @@ export function QASection() {
   // Mutation for adding a new message to a conversation
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
-      const response = await axios.post(`/api/qa/${conversationId}/ask`, { 
+      const response = await axios.post(`/api/qa/${conversationId}/ask`, {
         question: content,
         video_id: videoId
       });
@@ -121,122 +121,147 @@ export function QASection() {
     }
   }, [messages]);
 
-  // Handle submitting a question
+  const handleCreateNewConversation = () => {
+    // Create new conversation with a placeholder title based on question
+    const title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
+    createConversation.mutate(title);
+  };
+
+  const handleSelectConversation = (conversationId: number) => {
+    setActiveConversation(conversationId);
+  };
+
   const handleSubmitQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!question.trim() || isSubmitting) return;
 
-    if (!question.trim()) return;
+    // If there's no active conversation, create one first
+    if (!activeConversation) {
+      handleCreateNewConversation();
+      return;
+    }
 
+    // Add user message immediately to UI for better UX
+    const userMessage: Message = { role: 'user', content: question };
+    setMessages([...messages, userMessage]);
+
+    // Set loading state
     setIsSubmitting(true);
 
-    try {
-      // Create a new conversation if there's no active one
-      if (!activeConversation) {
-        const title = `Q: ${question.slice(0, 30)}${question.length > 30 ? '...' : ''}`;
+    // Send the question to the API
+    await addMessage.mutateAsync({
+      conversationId: activeConversation,
+      content: question
+    });
 
-        // Update UI immediately with user message
-        const userMessage = { role: 'user', content: question };
-        setMessages([...messages, userMessage]);
-
-        // Create conversation and get the ID
-        const result = await createConversation.mutateAsync(title);
-
-        console.log("New conversation created:", result);
-
-        if (result && typeof result === 'object' && 'id' in result) {
-          // Set the active conversation
-          setActiveConversation(result.id);
-
-          // Now send the message using the new conversation ID
-          await addMessage.mutateAsync({
-            conversationId: result.id,
-            content: question
-          });
-
-          // Explicitly refetch to get the assistant's response
-          await refetchConversation();
-          await refetchConversations();
-        }
-      } else {
-        // Update UI immediately with user message
-        const userMessage = { role: 'user', content: question };
-        setMessages([...messages, userMessage]);
-
-        // Submit the message to the API
-        await addMessage.mutateAsync({ 
-          conversationId: activeConversation,
-          content: question
-        });
-
-        // Refetch to get the assistant's response
-        await refetchConversation();
-      }
-
-      // Clear the question input
-      setQuestion("");
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      // Keep the user's message in the UI even if submission failed
-      // This prevents the UI from resetting as if nothing happened
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Clear the input
+    setQuestion("");
   };
 
   // Render the chat interface
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
-              <MessageCircle className="h-12 w-12 mb-4 opacity-20" />
-              <h3 className="text-lg font-medium mb-2">Ask a Question</h3>
-              <p className="text-sm text-gray-400 max-w-md">
-                Start by asking a question about the video content. The AI will analyze the transcript and provide an answer.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <div 
-                  key={index} 
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                      message.role === 'user' 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-muted'
+      <div className="flex h-full gap-4">
+        {/* Conversations sidebar */}
+        <div className="w-64 flex-shrink-0 bg-muted/20 rounded-lg p-3 overflow-hidden">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium">Conversations</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActiveConversation(null);
+                setMessages([]); //added to clear the messages when creating a new conversation
+              }}
+              className="h-7 px-2 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              New
+            </Button>
+          </div>
+
+          <ScrollArea className="h-[calc(100%-40px)]">
+            {isLoadingConversations ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : conversations && conversations.length > 0 ? (
+              <div className="space-y-1.5">
+                {conversations.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className={`px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-muted transition-colors ${
+                      activeConversation === conversation.id ? 'bg-muted' : ''
                     }`}
+                    onClick={() => handleSelectConversation(conversation.id)}
                   >
-                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                  </div>
-                </div>
-              ))}
-              {isSubmitting && (
-                <div className="flex justify-start">
-                  <div className="rounded-lg px-4 py-2 bg-muted">
-                    <div className="flex items-center">
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      <span className="text-sm">AI is thinking...</span>
+                    <div className="truncate">
+                      {conversation.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(conversation.createdAt).toLocaleDateString()}
                     </div>
                   </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </ScrollArea>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                No conversations yet
+              </div>
+            )}
+          </ScrollArea>
+        </div>
 
-        {/* Question input form */}
-        <form onSubmit={handleSubmitQuestion} className="p-4 border-t border-border">
-          <div className="flex space-x-2">
+        {/* Main chat area */}
+        <div className="flex-grow flex flex-col">
+          <div className="flex-grow bg-muted/20 rounded-lg p-6 mb-6 overflow-hidden flex flex-col">
+            {isLoadingConversation || !conversationData ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex-grow flex flex-col">
+                <ScrollArea className="flex-grow pr-4">
+                  <div className="space-y-6">
+                    {messages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-lg p-4 ${
+                            message.role === 'user'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          <div className="whitespace-pre-wrap">{message.content}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {isSubmitting && (
+                      <div className="flex justify-start">
+                        <div className="max-w-[80%] rounded-lg p-4 bg-muted text-muted-foreground">
+                          <div className="flex items-center space-x-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>AI is thinking...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-start space-x-2 p-4 border-t border-border">
             <Textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask a question about this video..."
-              className="flex-1 min-h-[60px] resize-none"
+              className="flex-grow min-h-[80px]"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -244,14 +269,15 @@ export function QASection() {
                 }
               }}
             />
-            <Button type="submit" disabled={isSubmitting || !question.trim()}>
+            <Button
+              onClick={handleSubmitQuestion}
+              className="flex-shrink-0"
+              disabled={!question.trim() || isSubmitting}
+            >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Press Enter to send, Shift+Enter for a new line
-          </p>
-        </form>
+        </div>
       </div>
     </div>
   );
