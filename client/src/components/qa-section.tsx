@@ -60,8 +60,7 @@ export function QASection() {
   // Create a new conversation
   const createConversation = useMutation({
     mutationFn: async (title: string) => {
-      const response = await axios.post('/api/qa', {
-        videoId,
+      const response = await axios.post(`/api/videos/${videoId}/qa`, {
         title
       });
       return response.data;
@@ -85,12 +84,19 @@ export function QASection() {
   // Add message to conversation
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
-      const response = await axios.post(`/api/qa/${conversationId}/messages`, { content });
+      const response = await axios.post(`/api/qa/${conversationId}/ask`, { question: content });
       return response.data;
     },
-    onSuccess: () => {
-      // Force refetch conversation data to get the updated messages
-      refetchConversation();
+    onSuccess: (data) => {
+      console.log("Message added, response:", data);
+      
+      // Update messages with the new AI response
+      if (data && data.conversation && Array.isArray(data.conversation.messages)) {
+        setMessages(data.conversation.messages);
+      }
+      
+      // Make sure we're not still in loading state
+      setIsSubmitting(false);
     }
   });
 
@@ -113,53 +119,54 @@ export function QASection() {
     e.preventDefault();
 
     if (!question.trim()) return;
-
-    // Create a new conversation if there's no active one
-    if (!activeConversation) {
-      const title = `Q: ${question.slice(0, 30)}${question.length > 30 ? '...' : ''}`;
-      createConversation.mutate(title);
-
-      // Update UI immediately with user message
-      setMessages([...messages, { role: 'user', content: question }]);
-      setIsSubmitting(true);
-
-      // We'll handle the actual message submission after the conversation is created
-      // in the useEffect below
-    } else {
-      // Update UI immediately with user message
-      const updatedMessages = [...messages, { role: 'user', content: question }];
-      setMessages(updatedMessages);
-      setIsSubmitting(true);
-
-      // Submit the message to the API
-      await addMessage.mutateAsync({ 
-        conversationId: activeConversation,
-        content: question
-      });
-    }
-
-    // Clear the input
-    setQuestion("");
-  };
-
-  // Watch for activeConversation changes to submit the first message
-  useEffect(() => {
-    const submitFirstMessage = async () => {
-      if (activeConversation && isSubmitting && messages.length > 0) {
-        const lastUserMessage = messages.find(m => m.role === 'user')?.content;
-
-        if (lastUserMessage) {
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Create a new conversation if there's no active one
+      if (!activeConversation) {
+        const title = `Q: ${question.slice(0, 30)}${question.length > 30 ? '...' : ''}`;
+        
+        // Update UI immediately with user message
+        setMessages([...messages, { role: 'user', content: question }]);
+        
+        // Create conversation and get the ID
+        const result = await createConversation.mutateAsync(title);
+        
+        console.log("New conversation created:", result);
+        
+        if (result && typeof result === 'object' && 'id' in result) {
+          // Now send the message using the new conversation ID
           await addMessage.mutateAsync({
-            conversationId: activeConversation,
-            content: lastUserMessage
+            conversationId: result.id,
+            content: question
           });
-          setIsSubmitting(false);
+          
+          // Explicitly refetch to get the assistant's response
+          queryClient.invalidateQueries({ queryKey: ['/api/qa', result.id] });
         }
+      } else {
+        // Update UI immediately with user message
+        const updatedMessages = [...messages, { role: 'user', content: question }];
+        setMessages(updatedMessages);
+        
+        // Submit the message to the API
+        await addMessage.mutateAsync({ 
+          conversationId: activeConversation,
+          content: question
+        });
+        
+        // Refetch to get the assistant's response
+        queryClient.invalidateQueries({ queryKey: ['/api/qa', activeConversation] });
       }
-    };
-
-    submitFirstMessage();
-  }, [activeConversation, isSubmitting]);
+    } catch (error) {
+      console.error("Error submitting question:", error);
+    } finally {
+      setIsSubmitting(false);
+      // Clear the input
+      setQuestion("");
+    }
+  };
 
   // Render the chat interface
   return (
@@ -195,7 +202,10 @@ export function QASection() {
               {isSubmitting && (
                 <div className="flex justify-start">
                   <div className="rounded-lg px-4 py-2 bg-muted">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <span className="text-sm">AI is thinking...</span>
+                    </div>
                   </div>
                 </div>
               )}
