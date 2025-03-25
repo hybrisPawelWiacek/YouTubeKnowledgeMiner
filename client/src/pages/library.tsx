@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -177,20 +177,41 @@ export default function Library() {
     }
   }, [isMobile]);
   
-  // Check auth status on component mount
+  // Track engagement levels and show auth prompt at strategic points
   useEffect(() => {
     if (!user) {
-      const shouldPrompt = promptAuth('access_library');
+      // Determine whether to show auth prompt based on user engagement
+      // Initial check with basic prompt logic
+      const shouldPrompt = libraryInteractions >= 3 
+        ? promptAuth('access_library') 
+        : false;
+      
       setShowAuthPrompt(shouldPrompt);
     }
-  }, [user, promptAuth]);
+  }, [user, promptAuth, libraryInteractions]);
+  
+  // Track significant user engagement with library features
+  const trackEngagement = useCallback(() => {
+    if (!user) {
+      setLibraryInteractions(prev => prev + 1);
+      incrementEngagement();
+      
+      // If user reaches high engagement threshold, consider prompting
+      if (libraryInteractions >= 3 && !showAuthPrompt) {
+        const shouldPrompt = promptAuth('access_library');
+        setShowAuthPrompt(shouldPrompt);
+      }
+    }
+  }, [user, libraryInteractions, incrementEngagement, promptAuth, showAuthPrompt]);
   
   // Toggle select all videos
   const toggleSelectAll = () => {
     if (selectedVideos.length === videosQuery.data?.length) {
       setSelectedVideos([]);
-    } else {
+    } else if (videosQuery.data) {
       setSelectedVideos(videosQuery.data.map((video: Video) => video.id));
+      // Track engagement when user selects all videos
+      if (!user) trackEngagement();
     }
   };
   
@@ -271,7 +292,10 @@ export default function Library() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsFilterSidebarOpen(true)}
+                onClick={() => {
+                  setIsFilterSidebarOpen(true);
+                  trackEngagement();
+                }}
                 className="flex items-center gap-1"
               >
                 <Filter className="h-4 w-4" />
