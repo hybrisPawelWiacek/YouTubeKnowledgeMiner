@@ -54,7 +54,7 @@ export default function Library() {
   const [, navigate] = useLocation();
   
   // Queries
-  const videosQuery = useQuery({
+  const videosQuery = useQuery<Video[]>({
     queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery],
     queryFn: async () => {
       let url = "/api/videos?";
@@ -90,11 +90,11 @@ export default function Library() {
     },
   });
   
-  const categoriesQuery = useQuery({
+  const categoriesQuery = useQuery<Category[]>({
     queryKey: ["/api/categories"],
   });
   
-  const collectionsQuery = useQuery({
+  const collectionsQuery = useQuery<Collection[]>({
     queryKey: ["/api/collections"],
   });
   
@@ -576,6 +576,14 @@ export default function Library() {
             });
           }
         }}
+      />
+      
+      {/* Auth Prompt Dialog */}
+      <AuthPromptDialog
+        isOpen={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        promptType="access_library"
+        onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
     </div>
   );
