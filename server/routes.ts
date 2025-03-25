@@ -3,11 +3,13 @@ import { createServer, type Server } from "http";
 import { dbStorage } from "./database-storage"; // Using database storage
 import { processYoutubeVideo, getYoutubeTranscript, generateTranscriptSummary } from "./services/youtube";
 import { generateAnswer } from "./services/openai";
+import { exportVideoContent, exportBatchVideoContent, saveExportPreference, getExportPreference } from "./services/export";
 import { ZodError } from "zod";
 import { 
   VideoMetadataRequest, youtubeUrlSchema, videoMetadataSchema, 
   insertCollectionSchema, insertSavedSearchSchema, searchParamsSchema, 
-  qaQuestionSchema, insertQAConversationSchema, semanticSearchSchema
+  qaQuestionSchema, insertQAConversationSchema, semanticSearchSchema,
+  exportRequestSchema, exportFormatEnum
 } from "@shared/schema";
 import { 
   processTranscriptEmbeddings, 
@@ -1000,6 +1002,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Failed to import data', 
         error: error instanceof Error ? error.message : String(error)
       });
+    }
+  });
+  
+  // Export routes
+  
+  // Export video content (transcript, summary, or Q&A)
+  app.post("/api/export", async (req, res) => {
+    try {
+      const exportData = exportRequestSchema.parse(req.body);
+      
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      let result;
+      if (exportData.video_ids.length === 1) {
+        // Single video export
+        result = await exportVideoContent({ 
+          ...exportData,
+          userId,
+          videoId: exportData.video_ids[0]
+        });
+        
+        return res.status(200).json({
+          filename: result.filename,
+          content: result.content,
+          mimeType: result.mimeType
+        });
+      } else {
+        // Batch export
+        result = await exportBatchVideoContent({
+          ...exportData,
+          userId
+        });
+        
+        return res.status(200).json({
+          filename: result.filename,
+          content: result.content,
+          mimeType: result.mimeType
+        });
+      }
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      console.error("Error exporting content:", error);
+      return res.status(500).json({ 
+        message: "Failed to export content",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Get user's export format preference
+  app.get("/api/export/preferences", async (req, res) => {
+    try {
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      const format = await getExportPreference(userId);
+      return res.status(200).json({ format });
+    } catch (error) {
+      console.error("Error getting export preferences:", error);
+      return res.status(500).json({ message: "Failed to get export preferences" });
+    }
+  });
+  
+  // Save user's export format preference
+  app.post("/api/export/preferences", async (req, res) => {
+    try {
+      const { format } = req.body;
+      
+      if (!format || !exportFormatEnum.enumValues.includes(format)) {
+        return res.status(400).json({ 
+          message: `Format must be one of: ${exportFormatEnum.enumValues.join(", ")}` 
+        });
+      }
+      
+      // In a real app, get user_id from session
+      const userId = 1; // This would come from session
+      
+      await saveExportPreference(userId, format);
+      return res.status(200).json({ format });
+    } catch (error) {
+      console.error("Error saving export preferences:", error);
+      return res.status(500).json({ message: "Failed to save export preferences" });
     }
   });
   
