@@ -96,12 +96,12 @@ export function QASection() {
     },
     onSuccess: (data) => {
       console.log("Message added, response:", data);
-      
+
       // Update messages with the new AI response
       if (data && data.conversation && Array.isArray(data.conversation.messages)) {
         setMessages(data.conversation.messages);
       }
-      
+
       // Make sure we're not still in loading state
       setIsSubmitting(false);
     }
@@ -126,52 +126,60 @@ export function QASection() {
     e.preventDefault();
 
     if (!question.trim()) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       // Create a new conversation if there's no active one
       if (!activeConversation) {
         const title = `Q: ${question.slice(0, 30)}${question.length > 30 ? '...' : ''}`;
-        
+
         // Update UI immediately with user message
-        setMessages([...messages, { role: 'user', content: question }]);
-        
+        const userMessage = { role: 'user', content: question };
+        setMessages([...messages, userMessage]);
+
         // Create conversation and get the ID
         const result = await createConversation.mutateAsync(title);
-        
+
         console.log("New conversation created:", result);
-        
+
         if (result && typeof result === 'object' && 'id' in result) {
+          // Set the active conversation
+          setActiveConversation(result.id);
+
           // Now send the message using the new conversation ID
           await addMessage.mutateAsync({
             conversationId: result.id,
             content: question
           });
-          
+
           // Explicitly refetch to get the assistant's response
-          queryClient.invalidateQueries({ queryKey: ['/api/qa', result.id] });
+          await refetchConversation();
+          await refetchConversations();
         }
       } else {
         // Update UI immediately with user message
-        const updatedMessages = [...messages, { role: 'user', content: question }];
-        setMessages(updatedMessages);
-        
+        const userMessage = { role: 'user', content: question };
+        setMessages([...messages, userMessage]);
+
         // Submit the message to the API
         await addMessage.mutateAsync({ 
           conversationId: activeConversation,
           content: question
         });
-        
+
         // Refetch to get the assistant's response
-        queryClient.invalidateQueries({ queryKey: ['/api/qa', activeConversation] });
+        await refetchConversation();
       }
+
+      // Clear the question input
+      setQuestion("");
     } catch (error) {
-      console.error("Error submitting question:", error);
+      console.error("Failed to send message:", error);
+      // Keep the user's message in the UI even if submission failed
+      // This prevents the UI from resetting as if nothing happened
     } finally {
       setIsSubmitting(false);
-      // Clear the input
-      setQuestion("");
     }
   };
 
