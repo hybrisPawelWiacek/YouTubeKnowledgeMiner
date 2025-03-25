@@ -50,8 +50,9 @@ export default function Library() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { user } = useSupabase();
-  const { promptAuth } = useAuthPrompt();
+  const { promptAuth, incrementEngagement } = useAuthPrompt();
   const [, navigate] = useLocation();
+  const [libraryInteractions, setLibraryInteractions] = useState(0);
   
   // Queries
   const videosQuery = useQuery<Video[]>({

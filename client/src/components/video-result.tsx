@@ -101,11 +101,29 @@ export function VideoResult({ video }: VideoResultProps) {
     // Store the metadata
     setPendingMetadata(metadata);
     
+    // Track this high-value action
+    incrementEngagement();
+    setInteractionCount(prev => prev + 1);
+    
     // Show auth prompt for non-authenticated users
     if (!user) {
-      const prompted = promptAuth('save_video');
-      if (!prompted) {
-        // If the prompt wasn't shown (e.g., suppressed), continue with normal flow
+      // Determine if this is a high-quality save (has meaningful data)
+      const hasQualityMetadata = 
+        (notes && notes.length > 20) || // User added significant notes
+        (rating > 3) ||                 // User gave high rating
+        categoryId !== undefined;       // User categorized the video
+      
+      // Higher likelihood of prompting if user has added quality metadata
+      // or has had significant engagement with the result
+      if (hasQualityMetadata || interactionCount >= 3) {
+        // This is a high-value moment to prompt for auth
+        const prompted = promptAuth('save_video');
+        if (!prompted) {
+          // If the prompt wasn't shown (e.g., suppressed), continue with normal flow
+          handleActualSave(metadata);
+        }
+      } else {
+        // Not the best moment to interrupt with auth - just save silently
         handleActualSave(metadata);
       }
     } else {
@@ -223,7 +241,13 @@ export function VideoResult({ video }: VideoResultProps) {
                   <div className="mb-4 bg-zinc-800 p-3 rounded-lg">
                     <div 
                       className="flex items-center mb-2 cursor-pointer" 
-                      onClick={() => setShowDescription(!showDescription)}
+                      onClick={() => {
+                        setShowDescription(!showDescription);
+                        // Track as engagement only when showing description (not hiding)
+                        if (!showDescription) {
+                          incrementEngagement();
+                        }
+                      }}
                     >
                       <Info className="w-4 h-4 mr-1" />
                       <span className="text-sm font-medium">
@@ -290,7 +314,13 @@ export function VideoResult({ video }: VideoResultProps) {
                       </label>
                       <StarRating
                         value={rating}
-                        onChange={setRating}
+                        onChange={(newRating) => {
+                          setRating(newRating);
+                          if (newRating > 0) {
+                            incrementEngagement();
+                            setInteractionCount(prev => prev + 1);
+                          }
+                        }}
                         className="py-2"
                       />
                     </div>
