@@ -282,7 +282,7 @@ export function QASection() {
                         className="flex justify-between items-start"
                       >
                         <div 
-                          className="flex-grow cursor-pointer"
+                          className="flex-grow cursor-pointer overflow-hidden mr-1"
                           onClick={() => {
                             handleSelectConversation(conversation.id);
                             if (window.innerWidth < 768) setShowSidebar(false);
@@ -296,7 +296,7 @@ export function QASection() {
                           </div>
                         </div>
                         <button
-                          className="text-xs text-red-500 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted-foreground/10"
+                          className="text-xs text-red-500 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted-foreground/10 flex-shrink-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             setConversationToDelete(conversation.id);
