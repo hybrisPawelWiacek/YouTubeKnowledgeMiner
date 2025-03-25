@@ -452,8 +452,8 @@ export default function VideoDetailPage() {
             <Tabs defaultValue="summary" className="w-full">
               <TabsList className="w-full grid grid-cols-3 mb-6">
                 <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="transcript">Transcript</TabsTrigger>
                 <TabsTrigger value="qa">Q&A</TabsTrigger>
+                <TabsTrigger value="transcript">Transcript</TabsTrigger>
               </TabsList>
               
               <Separator className="mb-6" />
@@ -472,20 +472,6 @@ export default function VideoDetailPage() {
                 )}
               </TabsContent>
               
-              <TabsContent value="transcript">
-                {video.transcript ? (
-                  <TranscriptSection transcript={video.transcript} />
-                ) : (
-                  <div className="text-center py-12">
-                    <Bookmark className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium mb-2">No Transcript Available</h3>
-                    <p className="text-gray-400 max-w-xl mx-auto">
-                      This video doesn't have a transcript available. Transcripts are extracted during the video processing stage.
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-              
               <TabsContent value="qa">
                 {video.transcript ? (
                   <QASection videoId={video.id} />
@@ -496,6 +482,20 @@ export default function VideoDetailPage() {
                     <p className="text-gray-400 max-w-xl mx-auto">
                       This video doesn't have a transcript available, which is required for Q&A functionality.
                       Transcripts are extracted during the video processing stage.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="transcript">
+                {video.transcript ? (
+                  <TranscriptSection transcript={video.transcript} />
+                ) : (
+                  <div className="text-center py-12">
+                    <Bookmark className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-medium mb-2">No Transcript Available</h3>
+                    <p className="text-gray-400 max-w-xl mx-auto">
+                      This video doesn't have a transcript available. Transcripts are extracted during the video processing stage.
                     </p>
                   </div>
                 )}
