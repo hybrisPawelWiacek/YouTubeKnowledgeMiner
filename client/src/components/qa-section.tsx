@@ -277,11 +277,12 @@ export function QASection() {
                 {showSidebar ? "Hide Conversations" : "Show Conversations"}
               </Button>
             </div>
-            {isLoadingConversation || !conversationData ? (
-              <div className="flex items-center justify-center h-48">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
+            {activeConversation ? (
+              isLoadingConversation ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
               <div className="flex-grow flex flex-col">
                 <ScrollArea className="flex-grow pr-4">
                   <div className="space-y-6">
@@ -314,6 +315,13 @@ export function QASection() {
                     <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
+              </div>
+            )
+            ) : (
+              <div className="flex items-center justify-center h-48 flex-col">
+                <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-lg text-muted-foreground">No active conversation</p>
+                <p className="text-sm text-muted-foreground mt-1">Type a question below to start a new conversation</p>
               </div>
             )}
           </div>
