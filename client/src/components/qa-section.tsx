@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Send, Loader2, Plus } from "lucide-react";
+import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose } from "lucide-react";
 
 // Define types for messages
 interface Message {
@@ -33,7 +33,12 @@ export function QASection() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+
+  // CSS classes for the sidebar based on visibility
+  const sidebarClasses = showSidebar
+    ? "w-1/4 min-w-[250px] border-r border-border h-[calc(100vh-12rem)] overflow-y-auto"
+    : "hidden";
 
   // Fetch conversations for this video
   const { data: conversations, isLoading: isLoadingConversations, refetch: refetchConversations } =
@@ -159,6 +164,12 @@ export function QASection() {
     setQuestion("");
   };
 
+  const handleNewConversation = () => {
+    setActiveConversation(null);
+    setMessages([]);
+    setShowSidebar(false);
+  };
+
   // Render the chat interface
   return (
     <div className="flex flex-col h-full">
@@ -250,6 +261,22 @@ export function QASection() {
         {/* Main chat area */}
         <div className="flex-grow flex flex-col md:pl-0 pl-8">
           <div className="flex-grow bg-muted/20 rounded-lg p-6 mb-6 overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-2 bg-muted/30 border-b border-border">
+              <div>
+                {activeConversation && conversationData ? 
+                  <span className="text-sm font-medium">{conversationData.title}</span> : 
+                  <span className="text-sm text-muted-foreground">No active conversation</span>
+                }
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSidebar(!showSidebar)}
+              >
+                {showSidebar ? <PanelLeftClose className="h-4 w-4 mr-2" /> : <PanelLeftOpen className="h-4 w-4 mr-2" />}
+                {showSidebar ? "Hide Conversations" : "Show Conversations"}
+              </Button>
+            </div>
             {isLoadingConversation || !conversationData ? (
               <div className="flex items-center justify-center h-48">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
