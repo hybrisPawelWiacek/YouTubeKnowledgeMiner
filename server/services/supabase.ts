@@ -23,7 +23,10 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Calculate cosine similarity between two vectors
+ * With pgvector, we don't need to calculate cosine similarity manually
+ * as PostgreSQL will do it for us using the <-> operator
+ * 
+ * This function is kept for backwards compatibility
  */
 export function calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length !== vecB.length) return 0;
@@ -44,6 +47,95 @@ export function calculateCosineSimilarity(vecA: number[], vecB: number[]): numbe
   if (magnitudeA === 0 || magnitudeB === 0) return 0;
   
   return dotProduct / (magnitudeA * magnitudeB);
+}
+
+/**
+ * Use pgvector's native vector operations for similarity search
+ */
+export async function performVectorSearch(
+  queryEmbedding: number[],
+  filters: { 
+    content_types?: string[],
+    video_id?: number,
+    category_id?: number,
+    collection_id?: number,
+    is_favorite?: boolean
+  },
+  limit: number = 10
+) {
+  try {
+    const { content_types, video_id, category_id, collection_id, is_favorite } = filters || {};
+    
+    // Convert embedding array to pgvector format
+    const embeddingString = `[${queryEmbedding.join(',')}]`;
+    
+    let query = `
+      SELECT e.id, e.content, e.content_type, e.video_id, v.title as video_title,
+             e.metadata, e.embedding <-> '${embeddingString}'::vector as distance
+      FROM embeddings e
+      JOIN videos v ON e.video_id = v.id
+      WHERE 1=1
+    `;
+    
+    const params: any[] = [];
+    let paramCount = 1;
+    
+    if (content_types && content_types.length > 0) {
+      query += ` AND e.content_type = ANY($${paramCount}::content_type[])`;
+      params.push(content_types);
+      paramCount++;
+    }
+    
+    if (video_id) {
+      query += ` AND e.video_id = $${paramCount}`;
+      params.push(video_id);
+      paramCount++;
+    }
+    
+    if (category_id) {
+      query += ` AND v.category_id = $${paramCount}`;
+      params.push(category_id);
+      paramCount++;
+    }
+    
+    if (is_favorite !== undefined) {
+      query += ` AND v.is_favorite = $${paramCount}`;
+      params.push(is_favorite);
+      paramCount++;
+    }
+    
+    if (collection_id) {
+      query += `
+        AND EXISTS (
+          SELECT 1 FROM collection_videos cv
+          WHERE cv.video_id = v.id
+          AND cv.collection_id = $${paramCount}
+        )
+      `;
+      params.push(collection_id);
+      paramCount++;
+    }
+    
+    query += ` ORDER BY distance LIMIT $${paramCount}`;
+    params.push(limit);
+    
+    if (supabase) {
+      const { data, error } = await supabase.rpc('query_vector_search', {
+        query_text: query,
+        query_params: params
+      });
+      
+      if (error) throw error;
+      return data;
+    } else {
+      // Fall back to local database if Supabase is not configured
+      const result = await db.execute(query, params);
+      return result.rows;
+    }
+  } catch (error) {
+    log(`Error in vector search: ${error}`, 'supabase');
+    throw error;
+  }
 }
 
 /**
