@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 // Using pgvector for native vector operations in PostgreSQL
 export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note']);
@@ -13,7 +14,7 @@ export const embeddings = pgTable("embeddings", {
   content_type: contentTypeEnum("content_type").notNull(),
   chunk_index: integer("chunk_index").notNull(), // Position in the original content
   content: text("content").notNull(), // The actual text chunk
-  embedding: text("embedding").notNull().type("vector(1536)"), // Using pgvector type for embeddings (1536 for OpenAI's ada-002)
+  embedding: jsonb("embedding").notNull(), // Store embeddings as JSON arrays
   metadata: jsonb("metadata"), // Additional metadata like timestamps, etc.
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
