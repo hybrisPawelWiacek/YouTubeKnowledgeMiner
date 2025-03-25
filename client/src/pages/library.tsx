@@ -193,11 +193,23 @@ export default function Library() {
   // Track significant user engagement with library features
   const trackEngagement = useCallback(() => {
     if (!user) {
-      setLibraryInteractions(prev => prev + 1);
+      setLibraryInteractions(prev => {
+        const newCount = prev + 1;
+        console.log(`Library interaction count: ${newCount}`);
+        return newCount;
+      });
       incrementEngagement();
       
-      // If user reaches high engagement threshold, consider prompting
-      if (libraryInteractions >= 3 && !showAuthPrompt) {
+      // Use progressive threshold - higher for repeated prompts
+      const primaryThreshold = 3;
+      const secondaryThreshold = 8;
+      
+      // If user reaches engagement threshold, consider prompting
+      // Different thresholds based on whether they've seen this prompt before
+      const effectiveThreshold = promptAuth('access_library', false) ? secondaryThreshold : primaryThreshold;
+      
+      if (libraryInteractions >= effectiveThreshold && !showAuthPrompt) {
+        console.log(`Engagement threshold reached (${effectiveThreshold}), showing auth prompt`);
         const shouldPrompt = promptAuth('access_library');
         setShowAuthPrompt(shouldPrompt);
       }
@@ -221,6 +233,9 @@ export default function Library() {
       setSelectedVideos(selectedVideos.filter(id => id !== videoId));
     } else {
       setSelectedVideos([...selectedVideos, videoId]);
+      
+      // Track engagement when selecting videos 
+      if (!user) trackEngagement();
     }
   };
   
@@ -236,11 +251,17 @@ export default function Library() {
   const handleToggleFavorite = (isFavorite: boolean) => {
     if (selectedVideos.length === 0) return;
     bulkToggleFavoriteMutation.mutate({ ids: selectedVideos, isFavorite });
+    
+    // Track engagement when adding/removing from favorites
+    if (!user) trackEngagement();
   };
   
   const handleAddToCollection = (collectionId: number) => {
     if (selectedVideos.length === 0) return;
     addToCollectionMutation.mutate({ videoIds: selectedVideos, collectionId });
+    
+    // Track engagement when adding to collections
+    if (!user) trackEngagement();
   };
   
   // Clear all filters
@@ -305,7 +326,10 @@ export default function Library() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsCreateCollectionOpen(true)}
+                onClick={() => {
+                  setIsCreateCollectionOpen(true);
+                  trackEngagement();
+                }}
                 className="flex items-center gap-1"
               >
                 <FolderPlus className="h-4 w-4" />
@@ -316,7 +340,10 @@ export default function Library() {
                 <Button
                   variant={isGridView ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setIsGridView(true)}
+                  onClick={() => {
+                    setIsGridView(true);
+                    if (!user) trackEngagement();
+                  }}
                   className="rounded-none px-2"
                 >
                   <LayoutGrid className="h-4 w-4" />
@@ -324,7 +351,10 @@ export default function Library() {
                 <Button
                   variant={!isGridView ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setIsGridView(false)}
+                  onClick={() => {
+                    setIsGridView(false);
+                    if (!user) trackEngagement();
+                  }}
                   className="rounded-none px-2"
                 >
                   <List className="h-4 w-4" />
@@ -342,7 +372,13 @@ export default function Library() {
                 placeholder="Search videos by title, channel, or content..."
                 className="pl-9 bg-zinc-900 border-zinc-800"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  // Track engagement when searching
+                  if (e.target.value.trim().length > 2 && !user) {
+                    trackEngagement();
+                  }
+                }}
               />
             </div>
             
