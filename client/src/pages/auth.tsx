@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { FcGoogle } from "react-icons/fc";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useSupabase } from "@/hooks/use-supabase";
+import { useToast } from "@/hooks/use-toast";
 
 // Login schema
 const loginSchema = z.object({
@@ -32,14 +33,22 @@ const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
+// Forgot password schema
+const forgotPasswordSchema = z.object({
+  email: z.string().email({ message: "Please enter a valid email address" }),
+});
+
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
+type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('login');
   const [_, setLocation] = useLocation();
-  const { signIn, signUp, signInWithGoogle } = useSupabase();
+  const { signIn, signUp, signInWithGoogle, resetPassword } = useSupabase();
+  const { toast } = useToast();
 
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -96,6 +105,31 @@ export default function Auth() {
       setIsGoogleLoading(false);
     }
   };
+  
+  // Forgot password form
+  const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+  
+  // Handle forgot password form submission
+  const onForgotPasswordSubmit = async (values: ForgotPasswordFormValues) => {
+    setIsLoading(true);
+    try {
+      await resetPassword(values.email);
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for instructions to reset your password",
+      });
+      setActiveTab("login");
+    } catch (error) {
+      console.error('Password reset error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -103,42 +137,60 @@ export default function Auth() {
       
       <main className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md bg-zinc-900">
-          <Tabs defaultValue="login">
+          <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
-              <div className="flex justify-center mb-4">
-                <TabsList className="bg-zinc-800">
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="register">Register</TabsTrigger>
-                </TabsList>
-              </div>
-              <CardTitle className="text-center">YouTubeKnowledgeMiner</CardTitle>
-              <CardDescription className="text-center">
-                Mine knowledge from your YouTube videos
-              </CardDescription>
+              {activeTab === "forgot-password" ? (
+                <div className="flex items-center">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="p-0 mr-2" 
+                    onClick={() => setActiveTab("login")}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <CardTitle>Reset Your Password</CardTitle>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-center mb-4">
+                    <TabsList className="bg-zinc-800">
+                      <TabsTrigger value="login">Login</TabsTrigger>
+                      <TabsTrigger value="register">Register</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <CardTitle className="text-center">YouTubeKnowledgeMiner</CardTitle>
+                  <CardDescription className="text-center">
+                    Mine knowledge from your YouTube videos
+                  </CardDescription>
+                </>
+              )}
             </CardHeader>
             
-            {/* Google sign-in button for both tabs */}
-            <CardContent>
-              <Button 
-                variant="outline" 
-                className="w-full bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 h-10"
-                onClick={handleGoogleSignIn}
-                disabled={isGoogleLoading}
-              >
-                {isGoogleLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FcGoogle className="h-5 w-5" />
-                )}
-                <span>{isGoogleLoading ? "Signing in..." : "Sign in with Google"}</span>
-              </Button>
-              
-              <div className="flex items-center my-4">
-                <Separator className="flex-grow" />
-                <span className="px-3 text-sm text-gray-500">OR</span>
-                <Separator className="flex-grow" />
-              </div>
-            </CardContent>
+            {/* Google sign-in button for login/register tabs only */}
+            {activeTab !== "forgot-password" && (
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  className="w-full bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 h-10"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                >
+                  {isGoogleLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FcGoogle className="h-5 w-5" />
+                  )}
+                  <span>{isGoogleLoading ? "Signing in..." : "Sign in with Google"}</span>
+                </Button>
+                
+                <div className="flex items-center my-4">
+                  <Separator className="flex-grow" />
+                  <span className="px-3 text-sm text-gray-500">OR</span>
+                  <Separator className="flex-grow" />
+                </div>
+              </CardContent>
+            )}
             
             <TabsContent value="login">
               <Form {...loginForm}>
@@ -162,7 +214,17 @@ export default function Auth() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <div className="flex justify-between items-center">
+                            <FormLabel>Password</FormLabel>
+                            <Button 
+                              variant="link" 
+                              className="text-xs p-0 h-auto" 
+                              type="button"
+                              onClick={() => setActiveTab("forgot-password")}
+                            >
+                              Forgot password?
+                            </Button>
+                          </div>
                           <FormControl>
                             <Input type="password" placeholder="••••••••" {...field} />
                           </FormControl>
@@ -248,6 +310,40 @@ export default function Auth() {
                       disabled={isLoading}
                     >
                       {isLoading ? "Creating account..." : "Create Account"}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </Form>
+            </TabsContent>
+            
+            <TabsContent value="forgot-password">
+              <Form {...forgotPasswordForm}>
+                <form onSubmit={forgotPasswordForm.handleSubmit(onForgotPasswordSubmit)}>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-400 mb-4">
+                      Enter your email address and we'll send you a link to reset your password.
+                    </p>
+                    <FormField
+                      control={forgotPasswordForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input placeholder="your.email@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Sending..." : "Send Reset Link"}
                     </Button>
                   </CardFooter>
                 </form>

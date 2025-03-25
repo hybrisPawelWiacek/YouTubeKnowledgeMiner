@@ -343,6 +343,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         signInWithGoogle,
         signUp,
         signOut,
+        resetPassword,
         getLocalData,
         setLocalData,
         migrateLocalData,
