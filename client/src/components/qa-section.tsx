@@ -156,7 +156,11 @@ export function QASection({ videoId }: QASectionProps) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'qa'] });
       if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
+        // Explicitly set the active conversation
         setActiveConversation(data.id);
+        
+        // Also trigger a query refetch for the new conversation
+        queryClient.invalidateQueries({ queryKey: ['/api/qa', data.id] });
       }
       setIsCreatingConversation(false);
       setNewConversationTitle("");
