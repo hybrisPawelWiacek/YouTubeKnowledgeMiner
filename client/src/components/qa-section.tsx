@@ -33,6 +33,7 @@ export function QASection() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   // Fetch conversations for this video
   const { data: conversations, isLoading: isLoadingConversations, refetch: refetchConversations } =
@@ -162,58 +163,92 @@ export function QASection() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex h-full gap-4">
-        {/* Conversations sidebar */}
-        <div className="w-64 flex-shrink-0 bg-muted/20 rounded-lg p-3 overflow-hidden">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium">Conversations</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setActiveConversation(null);
-                setMessages([]); //added to clear the messages when creating a new conversation
-              }}
-              className="h-7 px-2 text-xs"
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              New
-            </Button>
-          </div>
+        {/* Mobile sidebar toggle button */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setShowSidebar(!showSidebar)}
+          className="md:hidden absolute top-2 left-2 z-10"
+        >
+          <MessageCircle className="h-4 w-4" />
+        </Button>
 
-          <ScrollArea className="h-[calc(100%-40px)]">
-            {isLoadingConversations ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        {/* Conversations sidebar */}
+        <div className={`
+          ${showSidebar ? 'fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden' : 'hidden'}
+          md:block md:relative md:inset-auto md:z-auto md:bg-transparent md:backdrop-filter-none
+        `}>
+          <div className={`
+            w-64 h-full flex-shrink-0 bg-muted/20 rounded-lg p-3 overflow-hidden 
+            fixed left-0 top-0 bottom-0 z-50 transition-transform 
+            ${showSidebar ? 'translate-x-0' : '-translate-x-full'} 
+            md:relative md:translate-x-0 md:z-auto
+          `}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium">Conversations</h3>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSidebar(false)}
+                  className="h-7 px-2 text-xs md:hidden"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setActiveConversation(null);
+                    setMessages([]); //added to clear the messages when creating a new conversation
+                    if (window.innerWidth < 768) setShowSidebar(false);
+                  }}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New
+                </Button>
               </div>
-            ) : conversations && conversations.length > 0 ? (
-              <div className="space-y-1.5">
-                {conversations.map((conversation) => (
-                  <div
-                    key={conversation.id}
-                    className={`px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-muted transition-colors ${
-                      activeConversation === conversation.id ? 'bg-muted' : ''
-                    }`}
-                    onClick={() => handleSelectConversation(conversation.id)}
-                  >
-                    <div className="truncate">
-                      {conversation.title}
+            </div>
+
+            <ScrollArea className="h-[calc(100%-40px)]">
+              {isLoadingConversations ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : conversations && conversations.length > 0 ? (
+                <div className="space-y-1.5">
+                  {conversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className={`px-2 py-1.5 text-sm rounded cursor-pointer hover:bg-muted transition-colors ${
+                        activeConversation === conversation.id ? 'bg-muted' : ''
+                      }`}
+                      onClick={() => {
+                        handleSelectConversation(conversation.id);
+                        if (window.innerWidth < 768) setShowSidebar(false);
+                      }}
+                    >
+                      <div className="truncate">
+                        {conversation.title}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {new Date(conversation.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(conversation.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                No conversations yet
-              </div>
-            )}
-          </ScrollArea>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  No conversations yet
+                </div>
+              )}
+            </ScrollArea>
+          </div>
         </div>
 
         {/* Main chat area */}
-        <div className="flex-grow flex flex-col">
+        <div className="flex-grow flex flex-col md:pl-0 pl-8">
           <div className="flex-grow bg-muted/20 rounded-lg p-6 mb-6 overflow-hidden flex flex-col">
             {isLoadingConversation || !conversationData ? (
               <div className="flex items-center justify-center h-48">
