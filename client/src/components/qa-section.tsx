@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -66,12 +66,12 @@ export function QASection({ videoId }: QASectionProps) {
       }
     },
   });
-  
+
   // Ensure conversations is always an array
   const conversations: Conversation[] = Array.isArray(data) ? data : [];
 
-  // Fetch current conversation if one is active
-  const { data: conversationData, isLoading: isLoadingConversation } = useQuery<Conversation>({
+  // Get the active conversation
+  const { data: conversationData, isLoading: isLoadingConversation, refetch: refetchConversation } = useQuery({
     queryKey: ['/api/qa', activeConversation],
     queryFn: async () => {
       if (activeConversation === null) return { 
@@ -83,7 +83,7 @@ export function QASection({ videoId }: QASectionProps) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       try {
         const result = await apiRequest('GET', `/api/qa/${activeConversation}`);
         // Ensure the result is an object with a messages array
@@ -93,7 +93,7 @@ export function QASection({ videoId }: QASectionProps) {
           const messages = safeResult.messages && Array.isArray(safeResult.messages) 
             ? safeResult.messages 
             : [];
-            
+
           return {
             id: typeof safeResult.id === 'number' ? safeResult.id : 0,
             title: safeResult.title || '',
@@ -104,7 +104,7 @@ export function QASection({ videoId }: QASectionProps) {
             updated_at: safeResult.updated_at || new Date().toISOString()
           };
         }
-        
+
         // Return a default conversation if result is not valid
         return { 
           id: 0,
@@ -131,7 +131,7 @@ export function QASection({ videoId }: QASectionProps) {
     },
     enabled: activeConversation !== null,
   });
-  
+
   // Ensure currentConversation is properly initialized with default values
   const currentConversation: Conversation = conversationData || { 
     id: 0,
@@ -142,7 +142,7 @@ export function QASection({ videoId }: QASectionProps) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  
+
   // Ensure messages is always an array
   const messages: Message[] = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
 
@@ -158,7 +158,7 @@ export function QASection({ videoId }: QASectionProps) {
       if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
         // Explicitly set the active conversation
         setActiveConversation(data.id);
-        
+
         // Also trigger a query refetch for the new conversation
         queryClient.invalidateQueries({ queryKey: ['/api/qa', data.id] });
       }
@@ -211,7 +211,7 @@ export function QASection({ videoId }: QASectionProps) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/qa', activeConversation] });
       setQuestion("");
-      
+
       // Scroll to bottom of messages after a short delay to allow for rendering
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -229,7 +229,7 @@ export function QASection({ videoId }: QASectionProps) {
   // Handle sending a question
   const handleSendQuestion = () => {
     if (!question.trim() || !activeConversation) return;
-    
+
     askQuestionMutation.mutate({
       conversationId: activeConversation,
       question: question.trim()
@@ -246,7 +246,7 @@ export function QASection({ videoId }: QASectionProps) {
       });
       return;
     }
-    
+
     createConversationMutation.mutate(newConversationTitle.trim());
   };
 
@@ -263,6 +263,18 @@ export function QASection({ videoId }: QASectionProps) {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  useEffect(() => {
+    if (activeConversation) {
+      // When a conversation becomes active, explicitly refetch it
+      refetchConversation();
+
+      // Scroll to bottom of messages after a short delay
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 200);
+    }
+  }, [activeConversation, refetchConversation]);
 
   return (
     <div className="flex flex-col md:flex-row md:gap-4 h-full">
