@@ -6,21 +6,21 @@ async function createTestUser() {
   console.log('Creating test user...');
   
   try {
-    // Check if pw@mail.com already exists
+    // Check if demolinks@gmail.com already exists
     const existingUser = await db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.email, 'pw@mail.com')
+      where: (users, { eq }) => eq(users.email, 'demolinks@gmail.com')
     });
 
     if (existingUser) {
-      console.log('Test user pw@mail.com already exists');
+      console.log('Test user demolinks@gmail.com already exists');
       return;
     }
 
     // Insert test user
     const result = await db.insert(users).values({
-      username: 'demouser',
+      username: 'demolinks',
       password: 'testpassword',
-      email: 'demo@example.com'
+      email: 'demolinks@gmail.com'
     }).returning();
 
     console.log('Test user created successfully:', result[0]);

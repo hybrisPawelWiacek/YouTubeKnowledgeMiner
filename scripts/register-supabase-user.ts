@@ -20,11 +20,11 @@ async function registerSupabaseUser() {
     
     // Using regular signup instead of admin API
     const { data, error } = await supabase.auth.signUp({
-      email: 'demo@example.com',
+      email: 'demolinks@gmail.com',
       password: 'testpassword',
       options: {
         data: {
-          username: 'demouser',
+          username: 'demolinks',
           full_name: 'Demo User'
         }
       }
