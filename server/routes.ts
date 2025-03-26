@@ -495,7 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/categories", async (req, res) => {
     try {
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("CATEGORIES: Using user ID from request:", userId);
 
@@ -517,11 +517,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("CREATE CATEGORY: Using user ID from request:", userId);
 
-      if (!userId) {
+      if (userId === null) {
         return res.status(401).json({ 
           message: "Authentication required",
           code: "AUTH_REQUIRED" 
