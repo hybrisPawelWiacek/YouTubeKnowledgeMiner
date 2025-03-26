@@ -45,6 +45,14 @@ export function VideoResult({ video }: VideoResultProps) {
 
   const { mutate: saveVideo, isPending } = useMutation({
     mutationFn: async (metadata: VideoMetadata) => {
+      // Add debug logging to track user authentication status
+      console.log('Saving video with user context:', {
+        userIsAuthenticated: !!user,
+        userId: user?.id,
+        userEmail: user?.email,
+        userType: typeof user?.id
+      });
+      
       const videoData = {
         youtubeId: video.youtubeId,
         title: video.title,
@@ -56,20 +64,31 @@ export function VideoResult({ video }: VideoResultProps) {
         ...metadata,
       };
 
-      const response = await apiRequest("POST", "/api/videos", videoData);
-      return response.json();
+      console.log('Video data being sent to API:', videoData);
+      
+      try {
+        const response = await apiRequest("POST", "/api/videos", videoData);
+        const result = await response.json();
+        console.log('Save video response:', result);
+        return result;
+      } catch (err) {
+        console.error('Error saving video:', err);
+        throw err;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Video saved successfully with ID:', data?.id);
       toast({
         title: "Success",
         description: "Video saved to your library",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      console.error('Error in saveVideo mutation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save video",
+        description: error?.message || "Failed to save video",
         variant: "destructive",
       });
     },

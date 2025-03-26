@@ -1,7 +1,13 @@
-// If a userId is available, add it to the headers
+import { useSupabase } from '@/hooks/use-supabase';
+
+export function useLibraryQueryHeaders() {
+  const { user } = useSupabase();
+  
+  // If a userId is available, add it to the headers
   const headers: HeadersInit = {};
   
   // Add extensive debugging to diagnose user ID issues
+  const userId = user?.id;
   console.log('use-library-query trying to set x-user-id header with user ID:', userId, 'type:', typeof userId);
   
   if (userId) {
@@ -29,3 +35,6 @@
   } else {
     console.warn('No user ID available for library query');
   }
+  
+  return headers;
+}
