@@ -412,15 +412,15 @@ export function QASection() {
                           {/* Citation section */}
                           {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
                             <div className="mt-3 pt-2 border-t border-border">
-                              <div className="text-xs font-medium mb-1">Sources:</div>
-                              <div className="flex flex-col gap-1.5">
+                              <div className="text-xs font-medium mb-1.5">Sources cited:</div>
+                              <div className="flex flex-col gap-2">
                                 {message.citations.map((citation, idx) => (
-                                  <div key={idx} className="text-xs p-1.5 bg-muted/50 rounded">
-                                    <div className="flex items-center gap-1 mb-1">
-                                      <span className="font-medium">[{idx + 1}]</span>
+                                  <div key={idx} className="text-xs p-2 bg-muted/50 rounded border border-border/60 shadow-sm">
+                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                      <span className="font-medium text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded-sm">[{idx + 1}]</span>
                                       {citation.timestamp && (
                                         <button 
-                                          className="text-primary hover:underline flex items-center"
+                                          className="text-primary hover:underline flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-sm transition-colors hover:bg-primary/10"
                                           onClick={() => {
                                             // Create URL with timestamp parameter
                                             const timestampInSeconds = citation.timestamp 
@@ -428,12 +428,19 @@ export function QASection() {
                                               : 0;
                                             window.open(`https://youtube.com/watch?v=${videoIdParam}&t=${timestampInSeconds}s`, '_blank');
                                           }}
+                                          title="Jump to this timestamp on YouTube"
                                         >
-                                          at {citation.timestamp}
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                                          {citation.timestamp}
                                         </button>
                                       )}
+                                      <span className="text-muted-foreground text-xs ml-auto">
+                                        {citation.content_type === 'transcript' ? 'Transcript' : 
+                                         citation.content_type === 'summary' ? 'Summary' : 
+                                         citation.content_type === 'note' ? 'Note' : 'Content'}
+                                      </span>
                                     </div>
-                                    <div className="opacity-80">"{citation.content}"</div>
+                                    <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">"{citation.content}"</div>
                                   </div>
                                 ))}
                               </div>
