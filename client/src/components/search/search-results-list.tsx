@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -22,9 +22,10 @@ interface SearchResultsListProps {
   videoId?: number;
   initialSearchTerm?: string;
   onResultSelect?: (result: SearchResult) => void;
+  onSearchTermChange?: (term: string) => void;
 }
 
-export function SearchResultsList({ videoId, initialSearchTerm = "", onResultSelect }: SearchResultsListProps) {
+export function SearchResultsList({ videoId, initialSearchTerm = "", onResultSelect, onSearchTermChange }: SearchResultsListProps) {
   // Search state
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -35,6 +36,13 @@ export function SearchResultsList({ videoId, initialSearchTerm = "", onResultSel
   const [, navigate] = useLocation();
   const { toast } = useToast();
   
+  // Call onSearchTermChange when searchTerm changes
+  useEffect(() => {
+    if (onSearchTermChange && searchTerm.trim().length >= 3) {
+      onSearchTermChange(searchTerm);
+    }
+  }, [searchTerm, onSearchTermChange]);
+
   // Search mutation
   const searchMutation = useMutation({
     mutationFn: async () => {
@@ -64,6 +72,11 @@ export function SearchResultsList({ videoId, initialSearchTerm = "", onResultSel
     onSuccess: (data) => {
       setSearchResults(data);
       setHasSearched(true);
+      
+      // Notify parent component of the current search term for highlighting
+      if (onSearchTermChange && searchTerm.trim()) {
+        onSearchTermChange(searchTerm);
+      }
       
       if (data.length === 0) {
         toast({
@@ -125,7 +138,14 @@ export function SearchResultsList({ videoId, initialSearchTerm = "", onResultSel
             placeholder="Search for concepts, topics, or specific content..."
             className="pl-9 bg-zinc-900 border-zinc-800"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              const newTerm = e.target.value;
+              setSearchTerm(newTerm);
+              // Clear search results if the field is emptied
+              if (!newTerm.trim() && onSearchTermChange) {
+                onSearchTermChange("");
+              }
+            }}
           />
         </div>
         <Button 

@@ -57,6 +57,7 @@ export function QASection() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // CSS classes for the sidebar based on visibility
   const sidebarClasses = showSidebar
@@ -371,12 +372,31 @@ export function QASection() {
               </div>
               <div className="flex gap-2">
                 {activeConversation && conversationData && (
-                  <ExportButton
-                    videoId={videoId}
-                    qaConversationId={activeConversation}
-                    videoTitle={conversationData.title}
-                    small
-                  />
+                  <>
+                    <SearchDialog
+                      videoId={videoId}
+                      title="Search Conversation"
+                      description="Find specific information or questions in this conversation"
+                      initialSearchTerm={searchTerm}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1"
+                          onClick={() => setSearchTerm("")}
+                        >
+                          <Search className="h-4 w-4" />
+                          <span className="hidden sm:inline">Search</span>
+                        </Button>
+                      }
+                    />
+                    <ExportButton
+                      videoId={videoId}
+                      qaConversationId={activeConversation}
+                      videoTitle={conversationData.title}
+                      small
+                    />
+                  </>
                 )}
                 <Button
                   variant="outline"
@@ -384,7 +404,7 @@ export function QASection() {
                   onClick={() => setShowSidebar(!showSidebar)}
                 >
                   {showSidebar ? <PanelLeftClose className="h-4 w-4 mr-2" /> : <PanelLeftOpen className="h-4 w-4 mr-2" />}
-                  {showSidebar ? "Hide Conversations" : "Show Conversations"}
+                  <span className="hidden sm:inline">{showSidebar ? "Hide Conversations" : "Show Conversations"}</span>
                 </Button>
               </div>
             </div>
@@ -409,7 +429,20 @@ export function QASection() {
                               : 'bg-muted text-muted-foreground'
                           }`}
                         >
-                          <div className="whitespace-pre-wrap">{message.content}</div>
+                          {searchTerm ? (
+                            <div 
+                              className="whitespace-pre-wrap" 
+                              dangerouslySetInnerHTML={{ 
+                                __html: highlightText({
+                                  text: message.content,
+                                  searchTerm,
+                                  showFullTextWithHighlights: true
+                                }) 
+                              }} 
+                            />
+                          ) : (
+                            <div className="whitespace-pre-wrap">{message.content}</div>
+                          )}
                           
                           {/* Citation section */}
                           {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
