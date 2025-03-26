@@ -31,7 +31,7 @@ export function VideoResult({ video }: VideoResultProps) {
   const [rating, setRating] = useState(0);
   const [showDescription, setShowDescription] = useState(false);
   const { toast } = useToast();
-  const { user, isAuthenticated, loginWithGoogle } = useSupabase();
+  const { user } = useSupabase();
   const { showAuthPrompt, promptType, promptAuth, closePrompt, incrementEngagement } = useAuthPrompt();
   const [pendingMetadata, setPendingMetadata] = useState<VideoMetadata | null>(null);
   const [interactionCount, setInteractionCount] = useState(0);
@@ -312,16 +312,11 @@ export function VideoResult({ video }: VideoResultProps) {
                           // Handle special "create" action
                           if (value === "create-new") {
                             // If user is not authenticated, show login prompt
-                            if (!isAuthenticated) {
+                            if (!user) {
                               toast({
                                 title: "Authentication Required",
                                 description: "Please log in or create an account to add custom categories",
                                 variant: "default",
-                                action: (
-                                  <Button variant="outline" onClick={() => loginWithGoogle()}>
-                                    Log In
-                                  </Button>
-                                ),
                               });
                               return;
                             }
