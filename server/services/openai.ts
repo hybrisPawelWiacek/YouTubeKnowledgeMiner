@@ -200,7 +200,15 @@ export async function generateAnswer(
 
     // Format search results to provide as context
     let searchResultsText = '';
-    const citationMap: any[] = [];
+    const citationMap: Array<{
+      id: number;
+      video_id: number;
+      video_title: string;
+      content: string;
+      content_type: string;
+      timestamp?: string;
+      chunk_index?: number;
+    }> = [];
     
     if (searchResults && searchResults.length > 0) {
       searchResultsText = "Here are relevant excerpts from the video that might help answer the question:\n\n";
@@ -212,8 +220,8 @@ export async function generateAnswer(
           video_title: videoTitle,
           content: result.content,
           content_type: result.content_type,
-          timestamp: result.metadata?.timestamp || result.metadata?.formatted_timestamp || null,
-          chunk_index: result.metadata?.position || result.chunk_index
+          timestamp: result.metadata?.timestamp || result.metadata?.formatted_timestamp || undefined,
+          chunk_index: result.metadata?.position || undefined
         };
         citationMap.push(citation);
         
@@ -227,14 +235,14 @@ export async function generateAnswer(
 
     // First message provides context
     messages.push({
-      role: "user" as const,
+      role: "user",
       content: `Here is the transcript of a YouTube video titled "${videoTitle}":\n\n${truncatedTranscript}\n\n${searchResultsText}\nPlease reference this information when answering questions, using citation numbers [1], [2], etc.`
-    });
+    } as any);
     
     messages.push({
-      role: "assistant" as const,
+      role: "assistant",
       content: "I've reviewed the transcript and relevant sections, and I'm ready to answer questions about this video with proper citations."
-    });
+    } as any);
 
     // Add conversation history if it exists
     if (conversationHistory.length > 0) {
@@ -243,9 +251,9 @@ export async function generateAnswer(
 
     // Add the current question
     messages.push({
-      role: "user" as const,
+      role: "user",
       content: question
-    });
+    } as any);
 
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -258,9 +266,9 @@ export async function generateAnswer(
     const answerContent = response.choices[0].message.content?.trim() || 'Sorry, I could not generate an answer.';
     
     // Create the used citations array based on citation numbers in the answer
-    const usedCitations = [];
+    const usedCitations: typeof citationMap = [];
     const citationRegex = /\[(\d+)\]/g;
-    let match;
+    let match: RegExpExecArray | null;
     
     while ((match = citationRegex.exec(answerContent)) !== null) {
       const citationNumber = parseInt(match[1]);

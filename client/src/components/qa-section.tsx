@@ -19,9 +19,20 @@ import {
 } from "@/components/ui/dialog";
 
 // Define types for messages
+interface Citation {
+  id: number;
+  video_id: number;
+  video_title: string;
+  content: string;
+  content_type: string;
+  timestamp?: string;
+  chunk_index?: number;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  citations?: Citation[];
 }
 
 interface QASession {
@@ -397,6 +408,37 @@ export function QASection() {
                           }`}
                         >
                           <div className="whitespace-pre-wrap">{message.content}</div>
+                          
+                          {/* Citation section */}
+                          {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
+                            <div className="mt-3 pt-2 border-t border-border">
+                              <div className="text-xs font-medium mb-1">Sources:</div>
+                              <div className="flex flex-col gap-1.5">
+                                {message.citations.map((citation, idx) => (
+                                  <div key={idx} className="text-xs p-1.5 bg-muted/50 rounded">
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <span className="font-medium">[{idx + 1}]</span>
+                                      {citation.timestamp && (
+                                        <button 
+                                          className="text-primary hover:underline flex items-center"
+                                          onClick={() => {
+                                            // Create URL with timestamp parameter
+                                            const timestampInSeconds = citation.timestamp 
+                                              ? citation.timestamp.split(':').reduce((acc, time) => (60 * acc) + +time, 0)
+                                              : 0;
+                                            window.open(`https://youtube.com/watch?v=${videoIdParam}&t=${timestampInSeconds}s`, '_blank');
+                                          }}
+                                        >
+                                          at {citation.timestamp}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="opacity-80">"{citation.content}"</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
