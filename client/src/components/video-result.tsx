@@ -141,7 +141,7 @@ export function VideoResult({ video }: VideoResultProps) {
         {video.summary && video.summary.length > 0 && (
           <SummarySection 
             summary={video.summary} 
-            videoId={submittedVideo?.id || 0} 
+            videoId={video.id || 0} 
           />
         )}
         
