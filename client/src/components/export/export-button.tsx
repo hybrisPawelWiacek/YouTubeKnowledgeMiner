@@ -62,7 +62,8 @@ export function ExportButton({
   // Save format preference mutation
   const saveFormatPreferenceMutation = useMutation({
     mutationFn: async (format: ExportFormat) => {
-      return apiRequest('/api/export/preferences', {
+      return apiRequest({
+        url: '/api/export/preferences',
         method: 'POST',
         data: { format }
       });
@@ -77,7 +78,8 @@ export function ExportButton({
       video_ids: number[];
       qa_conversation_id?: number;
     }) => {
-      return apiRequest('/api/export', {
+      return apiRequest({
+        url: '/api/export',
         method: 'POST',
         data
       });

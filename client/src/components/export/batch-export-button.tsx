@@ -44,7 +44,8 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
   // Save format preference mutation
   const saveFormatPreferenceMutation = useMutation({
     mutationFn: async (format: ExportFormat) => {
-      return apiRequest('/api/export/preferences', {
+      return apiRequest({
+        url: '/api/export/preferences',
         method: 'POST',
         data: { format }
       });
@@ -58,7 +59,8 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
       format: ExportFormat;
       video_ids: number[];
     }) => {
-      return apiRequest('/api/export', {
+      return apiRequest({
+        url: '/api/export',
         method: 'POST',
         data
       });

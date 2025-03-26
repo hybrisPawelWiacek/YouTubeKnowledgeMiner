@@ -139,7 +139,10 @@ export function VideoResult({ video }: VideoResultProps) {
         
         {/* Show AI-generated summary if available */}
         {video.summary && video.summary.length > 0 && (
-          <SummarySection summary={video.summary} />
+          <SummarySection 
+            summary={video.summary} 
+            videoId={submittedVideo?.id || 0} 
+          />
         )}
         
         <Card className="bg-zinc-900">

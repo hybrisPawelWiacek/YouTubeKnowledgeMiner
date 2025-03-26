@@ -15,11 +15,18 @@ export function SummarySection({ summary, videoId }: SummarySectionProps) {
   return (
     <Card className="mb-6">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center">
-          <span className="mr-2">AI-Generated Summary</span>
-          <Badge variant="outline" className="ml-2 bg-indigo-800/10 text-indigo-400">
-            AI
-          </Badge>
+        <CardTitle className="text-lg flex items-center justify-between">
+          <div className="flex items-center">
+            <span className="mr-2">AI-Generated Summary</span>
+            <Badge variant="outline" className="ml-2 bg-indigo-800/10 text-indigo-400">
+              AI
+            </Badge>
+          </div>
+          <ExportButton 
+            videoId={videoId}
+            hasSummary={true}
+            small
+          />
         </CardTitle>
         <CardDescription>
           Key points extracted from the video
