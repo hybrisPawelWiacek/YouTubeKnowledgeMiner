@@ -160,6 +160,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save video to library
   app.post("/api/videos", async (req, res) => {
     try {
+      console.log("------------------ New Video Save Request ------------------");
+      console.log("Received POST /api/videos request at", new Date().toISOString());
+      console.log("Request body:", JSON.stringify(req.body, null, 2));
+      
       const { youtubeId, title, channel, duration, publishDate, thumbnail, transcript, summary } = req.body;
       const metadata: VideoMetadataRequest = videoMetadataSchema.parse({
         notes: req.body.notes,
@@ -169,33 +173,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamps: req.body.timestamps,
         collection_ids: req.body.collection_ids
       });
+      
+      console.log("Parsed metadata:", JSON.stringify(metadata, null, 2));
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // Explicitly use ID of demouser (ID 3) for testing
+      // IMPORTANT: This is only for debugging - would be removed in production
+      // let userId = 3; // Force demouser ID for testing
+      
+      // Get user_id from headers or default to 1 
+      let userId = 1; // Default to testuser
       
       // Debug: log all headers for troubleshooting
-      console.log("Request headers for /api/videos:", JSON.stringify(req.headers));
+      console.log("Request headers for /api/videos:", JSON.stringify(req.headers, null, 2));
       
       if (req.headers['x-user-id']) {
         try {
           // Log the raw user ID value
           console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
           
+          // Handle various header formats
+          let headerValue = req.headers['x-user-id'];
+          
+          // If it's an array (which can happen with headers), use the first value
+          if (Array.isArray(headerValue)) {
+            console.log("x-user-id is an array, using first value:", headerValue[0]);
+            headerValue = headerValue[0];
+          }
+          
+          // Convert to string if not already
+          headerValue = String(headerValue);
+          
           // Extract just the numeric portion if it's a string with non-numeric characters
-          const headerValue = req.headers['x-user-id'] as string;
           const numericMatch = headerValue.match(/\d+/);
           
           if (numericMatch) {
             userId = parseInt(numericMatch[0], 10);
-            console.log("Extracted numeric user ID:", userId);
+            console.log("Extracted numeric user ID from string:", userId);
           } else {
             userId = Number(headerValue);
             console.log("Converted user ID directly:", userId);
           }
           
           if (isNaN(userId)) {
-            console.error("Failed to parse user ID, got NaN:", headerValue);
-            return res.status(400).json({ message: "Invalid user ID format" });
+            console.error("Failed to parse user ID, got NaN from:", headerValue);
+            return res.status(400).json({ message: "Invalid user ID format", originalValue: headerValue });
           }
           
           // Always ensure we have a valid positive integer
@@ -207,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using user ID for video save:", userId);
         } catch (e) {
           console.error("Error processing user ID:", e);
-          return res.status(400).json({ message: "Failed to parse user ID" });
+          return res.status(400).json({ message: "Failed to parse user ID", error: String(e) });
         }
       } else {
         console.log("No x-user-id header found, using default user ID:", userId);
@@ -289,32 +310,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all videos for a user
   app.get("/api/videos", async (req, res) => {
     try {
+      console.log("------------------ Video Fetch Request ------------------");
+      console.log("Received GET /api/videos request at", new Date().toISOString());
+      console.log("Request query params:", JSON.stringify(req.query, null, 2));
+      
       // Get user_id from headers, session or default to 1
       let userId = 1;
       
       // Debug: log all headers for troubleshooting
-      console.log("Request headers for GET /api/videos:", JSON.stringify(req.headers));
+      console.log("Request headers for GET /api/videos:", JSON.stringify(req.headers, null, 2));
       
       if (req.headers['x-user-id']) {
         try {
           // Log the raw user ID value
           console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
           
+          // Handle various header formats
+          let headerValue = req.headers['x-user-id'];
+          
+          // If it's an array (which can happen with headers), use the first value
+          if (Array.isArray(headerValue)) {
+            console.log("x-user-id is an array, using first value:", headerValue[0]);
+            headerValue = headerValue[0];
+          }
+          
+          // Convert to string if not already
+          headerValue = String(headerValue);
+          
           // Extract just the numeric portion if it's a string with non-numeric characters
-          const headerValue = req.headers['x-user-id'] as string;
           const numericMatch = headerValue.match(/\d+/);
           
           if (numericMatch) {
             userId = parseInt(numericMatch[0], 10);
-            console.log("Extracted numeric user ID:", userId);
+            console.log("Extracted numeric user ID from string:", userId);
           } else {
             userId = Number(headerValue);
             console.log("Converted user ID directly:", userId);
           }
           
           if (isNaN(userId)) {
-            console.error("Failed to parse user ID, got NaN:", headerValue);
-            return res.status(400).json({ message: "Invalid user ID format" });
+            console.error("Failed to parse user ID, got NaN from:", headerValue);
+            return res.status(400).json({ message: "Invalid user ID format", originalValue: headerValue });
           }
           
           // Always ensure we have a valid positive integer
@@ -326,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using user ID for fetching videos:", userId);
         } catch (e) {
           console.error("Error processing user ID:", e);
-          return res.status(400).json({ message: "Failed to parse user ID" });
+          return res.status(400).json({ message: "Failed to parse user ID", error: String(e) });
         }
       } else {
         console.log("No x-user-id header found in GET /api/videos, using default user ID:", userId);
