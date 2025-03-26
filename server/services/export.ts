@@ -323,11 +323,19 @@ export async function exportBatchVideoContent(
 
 /**
  * Saves user's export format preferences
+ * @param userId The user ID, or null for anonymous users (will be rejected)
+ * @param defaultFormat The preferred export format
+ * @throws Error if userId is null (anonymous users can't save preferences)
  */
 export async function saveExportPreference(
-  userId: number, 
+  userId: number | null, 
   defaultFormat: 'txt' | 'csv' | 'json'
 ): Promise<void> {
+  // Anonymous users can't save preferences
+  if (userId === null) {
+    throw new Error("Anonymous users cannot save export preferences");
+  }
+  
   // Check if user already has preferences
   const existingPrefs = await dbStorage.getExportPreferencesByUserId(userId);
   
@@ -343,8 +351,16 @@ export async function saveExportPreference(
 
 /**
  * Gets user's export format preferences
+ * @param userId The user ID, or null for anonymous users
+ * @returns The preferred export format, defaulting to 'txt' for anonymous users or users without preferences
  */
-export async function getExportPreference(userId: number): Promise<'txt' | 'csv' | 'json'> {
+export async function getExportPreference(userId: number | null): Promise<'txt' | 'csv' | 'json'> {
+  // For anonymous users (null userId), return default format
+  if (userId === null) {
+    return 'txt';
+  }
+  
+  // For registered users, fetch preferences from database
   const prefs = await dbStorage.getExportPreferencesByUserId(userId);
   return prefs?.default_format || 'txt'; // Default to txt if no preferences are saved
 }

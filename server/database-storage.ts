@@ -554,11 +554,24 @@ export class DatabaseStorage implements IStorage {
     return newCount;
   }
   
+  /**
+   * Get all videos associated with an anonymous session
+   * Used for migrating videos when a user registers after using the app anonymously
+   * @param sessionId The anonymous session ID
+   * @returns Array of videos associated with the session
+   */
   async getVideosByAnonymousSessionId(sessionId: string): Promise<Video[]> {
-    return await db
-      .select()
-      .from(videos)
-      .where(eq(videos.anonymous_session_id, sessionId));
+    try {
+      const result = await db
+        .select()
+        .from(videos)
+        .where(eq(videos.anonymous_session_id, sessionId));
+      
+      return result;
+    } catch (error) {
+      console.error('Error fetching videos by anonymous session ID:', error);
+      return [];
+    }
   }
   
   async deleteInactiveAnonymousSessions(olderThanDays: number): Promise<number> {
