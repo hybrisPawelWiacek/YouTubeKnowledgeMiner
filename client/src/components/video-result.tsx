@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { StarRating } from "@/components/ui/star-rating";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { SummarySection } from "@/components/summary-section";
 import { YoutubeVideo, VideoMetadata, Category } from "@/types";
 import { useSupabase } from "@/hooks/use-supabase";
@@ -48,8 +49,6 @@ export function VideoResult({ video }: VideoResultProps) {
       // Detailed debugging information for authentication context
       console.log('🎥 SAVING VIDEO - USER CONTEXT:', {
         userIsAuthenticated: !!user,
-        userId: user?.id,
-        userEmail: user?.email,
         userType: typeof user?.id
       });
       
@@ -75,15 +74,21 @@ export function VideoResult({ video }: VideoResultProps) {
       };
 
       console.log('📤 VIDEO DATA BEING SENT TO API:', videoData);
-      console.log('🧪 USING EXPERIMENTAL FORCED USER ID IN SERVER API ENDPOINT');
       
       try {
+        // For anonymous users, add session header manually
+        let headers: HeadersInit = {};
+        if (!user) {
+          const sessionId = getOrCreateAnonymousSessionId();
+          headers = { 'x-anonymous-session': sessionId };
+          console.log('📡 Anonymous user - adding session header:', sessionId);
+        }
+        
         // Making the API request
         console.log('📡 Making POST request to /api/videos');
-        const response = await apiRequest("POST", "/api/videos", videoData);
+        const response = await apiRequest("POST", "/api/videos", videoData, headers);
         const result = await response.json();
         console.log('✅ SAVE VIDEO RESPONSE:', result);
-        console.log('🔍 Saved with user_id:', result.user_id);
         return result;
       } catch (err) {
         console.error('❌ ERROR SAVING VIDEO:', err);
@@ -172,11 +177,23 @@ export function VideoResult({ video }: VideoResultProps) {
 
   const createCategory = async (categoryName: string) => {
     try {
-      await apiRequest("POST", "/api/categories", { name: categoryName });
+      // For anonymous users, we don't allow creating categories
+      // But in case we change this later, let's add the session headers
+      let headers: HeadersInit = {};
+      if (!user) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers = { 'x-anonymous-session': sessionId };
+      }
+      
+      await apiRequest("POST", "/api/categories", { name: categoryName }, headers);
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
       toast({ title: "Category created successfully!", description: "" });
-    } catch (error) {
-      toast({ title: "Error creating category", description: error.message, variant: "destructive" });
+    } catch (error: any) {
+      toast({ 
+        title: "Error creating category", 
+        description: error?.message || "Unknown error occurred", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -190,7 +207,7 @@ export function VideoResult({ video }: VideoResultProps) {
         {video.summary && video.summary.length > 0 && (
           <SummarySection 
             summary={video.summary} 
-            videoId={video.id || 0} 
+            videoId={0} 
           />
         )}
 
