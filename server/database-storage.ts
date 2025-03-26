@@ -497,19 +497,26 @@ export class DatabaseStorage implements IStorage {
   }
   
   async createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession> {
-    const now = new Date();
-    
-    const result = await db
-      .insert(anonymous_sessions)
-      .values({
-        ...session,
-        created_at: now,
-        last_active_at: now,
-        video_count: 0
-      })
-      .returning();
-    
-    return result[0];
+    try {
+      console.log('[DB] Creating anonymous session:', session);
+      const now = new Date();
+      
+      const result = await db
+        .insert(anonymous_sessions)
+        .values({
+          ...session,
+          created_at: now,
+          last_active_at: now,
+          video_count: 0
+        })
+        .returning();
+      
+      console.log('[DB] Session created successfully:', result[0]);
+      return result[0];
+    } catch (error) {
+      console.error('[DB] Error creating anonymous session:', error);
+      throw error;
+    }
   }
   
   async updateAnonymousSession(sessionId: string, data: Partial<AnonymousSession>): Promise<AnonymousSession | undefined> {

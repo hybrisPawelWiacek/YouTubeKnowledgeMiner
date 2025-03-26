@@ -1590,11 +1590,16 @@ async function getUserInfoFromRequest(req: Request): Promise<{
       if (!session) {
         // Create a new session if it doesn't exist
         console.log("[Auth Helper] Creating new anonymous session in database");
-        session = await dbStorage.createAnonymousSession({
-          session_id: sessionId,
-          user_agent: req.headers['user-agent'] || null,
-          ip_address: req.ip || null
-        });
+        try {
+          session = await dbStorage.createAnonymousSession({
+            session_id: sessionId,
+            user_agent: req.headers['user-agent'] || null,
+            ip_address: req.ip || null
+          });
+          console.log("[Auth Helper] Session created successfully:", session);
+        } catch (error) {
+          console.error("[Auth Helper] ERROR creating anonymous session:", error);
+        }
       } else {
         console.log("[Auth Helper] Using existing anonymous session from database");
       }
