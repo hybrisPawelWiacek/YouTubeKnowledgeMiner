@@ -378,6 +378,7 @@ export function QASection() {
                       title="Search Conversation"
                       description="Find specific information or questions in this conversation"
                       initialSearchTerm={searchTerm}
+                      onSearchTermChange={setSearchTerm}
                       trigger={
                         <Button
                           variant="outline"
@@ -475,7 +476,21 @@ export function QASection() {
                                          citation.content_type === 'note' ? 'Note' : 'Content'}
                                       </span>
                                     </div>
-                                    <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">"{citation.content}"</div>
+                                    <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">
+                                      {searchTerm ? (
+                                        <div 
+                                          dangerouslySetInnerHTML={{ 
+                                            __html: '"' + highlightText({
+                                              text: citation.content,
+                                              searchTerm,
+                                              showFullTextWithHighlights: true
+                                            }) + '"'
+                                          }} 
+                                        />
+                                      ) : (
+                                        <>"{citation.content}"</>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>

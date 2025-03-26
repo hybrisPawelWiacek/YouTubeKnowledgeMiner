@@ -17,6 +17,7 @@ interface SearchDialogProps {
   title?: string;
   description?: string;
   initialSearchTerm?: string;
+  onSearchTermChange?: (term: string) => void;
 }
 
 export function SearchDialog({
@@ -25,6 +26,7 @@ export function SearchDialog({
   title = "Semantic Search",
   description = "Search through video content by meaning, not just keywords",
   initialSearchTerm = "",
+  onSearchTermChange,
 }: SearchDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -48,6 +50,7 @@ export function SearchDialog({
             videoId={videoId}
             initialSearchTerm={initialSearchTerm}
             onResultSelect={() => setOpen(false)}
+            onSearchTermChange={onSearchTermChange}
           />
         </div>
       </DialogContent>
