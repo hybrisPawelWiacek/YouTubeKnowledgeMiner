@@ -7,8 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose, Trash2, Download } from "lucide-react";
+import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose, Trash2, Download, Search } from "lucide-react";
 import { ExportButton } from "@/components/export/export-button";
+import { SearchDialog } from "@/components/search/search-dialog";
+import { highlightText } from "@/lib/highlight-utils";
 import {
   Dialog,
   DialogContent,

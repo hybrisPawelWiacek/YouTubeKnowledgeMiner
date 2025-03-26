@@ -3,15 +3,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/export-button";
+import { SearchDialog } from "@/components/search/search-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Search } from "lucide-react";
+import { highlightText } from "@/lib/highlight-utils";
 
 interface SummarySectionProps {
   summary: string[];
   videoId: number;
+  searchTerm?: string;
 }
 
-export function SummarySection({ summary, videoId }: SummarySectionProps) {
+export function SummarySection({ summary, videoId, searchTerm }: SummarySectionProps) {
   const { toast } = useToast();
   const [copying, setCopying] = useState(false);
   
@@ -78,6 +81,17 @@ export function SummarySection({ summary, videoId }: SummarySectionProps) {
     }
   };
 
+  // Process summary points with highlighting if search term is provided
+  const processedSummary = searchTerm
+    ? summary.map(point => 
+        highlightText({
+          text: point,
+          searchTerm,
+          showFullTextWithHighlights: true
+        })
+      )
+    : summary;
+
   return (
     <Card className="mb-6">
       <CardHeader className="pb-3">
@@ -89,6 +103,21 @@ export function SummarySection({ summary, videoId }: SummarySectionProps) {
             </Badge>
           </div>
           <div className="flex items-center space-x-2">
+            <SearchDialog 
+              videoId={videoId}
+              title="Search Summary"
+              description="Find specific information in the video summary"
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Search</span>
+                </Button>
+              }
+            />
             <Button 
               variant="outline" 
               size="sm"
@@ -120,10 +149,8 @@ export function SummarySection({ summary, videoId }: SummarySectionProps) {
       </CardHeader>
       <CardContent>
         <ul className="space-y-2 list-disc pl-5">
-          {summary.map((point, index) => (
-            <li key={index} className="text-base">
-              {point}
-            </li>
+          {processedSummary.map((point, index) => (
+            <li key={index} className="text-base" dangerouslySetInnerHTML={{ __html: point }} />
           ))}
         </ul>
       </CardContent>
