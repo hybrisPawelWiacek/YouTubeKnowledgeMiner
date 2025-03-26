@@ -312,17 +312,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all videos for a user
   app.get("/api/videos", async (req, res) => {
     try {
-      console.log("------------------ Video Fetch Request ------------------");
+      console.log("================================================");
+      console.log("🔴 VIDEO FETCH REQUEST STARTING 🔴");
+      console.log("================================================");
       console.log("Received GET /api/videos request at", new Date().toISOString());
       console.log("Request query params:", JSON.stringify(req.query, null, 2));
       
-      // Get user_id from headers, session or default to 1
-      let userId = 1;
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      
+      console.log("⚠️ IMPORTANT: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("================================================");
       
       // Debug: log all headers for troubleshooting
       console.log("Request headers for GET /api/videos:", JSON.stringify(req.headers, null, 2));
       
-      if (req.headers['x-user-id']) {
+      if (false && req.headers['x-user-id']) { // Disabled header processing with 'false &&' for testing
         try {
           // Log the raw user ID value
           console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
@@ -519,9 +525,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get categories
   app.get("/api/categories", async (req, res) => {
     try {
-      // In a real app, get user_id from session
-      // If user is not authenticated, only return global categories
-      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id'] as string) : null;
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      const userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      
+      console.log("⚠️ CATEGORIES: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
 
       // Get categories (both global and user-specific if authenticated)
       const categories = await dbStorage.getCategories(userId);
@@ -568,10 +576,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all collections for a user
   app.get("/api/collections", async (req, res) => {
     try {
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
       
-      if (req.headers['x-user-id']) {
+      console.log("⚠️ COLLECTIONS: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
+      
+      if (false && req.headers['x-user-id']) {
         try {
           userId = Number(req.headers['x-user-id']);
           if (isNaN(userId)) {
@@ -595,10 +606,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertCollectionSchema.parse(req.body);
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
       
-      if (req.headers['x-user-id']) {
+      console.log("⚠️ CREATE COLLECTION: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
+      
+      if (false && req.headers['x-user-id']) {
         try {
           userId = Number(req.headers['x-user-id']);
           if (isNaN(userId)) {
