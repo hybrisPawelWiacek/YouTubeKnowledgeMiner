@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { 
@@ -36,19 +36,17 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
   });
   
   // Set the format based on user preference when data is available
-  if (formatPreferenceQuery.data && isDialogOpen) {
-    setSelectedFormat(formatPreferenceQuery.data.format);
-    setIsDialogOpen(false); // Close the dialog to prevent infinite loop
-  }
+  useEffect(() => {
+    if (formatPreferenceQuery.data && formatPreferenceQuery.data.format && isDialogOpen) {
+      setSelectedFormat(formatPreferenceQuery.data.format as ExportFormat);
+      setIsDialogOpen(false); // Close the dialog to prevent infinite loop
+    }
+  }, [formatPreferenceQuery.data, isDialogOpen]);
   
   // Save format preference mutation
   const saveFormatPreferenceMutation = useMutation({
     mutationFn: async (format: ExportFormat) => {
-      return apiRequest({
-        url: '/api/export/preferences',
-        method: 'POST',
-        data: { format }
-      });
+      return apiRequest("POST", '/api/export/preferences', { format });
     }
   });
   
@@ -59,15 +57,14 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
       format: ExportFormat;
       video_ids: number[];
     }) => {
-      return apiRequest({
-        url: '/api/export',
-        method: 'POST',
-        data
-      });
+      return apiRequest("POST", '/api/export', data);
     },
-    onSuccess: (data) => {
+    onSuccess: async (response) => {
       // Save format preference if it has changed
       saveFormatPreferenceMutation.mutate(selectedFormat);
+      
+      // Parse the response to get the content, mimeType, and filename
+      const data = await response;
       
       // Create a download link for the exported content
       const blob = new Blob([data.content], { type: data.mimeType });

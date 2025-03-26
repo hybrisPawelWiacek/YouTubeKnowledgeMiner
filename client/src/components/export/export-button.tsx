@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { 
@@ -78,12 +78,12 @@ export function ExportButton({
     }) => {
       return apiRequest("POST", '/api/export', data);
     },
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       // Save format preference if it has changed
       saveFormatPreferenceMutation.mutate(selectedFormat);
       
       // Parse the response to get the content, mimeType, and filename
-      const data = response.json();
+      const data = await response;
       
       // Create a download link for the exported content
       const blob = new Blob([data.content], { type: data.mimeType });
