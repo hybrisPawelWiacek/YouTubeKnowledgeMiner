@@ -472,12 +472,46 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       if (hasAnonymousSessionData) {
         console.log("Found anonymous session data to migrate");
         
-        // Here we would implement the migration of newer anonymous session videos
-        // This would typically be a server-side operation where videos with this
-        // anonymous_session_id would be reassigned to the user's account
+        // Get the current session ID
+        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+        const sessionId = getOrCreateAnonymousSessionId();
         
-        // For now, let's clear the anonymous session since the user is logged in
-        clearAnonymousSession();
+        // Call the server endpoint to migrate videos from anonymous session to user account
+        const response = await fetch('/api/migrate-anonymous-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-anonymous-session': sessionId
+          },
+          body: JSON.stringify({
+            userId: user.id
+          }),
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          const migratedCount = result.migratedCount || 0;
+          
+          console.log(`Successfully migrated ${migratedCount} videos from anonymous session to user account`);
+          
+          if (migratedCount > 0) {
+            toast({
+              title: "Videos Imported",
+              description: `Successfully imported ${migratedCount} videos from your guest session`,
+            });
+          }
+          
+          // Clear anonymous session after successful migration
+          clearAnonymousSession();
+        } else {
+          console.error("Error migrating anonymous session data:", await response.text());
+          toast({
+            title: "Import Failed",
+            description: "An error occurred while importing your data",
+            variant: "destructive",
+          });
+        }
         
         toast({
           title: "Anonymous data cleared",

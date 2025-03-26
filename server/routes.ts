@@ -1284,6 +1284,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  
+  // Migration endpoint to move videos from anonymous session to authenticated user
+  app.post("/api/migrate-anonymous-session", async (req, res) => {
+    try {
+      // Get session ID from header
+      const sessionHeader = req.headers['x-anonymous-session'];
+      if (!sessionHeader) {
+        return res.status(400).json({ message: "No anonymous session ID provided" });
+      }
+      
+      const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+      const { userId } = req.body;
+      
+      if (!userId || typeof userId !== 'number') {
+        return res.status(400).json({ message: "Invalid user ID provided" });
+      }
+      
+      // Get videos attached to this anonymous session
+      const anonymousVideos = await dbStorage.getVideosByAnonymousSessionId(sessionId);
+      
+      if (!anonymousVideos || anonymousVideos.length === 0) {
+        return res.status(200).json({ message: "No videos to migrate", migratedCount: 0 });
+      }
+      
+      // Update the user_id on all these videos
+      let migratedCount = 0;
+      for (const video of anonymousVideos) {
+        await dbStorage.updateVideo(video.id, { user_id: userId });
+        migratedCount++;
+      }
+      
+      console.log(`Successfully migrated ${migratedCount} videos from anonymous session ${sessionId} to user ${userId}`);
+      
+      return res.status(200).json({ 
+        message: "Videos successfully migrated", 
+        migratedCount,
+        sessionId
+      });
+    } catch (error) {
+      console.error("Error migrating anonymous session:", error);
+      return res.status(500).json({ 
+        message: "Failed to migrate anonymous session", 
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   return httpServer;
 }
