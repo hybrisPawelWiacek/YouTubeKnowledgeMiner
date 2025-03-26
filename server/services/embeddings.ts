@@ -55,7 +55,10 @@ export async function processTranscriptEmbeddings(
   log(`Split transcript into ${chunks.length} chunks for embedding`, 'embeddings');
   
   // Process chunks with timestamp metadata
-  return processTranscriptChunksWithTimestamps(videoId, userId, chunks, timestampData);
+  // For embedding storage purposes, we need a valid user ID
+  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
+  const embeddingUserId = userId !== null ? userId : 1;
+  return processTranscriptChunksWithTimestamps(videoId, embeddingUserId, chunks, timestampData);
 }
 
 /**
@@ -75,7 +78,10 @@ export async function processSummaryEmbeddings(
     return [];
   }
   
-  return processContentEmbeddings(videoId, userId, summaryPoints, 'summary');
+  // For embedding storage purposes, we need a valid user ID
+  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
+  const embeddingUserId = userId !== null ? userId : 1;
+  return processContentEmbeddings(videoId, embeddingUserId, summaryPoints, 'summary');
 }
 
 /**
@@ -99,7 +105,10 @@ export async function processNotesEmbeddings(
   const chunks = chunkText(notes);
   log(`Split notes into ${chunks.length} chunks for embedding`, 'embeddings');
   
-  return processContentEmbeddings(videoId, userId, chunks, 'note');
+  // For embedding storage purposes, we need a valid user ID
+  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
+  const embeddingUserId = userId !== null ? userId : 1;
+  return processContentEmbeddings(videoId, embeddingUserId, chunks, 'note');
 }
 
 /**
@@ -107,7 +116,7 @@ export async function processNotesEmbeddings(
  */
 async function processTranscriptChunksWithTimestamps(
   videoId: number,
-  userId: number | null,
+  userId: number, // Must be a valid number for database storage
   textChunks: string[],
   timestampData: { [index: number]: { timestamp: number, duration: number } }
 ): Promise<number[]> {
