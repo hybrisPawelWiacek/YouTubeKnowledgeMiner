@@ -51,7 +51,7 @@ export default function Library() {
   // Hooks
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const { user } = useSupabase();
+  const { user, getLocalData, setLocalData, hasReachedAnonymousLimit } = useSupabase();
   const { promptAuth, incrementEngagement } = useAuthPrompt();
   const [, navigate] = useLocation();
   const [libraryInteractions, setLibraryInteractions] = useState(0);
@@ -401,29 +401,7 @@ export default function Library() {
     ));
   };
 
-  // Helper functions for anonymous user limits
-  const getLocalData = () => {
-    try {
-      const storedData = localStorage.getItem('anonymousLibraryData');
-      return storedData ? JSON.parse(storedData) : { videos: [], collections: [] };
-    } catch (error) {
-      console.error("Error getting local data:", error);
-      return { videos: [], collections: [] };
-    }
-  };
-
-  const hasReachedAnonymousLimit = () => {
-    const localData = getLocalData();
-    return localData.videos.length >= 3;
-  };
-
-  const saveLocalData = (data: { videos: any[]; collections: any[]; }) => {
-    try {
-      localStorage.setItem('anonymousLibraryData', JSON.stringify(data));
-    } catch (error) {
-      console.error("Error saving local data:", error);
-    }
-  };
+  // This function isn't needed as we're using the ones from useSupabase hook
 
   useEffect(() => {
     // For anonymous users
@@ -454,8 +432,8 @@ export default function Library() {
     async function loadCategories() {
       try {
         if (!user) {
-          // For anonymous users, just set empty categories or mock data
-          setSelectedCategory([]);
+          // For anonymous users, no categories are available
+          setSelectedCategory(undefined);
           return;
         }
         const response = await fetch('/api/categories');
@@ -494,7 +472,7 @@ export default function Library() {
       try {
         if (!user) {
           // Anonymous users don't have saved searches
-          setSearchQuery([]);
+          // We're not changing the search query here
           return;
         }
         const response = await fetch('/api/saved-searches');
