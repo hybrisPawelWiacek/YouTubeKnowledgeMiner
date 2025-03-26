@@ -477,11 +477,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get categories
   app.get("/api/categories", async (req, res) => {
     try {
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      const userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ CATEGORIES: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("CATEGORIES: Using user ID from request:", userId);
 
       // Get categories (both global and user-specific if authenticated)
       const categories = await dbStorage.getCategories(userId);
@@ -500,11 +499,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Category name is required" });
       }
 
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      const userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ CREATE CATEGORY: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("CREATE CATEGORY: Using user ID from request:", userId);
 
       if (!userId) {
         return res.status(401).json({ 
@@ -530,23 +528,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all collections for a user
   app.get("/api/collections", async (req, res) => {
     try {
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ COLLECTIONS: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("COLLECTIONS: Using user ID from request:", userId);
       
-      if (false && req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
-
       const collections = await dbStorage.getCollectionsByUserId(userId);
       return res.status(200).json(collections);
     } catch (error) {
@@ -560,23 +546,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertCollectionSchema.parse(req.body);
 
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ CREATE COLLECTION: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("CREATE COLLECTION: Using user ID from request:", userId);
       
-      if (false && req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
-
       const collection = await dbStorage.createCollection({
         ...validatedData,
         user_id: userId
@@ -722,23 +696,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all saved searches for a user
   app.get("/api/saved-searches", async (req, res) => {
     try {
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ SAVED SEARCHES: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("SAVED SEARCHES: Using user ID from request:", userId);
       
-      if (false && req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
-
       const savedSearches = await dbStorage.getSavedSearchesByUserId(userId);
       return res.status(200).json(savedSearches);
     } catch (error) {
@@ -752,23 +714,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertSavedSearchSchema.parse(req.body);
 
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ CREATE SAVED SEARCH: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("CREATE SAVED SEARCH: Using user ID from request:", userId);
       
-      if (false && req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
-
       const savedSearch = await dbStorage.createSavedSearch({
         ...validatedData,
         user_id: userId
@@ -812,22 +762,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize Supabase vector functions if not already done
       await initializeVectorFunctions();
 
-      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
-      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      console.log("⚠️ SEMANTIC SEARCH: Using FORCED USER ID:", userId);
-      console.log("This is a temporary fix for testing - would be removed in production");
-      
-      if (false && req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
+      console.log("SEMANTIC SEARCH: Using user ID from request:", userId);
 
       // Execute semantic search
       const results = await performSemanticSearch(
@@ -907,20 +845,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid video ID" });
       }
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      if (req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
-
+      console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
       console.log("Creating Q&A conversation with body:", req.body);
 
       try {

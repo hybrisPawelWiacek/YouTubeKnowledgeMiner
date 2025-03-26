@@ -131,7 +131,20 @@ export default function Library() {
         url += `&cursor=${cursor}`;
       }
 
-      const response = await fetch(url);
+      console.log('Library - Fetching videos for user:', user?.id);
+      
+      // Create auth headers
+      const headers: HeadersInit = {};
+      if (user?.id) {
+        headers['x-user-id'] = String(user.id);
+        console.log('Library - Setting x-user-id header to:', user.id);
+      }
+      
+      const response = await fetch(url, { 
+        headers,
+        credentials: 'include'
+      });
+      
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
