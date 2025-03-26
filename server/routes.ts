@@ -1446,18 +1446,19 @@ async function getUserInfoFromRequest(req: Request): Promise<{
 }
 
 /**
- * Simplified version that just returns the user ID
- * Enhanced to handle anonymous sessions while maintaining backward compatibility
+ * Returns the user ID for authenticated users or null for anonymous users
+ * This supports the session-based approach for both user types
  * 
  * @param req Express request object
- * @returns The user ID (authenticated user ID or 1 for anonymous)
+ * @returns The user ID for authenticated users or null for anonymous users
  */
-async function getUserIdFromRequest(req: Request): Promise<number> {
+async function getUserIdFromRequest(req: Request): Promise<number | null> {
   console.log("[Auth Helper] Extracting user ID from request headers");
   
-  // Default to anonymous user (1) only if we can't find a valid user ID
-  let userId = 1;
+  // Default to null for anonymous users - this is the key change
+  let userId: number | null = null;
   let isAnonymous = true;
+  let anonymousSessionId: string | null = null;
   
   // Check if we have a user ID header first (authenticated user)
   if (req.headers['x-user-id']) {
@@ -1479,13 +1480,10 @@ async function getUserIdFromRequest(req: Request): Promise<number> {
       const parsedId = parseInt(cleanValue, 10);
       
       // Validate the parsed ID - exclude 1 since that's reserved for anonymous users
-      if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
+      if (!isNaN(parsedId) && parsedId > 0) {
         userId = parsedId;
         isAnonymous = false; // This is an authenticated user
         console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
-      } else if (!isNaN(parsedId) && parsedId === 1) {
-        // ID is 1, which is our anonymous user, so we'll check for session below
-        console.log("[Auth Helper] Found user ID 1 (anonymous), will check for session ID");
       } else {
         console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
       }
@@ -1503,6 +1501,7 @@ async function getUserIdFromRequest(req: Request): Promise<number> {
       try {
         const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
         console.log("[Auth Helper] Found anonymous session header:", sessionId);
+        anonymousSessionId = sessionId;
         
         // Get or create session and update last active time
         let session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
@@ -1519,17 +1518,17 @@ async function getUserIdFromRequest(req: Request): Promise<number> {
           });
         }
         
-        // We still return user_id=1 for anonymous users, but the session ID
-        // in the header is what ties videos to specific anonymous users
+        // For anonymous users, we now return null instead of user_id=1
+        // The session ID header is what ties videos to specific anonymous users
         console.log("[Auth Helper] Using anonymous session ID:", sessionId);
       } catch (error) {
         console.error("[Auth Helper] Error handling anonymous session:", error);
       }
     } else {
-      console.log("[Auth Helper] No anonymous session header found, using default anonymous user ID");
+      console.log("[Auth Helper] No anonymous session header found, using null user ID for anonymous");
     }
   }
   
-  console.log("[Auth Helper] Final user ID being used:", userId, "(type: number)");
+  console.log("[Auth Helper] Final user ID being used:", userId, "(type:", typeof userId, ")");
   return userId;
 }
