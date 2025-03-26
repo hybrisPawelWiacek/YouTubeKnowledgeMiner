@@ -66,27 +66,23 @@ export function AuthPromptDialog({
 }: AuthPromptDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
-  const { signInWithGoogle, getLocalData } = useSupabase();
+  const { signInWithGoogle, getLocalData, hasReachedAnonymousLimit } = useSupabase();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
-
-  const getAnonymousVideoCount = (): number => {
-    const localData = getLocalData();
-    return localData?.videos?.length || 0;
-  };
+  const [maxAllowedVideos] = useState(3);
 
   useEffect(() => {
-    const fetchCount = () => {
-      const count = getAnonymousVideoCount();
-      setAnonymousVideoCount(count);
-    };
-
-    fetchCount();
-  }, []);
+    // Update video count when dialog opens
+    if (isOpen) {
+      const localData = getLocalData();
+      setAnonymousVideoCount(localData.videos?.length || 0);
+    }
+  }, [isOpen, getLocalData]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
       await signInWithGoogle();
+      // The auth state change handler in useSupabase will trigger data migration
     } catch (error) {
       console.error('Error signing in with Google:', error);
       setIsLoading(false);
@@ -99,18 +95,29 @@ export function AuthPromptDialog({
   };
 
   const handleRemindLater = () => {
-    const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; 
-    localStorage.setItem('suppress_auth_prompts_until', suppressUntil.toString());
-    if (onContinueAsGuest) {
-      onContinueAsGuest();
+    // Only allow "remind later" if they haven't reached the limit
+    if (!hasReachedAnonymousLimit()) {
+      const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+      localStorage.setItem('suppress_auth_prompts_until', suppressUntil.toString());
+      if (onContinueAsGuest) {
+        onContinueAsGuest();
+      }
     }
     onClose();
   };
 
-  const reachedLimit = anonymousVideoCount >= 3;
+  // Determine if user has reached the video limit
+  const reachedLimit = hasReachedAnonymousLimit();
+  
+  // Customize message based on limit status
   let description = promptMessages[promptType].description;
   if (reachedLimit) {
-    description = `You've reached the limit of 3 videos as a guest. ${promptMessages[promptType].description}`;
+    // More explicit message when limit is reached
+    if (promptType === 'analyze_again') {
+      description = `You've reached the limit of ${maxAllowedVideos} videos as a guest user. Create an account to analyze unlimited videos and access your library from any device.`;
+    } else {
+      description = `You've reached the limit of ${maxAllowedVideos} videos as a guest. ${promptMessages[promptType].description}`;
+    }
   }
 
   return (
@@ -161,7 +168,7 @@ export function AuthPromptDialog({
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between">
-          {onContinueAsGuest && (
+          {onContinueAsGuest && !reachedLimit && (
             <Button
               variant="ghost"
               onClick={handleRemindLater}
@@ -169,6 +176,11 @@ export function AuthPromptDialog({
             >
               Continue as Guest
             </Button>
+          )}
+          {reachedLimit && promptType === 'analyze_again' && (
+            <div className="text-xs text-muted-foreground mb-2 sm:mb-0">
+              You've used {anonymousVideoCount}/{maxAllowedVideos} free videos
+            </div>
           )}
           <Button
             variant="link"
