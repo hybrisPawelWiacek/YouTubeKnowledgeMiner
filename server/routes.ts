@@ -239,11 +239,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamps: metadata.timestamps
       };
       
-      // For anonymous users with sessions, add the session ID
+      // For anonymous users with sessions, add the session ID and use user_id=1 for database compatibility
       if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
         videoData.anonymous_session_id = userInfo.anonymous_session_id;
+        // We must use user_id=1 for anonymous users due to the not-null constraint
+        // The anonymous_session_id is what actually identifies the user
+        videoData.user_id = 1;
+        console.log("Converting null user_id to 1 for anonymous session:", userInfo.anonymous_session_id);
+      } else if (userInfo.user_id === null) {
+        // Fall back to user_id=1 for any edge cases where we have a null user but no session
+        videoData.user_id = 1;
+        console.log("Converting null user_id to 1 (no session)");
       }
       
+      console.log("User ID in insert request:", videoData.user_id, "(type:", typeof videoData.user_id, ")");
       const video = await dbStorage.insertVideo(videoData);
 
       // If collections were specified, add the video to those collections
