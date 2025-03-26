@@ -19,7 +19,9 @@ import { OAuthSetupGuide } from "@/components/auth/oauth-setup-guide";
 
 // Login schema
 const loginSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.string().min(3, { 
+    message: "Please enter a valid email or username (min 3 characters)" 
+  }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" }),
 });
 
@@ -202,9 +204,9 @@ export default function Auth() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel>Email or Username</FormLabel>
                           <FormControl>
-                            <Input placeholder="your.email@example.com" {...field} />
+                            <Input placeholder="email@example.com or username" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -240,7 +242,7 @@ export default function Auth() {
                       className="w-full" 
                       disabled={isLoading}
                     >
-                      {isLoading ? "Logging in..." : "Login with Email"}
+                      {isLoading ? "Logging in..." : "Login"}
                     </Button>
                   </CardFooter>
                 </form>
