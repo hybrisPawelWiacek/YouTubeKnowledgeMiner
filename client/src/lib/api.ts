@@ -1,3 +1,15 @@
+// Import needed authentication modules
+import { useSupabase } from '@/hooks/use-supabase';
+
+// Create a helper to get the current user session without hooks
+// This is necessary because we can't use React hooks outside of components
+let currentSession: any = null;
+
+// Function to update the current session (to be called from components)
+export function updateCurrentSession(session: any) {
+  currentSession = session;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -14,10 +26,9 @@ export async function apiRequest(
   };
 
   // Add auth header if user is authenticated
-  const { session } = useAuthStore.getState();
-  if (session?.user) {
+  if (currentSession?.user) {
     // Ensure user ID is sent as a number in string format
-    const userId = session.user.id;
+    const userId = currentSession.user.id;
     (options.headers as Record<string, string>)['x-user-id'] = typeof userId === 'number' ? 
       String(userId) : String(Number(userId));
   }
