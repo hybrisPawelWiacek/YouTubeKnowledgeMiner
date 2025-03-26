@@ -546,11 +546,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/collections", async (req, res) => {
     try {
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("COLLECTIONS: Using user ID from request:", userId);
       
-      const collections = await dbStorage.getCollectionsByUserId(userId);
+      // Anonymous users (userId is null) don't have collections
+      const collections = userId ? await dbStorage.getCollectionsByUserId(userId) : [];
       return res.status(200).json(collections);
     } catch (error) {
       console.error("Error fetching collections:", error);
@@ -564,9 +565,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertCollectionSchema.parse(req.body);
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("CREATE COLLECTION: Using user ID from request:", userId);
+      
+      // Anonymous users can't create collections
+      if (userId === null) {
+        return res.status(401).json({ 
+          message: "Authentication required to create collections",
+          code: "AUTH_REQUIRED" 
+        });
+      }
       
       const collection = await dbStorage.createCollection({
         ...validatedData,
@@ -714,11 +723,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/saved-searches", async (req, res) => {
     try {
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("SAVED SEARCHES: Using user ID from request:", userId);
       
-      const savedSearches = await dbStorage.getSavedSearchesByUserId(userId);
+      // Anonymous users don't have saved searches
+      const savedSearches = userId ? await dbStorage.getSavedSearchesByUserId(userId) : [];
       return res.status(200).json(savedSearches);
     } catch (error) {
       console.error("Error fetching saved searches:", error);
@@ -732,9 +742,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertSavedSearchSchema.parse(req.body);
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("CREATE SAVED SEARCH: Using user ID from request:", userId);
+      
+      // Anonymous users can't create saved searches
+      if (userId === null) {
+        return res.status(401).json({ 
+          message: "Authentication required to save searches",
+          code: "AUTH_REQUIRED" 
+        });
+      }
       
       const savedSearch = await dbStorage.createSavedSearch({
         ...validatedData,
@@ -780,7 +798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await initializeVectorFunctions();
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("SEMANTIC SEARCH: Using user ID from request:", userId);
 
@@ -798,12 +816,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit
       );
 
-      // Save search to history
-      try {
-        await saveSearchHistory(userId, query, filter, results.length);
-      } catch (error) {
-        // Non-critical, log but continue
-        log(`Error saving search history: ${error}`, 'routes');
+      // Save search to history only for authenticated users
+      if (userId !== null) {
+        try {
+          await saveSearchHistory(userId, query, filter, results.length);
+        } catch (error) {
+          // Non-critical, log but continue
+          log(`Error saving search history: ${error}`, 'routes');
+        }
       }
 
       return res.status(200).json(results);
@@ -863,10 +883,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
       console.log("Creating Q&A conversation with body:", req.body);
+      
+      // Anonymous users can't create Q&A conversations
+      if (userId === null) {
+        return res.status(401).json({ 
+          message: "Authentication required to create Q&A conversations",
+          code: "AUTH_REQUIRED" 
+        });
+      }
 
       try {
         // Validate schema requirements first
@@ -1166,9 +1194,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const exportRequest = req.body;
 
       // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      const userId = await getUserIdFromRequest(req);
       
       console.log("EXPORT: Using user ID from request:", userId);
+      
+      // Anonymous users can't export content
+      if (userId === null) {
+        return res.status(401).json({ 
+          message: "Authentication required to export content",
+          code: "AUTH_REQUIRED" 
+        });
+      }
       
       exportRequest.userId = userId;
 
@@ -1213,8 +1249,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = await getUserIdFromRequest(req);
       
       console.log("GET EXPORT PREFERENCES: Using user ID from request:", userId);
-
-      const format = await getExportPreference(userId);
+      
+      // For anonymous users, return default format without requiring authentication
+      const format = userId !== null 
+        ? await getExportPreference(userId)
+        : 'txt'; // Default format for anonymous users
       return res.status(200).json({ format });
     } catch (error) {
       console.error("Error getting export preferences:", error);
@@ -1237,6 +1276,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = await getUserIdFromRequest(req);
       
       console.log("SAVE EXPORT PREFERENCES: Using user ID from request:", userId);
+      
+      // Anonymous users can't save export preferences
+      if (userId === null) {
+        return res.status(401).json({ 
+          message: "Authentication required to save export preferences",
+          code: "AUTH_REQUIRED" 
+        });
+      }
 
       await saveExportPreference(userId, format);
       return res.status(200).json({ format });
