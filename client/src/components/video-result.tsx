@@ -15,8 +15,11 @@ import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { 
   User, Calendar, Link, ThumbsUp, Eye, Clock, 
-  Tag as TagIcon, Info 
+  Tag as TagIcon, Info, PlusCircle 
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
 
 interface VideoResultProps {
   video: YoutubeVideo;
@@ -28,10 +31,12 @@ export function VideoResult({ video }: VideoResultProps) {
   const [rating, setRating] = useState(0);
   const [showDescription, setShowDescription] = useState(false);
   const { toast } = useToast();
-  const { user } = useSupabase();
+  const { user, isAuthenticated, loginWithGoogle } = useSupabase();
   const { showAuthPrompt, promptType, promptAuth, closePrompt, incrementEngagement } = useAuthPrompt();
   const [pendingMetadata, setPendingMetadata] = useState<VideoMetadata | null>(null);
   const [interactionCount, setInteractionCount] = useState(0);
+  const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   // Fetch categories
   const { data: categories = [] } = useQuery<Category[]>({
@@ -50,7 +55,7 @@ export function VideoResult({ video }: VideoResultProps) {
         transcript: video.transcript,
         ...metadata,
       };
-      
+
       const response = await apiRequest("POST", "/api/videos", videoData);
       return response.json();
     },
@@ -97,14 +102,14 @@ export function VideoResult({ video }: VideoResultProps) {
       category_id: categoryId,
       rating: rating || undefined,
     };
-    
+
     // Store the metadata
     setPendingMetadata(metadata);
-    
+
     // Track this high-value action
     incrementEngagement();
     setInteractionCount(prev => prev + 1);
-    
+
     // Show auth prompt for non-authenticated users
     if (!user) {
       // Determine if this is a high-quality save (has meaningful data)
@@ -112,7 +117,7 @@ export function VideoResult({ video }: VideoResultProps) {
         (notes && notes.length > 20) || // User added significant notes
         (rating > 3) ||                 // User gave high rating
         categoryId !== undefined;       // User categorized the video
-      
+
       // Higher likelihood of prompting if user has added quality metadata
       // or has had significant engagement with the result
       if (hasQualityMetadata || interactionCount >= 3) {
@@ -132,11 +137,22 @@ export function VideoResult({ video }: VideoResultProps) {
     }
   };
 
+  const createCategory = async (categoryName: string) => {
+    try {
+      await apiRequest("POST", "/api/categories", { name: categoryName });
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      toast({ title: "Category created successfully!", description: "" });
+    } catch (error) {
+      toast({ title: "Error creating category", description: error.message, variant: "destructive" });
+    }
+  };
+
+
   return (
     <>
       <section className="mb-12">
         <h2 className="text-2xl font-bold mb-6">Video Information</h2>
-        
+
         {/* Show AI-generated summary if available */}
         {video.summary && video.summary.length > 0 && (
           <SummarySection 
@@ -144,7 +160,7 @@ export function VideoResult({ video }: VideoResultProps) {
             videoId={video.id || 0} 
           />
         )}
-        
+
         <Card className="bg-zinc-900">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row gap-6">
@@ -167,7 +183,7 @@ export function VideoResult({ video }: VideoResultProps) {
                     </div>
                   </a>
                 </div>
-                
+
                 {/* Video Stats */}
                 {(video.viewCount || video.likeCount) && (
                   <div className="mt-3 space-y-2 bg-zinc-800 p-3 rounded-lg">
@@ -189,7 +205,7 @@ export function VideoResult({ video }: VideoResultProps) {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Tags */}
                 {video.tags && video.tags.length > 0 && (
                   <div className="mt-3">
@@ -212,11 +228,11 @@ export function VideoResult({ video }: VideoResultProps) {
                   </div>
                 )}
               </div>
-              
+
               {/* Video Metadata */}
               <div className="flex-1">
                 <h3 className="text-xl font-semibold mb-2">{video.title}</h3>
-                
+
                 <div className="text-gray-400 text-sm mb-4">
                   <div className="flex items-center mb-1">
                     <User className="w-4 h-4 mr-2" />
@@ -238,7 +254,7 @@ export function VideoResult({ video }: VideoResultProps) {
                     </a>
                   </div>
                 </div>
-                
+
                 {/* Description */}
                 {video.description && (
                   <div className="mb-4 bg-zinc-800 p-3 rounded-lg">
@@ -262,7 +278,7 @@ export function VideoResult({ video }: VideoResultProps) {
                     )}
                   </div>
                 )}
-                
+
                 {/* Video Metadata Form */}
                 <form className="space-y-4 bg-zinc-800 p-4 rounded-md">
                   <div>
@@ -285,7 +301,7 @@ export function VideoResult({ video }: VideoResultProps) {
                       rows={2}
                     />
                   </div>
-                  
+
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="w-full sm:w-1/2">
                       <label htmlFor="videoCategory" className="block text-sm font-medium text-gray-300 mb-1">
@@ -293,9 +309,30 @@ export function VideoResult({ video }: VideoResultProps) {
                       </label>
                       <Select 
                         onValueChange={(value) => {
-                          setCategoryId(Number(value));
-                          incrementEngagement();
-                          setInteractionCount(prev => prev + 1);
+                          // Handle special "create" action
+                          if (value === "create-new") {
+                            // If user is not authenticated, show login prompt
+                            if (!isAuthenticated) {
+                              toast({
+                                title: "Authentication Required",
+                                description: "Please log in or create an account to add custom categories",
+                                variant: "default",
+                                action: (
+                                  <Button variant="outline" onClick={() => loginWithGoogle()}>
+                                    Log In
+                                  </Button>
+                                ),
+                              });
+                              return;
+                            }
+
+                            // Show dialog to create new category
+                            setShowCreateCategoryDialog(true);
+                          } else {
+                            setCategoryId(Number(value));
+                            incrementEngagement();
+                            setInteractionCount(prev => prev + 1);
+                          }
                         }}
                       >
                         <SelectTrigger className="bg-zinc-900 border-zinc-700">
@@ -303,14 +340,56 @@ export function VideoResult({ video }: VideoResultProps) {
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700">
                           {categories.map((category: Category) => (
-                            <SelectItem key={category.id} value={category.id.toString()}>
-                              {category.name}
+                            <SelectItem 
+                              key={category.id} 
+                              value={category.id.toString()}
+                              className={category.is_global ? "font-medium" : ""}
+                            >
+                              {category.name} {category.is_global && "(Global)"}
                             </SelectItem>
                           ))}
+                          {/* Add option to create new category */}
+                          <SelectItem value="create-new" className="border-t border-zinc-700 mt-1 pt-1">
+                            <PlusCircle className="mr-2 h-4 w-4 inline-block" /> Create new category...
+                          </SelectItem>
                         </SelectContent>
                       </Select>
+
+                      {/* Create category dialog */}
+                      {showCreateCategoryDialog && (
+                        <Dialog open={showCreateCategoryDialog} onOpenChange={setShowCreateCategoryDialog}>
+                          <DialogContent className="bg-zinc-900 border-zinc-700">
+                            <DialogHeader>
+                              <DialogTitle>Create New Category</DialogTitle>
+                              <DialogDescription>
+                                Add a new category to organize your videos.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={(e) => {
+                              e.preventDefault();
+                              if (newCategoryName.trim()) {
+                                createCategory(newCategoryName.trim());
+                                setNewCategoryName("");
+                                setShowCreateCategoryDialog(false);
+                              }
+                            }}>
+                              <Input
+                                className="bg-zinc-800 border-zinc-700"
+                                placeholder="Category name"
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                              />
+                              <DialogFooter className="mt-4">
+                                <Button type="submit" disabled={!newCategoryName.trim()}>
+                                  Create
+                                </Button>
+                              </DialogFooter>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      )}
                     </div>
-                    
+
                     <div className="w-full sm:w-1/2">
                       <label htmlFor="videoRating" className="block text-sm font-medium text-gray-300 mb-1">
                         Rating
@@ -328,7 +407,7 @@ export function VideoResult({ video }: VideoResultProps) {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-end">
                     <Button
                       type="button"

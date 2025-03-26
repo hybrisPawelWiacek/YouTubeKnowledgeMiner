@@ -42,6 +42,7 @@ export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   user_id: integer("user_id").references(() => users.id).notNull(),
+  is_global: boolean("is_global").default(false).notNull(),
 });
 
 export const videos = pgTable("videos", {
