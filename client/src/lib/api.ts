@@ -91,27 +91,21 @@ export async function apiRequest(
     console.log('[API] No current session or user available for API call');
     
     // Handle anonymous user sessions
-    if (!currentSession?.user && hasAnonymousSession()) {
-      // User doesn't have an authenticated session but has an anonymous session
+    if (!currentSession?.user) {
+      // Get or create an anonymous session ID
       const anonymousSessionId = getOrCreateAnonymousSessionId();
-      console.log('[API] Using anonymous session:', anonymousSessionId);
+      
+      if (hasAnonymousSession()) {
+        console.log('[API] Using anonymous session:', anonymousSessionId);
+      } else {
+        console.log('[API] Created new anonymous session:', anonymousSessionId);
+      }
       
       // Add anonymous session header
       (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
       
-      // Also send the standard user-id header for backward compatibility
-      // This ensures older server code still works during the transition
-      (options.headers as Record<string, string>)['x-user-id'] = '1';
-    } else if (!currentSession?.user) {
-      // First-time anonymous user, create a session
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      console.log('[API] Created new anonymous session:', anonymousSessionId);
-      
-      // Add anonymous session header
-      (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
-      
-      // Also send the standard user-id header for backward compatibility
-      (options.headers as Record<string, string>)['x-user-id'] = '1';
+      // No longer setting x-user-id=1 for anonymous users
+      // Server will identify users solely by their session ID
     }
   }
 
