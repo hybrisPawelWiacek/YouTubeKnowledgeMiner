@@ -3,9 +3,9 @@ import {
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
   SavedSearch, InsertSavedSearch, SearchParams, QAConversation, InsertQAConversation,
-  ExportPreferences, InsertExportPreferences,
+  ExportPreferences, InsertExportPreferences, AnonymousSession, InsertAnonymousSession,
   users, categories, videos, collections, collection_videos, saved_searches, qa_conversations,
-  export_preferences
+  export_preferences, anonymous_sessions
 } from '@shared/schema';
 import { db } from './db';
 import { IStorage } from './storage';
@@ -484,6 +484,93 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return result[0];
+  }
+  
+  // Anonymous session methods
+  async getAnonymousSessionBySessionId(sessionId: string): Promise<AnonymousSession | undefined> {
+    const result = await db
+      .select()
+      .from(anonymous_sessions)
+      .where(eq(anonymous_sessions.session_id, sessionId));
+    
+    return result[0];
+  }
+  
+  async createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession> {
+    const now = new Date();
+    
+    const result = await db
+      .insert(anonymous_sessions)
+      .values({
+        ...session,
+        created_at: now,
+        last_active_at: now,
+        video_count: 0
+      })
+      .returning();
+    
+    return result[0];
+  }
+  
+  async updateAnonymousSession(sessionId: string, data: Partial<AnonymousSession>): Promise<AnonymousSession | undefined> {
+    const result = await db
+      .update(anonymous_sessions)
+      .set(data)
+      .where(eq(anonymous_sessions.session_id, sessionId))
+      .returning();
+    
+    return result[0];
+  }
+  
+  async updateAnonymousSessionLastActive(sessionId: string): Promise<void> {
+    await db
+      .update(anonymous_sessions)
+      .set({
+        last_active_at: new Date()
+      })
+      .where(eq(anonymous_sessions.session_id, sessionId));
+  }
+  
+  async incrementAnonymousSessionVideoCount(sessionId: string): Promise<number> {
+    // First get the current count
+    const session = await this.getAnonymousSessionBySessionId(sessionId);
+    
+    if (!session) {
+      throw new Error(`Anonymous session not found: ${sessionId}`);
+    }
+    
+    // Increment the count
+    const newCount = (session.video_count || 0) + 1;
+    
+    // Update the session
+    await db
+      .update(anonymous_sessions)
+      .set({
+        video_count: newCount,
+        last_active_at: new Date()
+      })
+      .where(eq(anonymous_sessions.session_id, sessionId));
+    
+    return newCount;
+  }
+  
+  async getVideosByAnonymousSessionId(sessionId: string): Promise<Video[]> {
+    return await db
+      .select()
+      .from(videos)
+      .where(eq(videos.anonymous_session_id, sessionId));
+  }
+  
+  async deleteInactiveAnonymousSessions(olderThanDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    
+    const result = await db
+      .delete(anonymous_sessions)
+      .where(lt(anonymous_sessions.last_active_at, cutoffDate))
+      .returning();
+    
+    return result.length;
   }
 }
 
