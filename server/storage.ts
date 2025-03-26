@@ -19,6 +19,8 @@ export interface IStorage {
   getCategory(id: number): Promise<Category | undefined>;
   getCategoriesByUserId(userId: number): Promise<Category[]>;
   createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: number, data: Partial<Category>): Promise<Category | undefined>;
+  deleteCategory(id: number): Promise<boolean>;
   
   // Video methods
   getVideo(id: number): Promise<Video | undefined>;
@@ -145,6 +147,24 @@ export class MemStorage implements IStorage {
     const category: Category = { ...insertCategory, id };
     this.categories.set(id, category);
     return category;
+  }
+  
+  async updateCategory(id: number, data: Partial<Category>): Promise<Category | undefined> {
+    const category = this.categories.get(id);
+    if (!category) return undefined;
+    
+    const updatedCategory: Category = { ...category, ...data };
+    this.categories.set(id, updatedCategory);
+    return updatedCategory;
+  }
+  
+  async deleteCategory(id: number): Promise<boolean> {
+    // Don't allow deletion if this is a global category
+    const category = this.categories.get(id);
+    if (!category) return false;
+    if (category.is_global) return false;
+    
+    return this.categories.delete(id);
   }
 
   // Video methods

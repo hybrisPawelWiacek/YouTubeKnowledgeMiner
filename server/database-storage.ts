@@ -58,6 +58,23 @@ export class DatabaseStorage implements IStorage {
     const result = await db.insert(categories).values(category).returning();
     return result[0];
   }
+  
+  async updateCategory(id: number, data: Partial<Category>): Promise<Category | undefined> {
+    const result = await db
+      .update(categories)
+      .set(data)
+      .where(eq(categories.id, id))
+      .returning();
+    return result[0];
+  }
+  
+  async deleteCategory(id: number): Promise<boolean> {
+    const result = await db
+      .delete(categories)
+      .where(eq(categories.id, id))
+      .returning();
+    return result.length > 0;
+  }
 
   // Video methods
   async getVideo(id: number): Promise<Video | undefined> {
