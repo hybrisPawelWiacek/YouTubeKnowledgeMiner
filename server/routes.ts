@@ -742,8 +742,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize Supabase vector functions if not already done
       await initializeVectorFunctions();
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       // Execute semantic search
       const results = await performSemanticSearch(
@@ -823,8 +834,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid video ID" });
       }
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       console.log("Creating Q&A conversation with body:", req.body);
 
@@ -1125,8 +1147,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse request and add userId
       const exportRequest = req.body;
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
+      
       exportRequest.userId = userId;
 
       const exportData = exportRequestSchema.parse(exportRequest);
@@ -1166,8 +1200,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's export format preference
   app.get("/api/export/preferences", async (req, res) => {
     try {
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       const format = await getExportPreference(userId);
       return res.status(200).json({ format });
@@ -1188,8 +1233,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       await saveExportPreference(userId, format);
       return res.status(200).json({ format });
