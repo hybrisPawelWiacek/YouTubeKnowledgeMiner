@@ -27,24 +27,10 @@ export async function apiRequest(
 
   // Add auth header if user is authenticated
   if (currentSession?.user) {
-    // Get the user ID and ensure it's a number
-    let userId = currentSession.user.id;
-    
-    // Convert to number if it's a string
-    if (typeof userId === 'string') {
-      // Remove any 'direct_' prefix if it exists (for backward compatibility)
-      if (userId.startsWith('direct_')) {
-        userId = userId.substring(7);
-      }
-      userId = Number(userId);
-    }
-    
-    // Send the user ID if it's valid
-    if (!isNaN(userId as number)) {
-      (options.headers as Record<string, string>)['x-user-id'] = String(userId);
-    } else {
-      console.error('Invalid user ID found in session', userId);
-    }
+    // Ensure user ID is sent as a number in string format
+    const userId = currentSession.user.id;
+    (options.headers as Record<string, string>)['x-user-id'] = typeof userId === 'number' ? 
+      String(userId) : String(Number(userId));
   }
 
   if (data) {
