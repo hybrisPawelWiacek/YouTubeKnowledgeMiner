@@ -66,14 +66,20 @@ export function AuthPromptDialog({
 }: AuthPromptDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
-  const { signInWithGoogle, getAnonymousVideoCount } = useSupabase();
+  const { signInWithGoogle, getLocalData } = useSupabase();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
 
+  const getAnonymousVideoCount = (): number => {
+    const localData = getLocalData();
+    return localData?.videos?.length || 0;
+  };
+
   useEffect(() => {
-    const fetchCount = async () => {
-      const count = await getAnonymousVideoCount();
+    const fetchCount = () => {
+      const count = getAnonymousVideoCount();
       setAnonymousVideoCount(count);
     };
+
     fetchCount();
   }, []);
 
