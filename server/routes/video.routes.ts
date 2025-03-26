@@ -53,6 +53,115 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
 });
 
 /**
+ * Process a video from the front end - root /api/videos endpoint
+ * This is to handle the client's POST request to /api/videos
+ */
+router.post('/', requireSession, async (req: Request, res: Response) => {
+  try {
+    // Get user information from middleware
+    const userInfo = res.locals.userInfo;
+    console.log("[video routes] Processing video (POST /) for user:", 
+      userInfo.user_id, 
+      "anonymous:", userInfo.is_anonymous, 
+      "session:", userInfo.anonymous_session_id
+    );
+    
+    // For anonymous users, check if they've reached the limit
+    if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+      // Get current video count for this anonymous session
+      const session = await dbStorage.getAnonymousSessionBySessionId(userInfo.anonymous_session_id);
+      
+      // Check if session has video count attribute
+      if (session && session.video_count && session.video_count >= 3) {
+        return sendError(res, 
+          "Anonymous users can only save up to 3 videos. Please sign in to save more.", 
+          403, 
+          "ANONYMOUS_LIMIT_REACHED"
+        );
+      }
+    }
+    
+    // Extract the data from the request
+    const {
+      youtubeId,
+      title,
+      channel,
+      duration,
+      publishDate,
+      thumbnail,
+      transcript,
+      summary,
+      viewCount,
+      likeCount,
+      description,
+      tags,
+      notes,
+      category_id,
+      rating,
+      is_favorite
+    } = req.body;
+
+    // Create the video in the database
+    const video = await dbStorage.insertVideo({
+      youtube_id: youtubeId || '',
+      title,
+      channel,
+      duration,
+      publish_date: publishDate,
+      thumbnail,
+      transcript,
+      summary,
+      views: viewCount,
+      likes: likeCount,
+      description,
+      tags,
+      user_id: userInfo.is_anonymous ? 1 : (userInfo.user_id as number), // Use user_id=1 for anonymous users
+      anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null,
+      notes,
+      category_id,
+      rating,
+      is_favorite
+    });
+    
+    console.log("🔍 Saved with user_id:", video.user_id);
+    
+    // For anonymous users, increment their video count
+    if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+      await dbStorage.incrementAnonymousSessionVideoCount(userInfo.anonymous_session_id);
+    }
+    
+    // Process embeddings for transcript and summary if available
+    if (video.transcript) {
+      await processTranscriptEmbeddings(
+        video.id,
+        video.user_id,
+        video.transcript
+      );
+    }
+    
+    if (video.summary) {
+      await processSummaryEmbeddings(
+        video.id,
+        video.user_id,
+        video.summary
+      );
+    }
+    
+    // Return the processed video data
+    return sendSuccess(res, { 
+      message: "Video processed successfully", 
+      video 
+    }, 201);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
+    }
+    console.error("Error processing video:", error);
+    return sendError(res, "Failed to process video", 500);
+  }
+});
+
+/**
  * Get all videos with optional filtering
  */
 router.get('/', async (req: Request, res: Response) => {

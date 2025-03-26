@@ -14,14 +14,22 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 // Function to process a YouTube video and get its metadata
 export async function processYoutubeVideo(videoId: string) {
   try {
-    if (!YOUTUBE_API_KEY) {
-      throw new Error('YouTube API key is not set. Please add a valid YouTube API key to your environment variables.');
+    // Extract YouTube ID from URL if a full URL was provided
+    const extractedId = extractYoutubeId(videoId);
+    if (!extractedId) {
+      throw new Error('Invalid YouTube URL. Please provide a valid YouTube video URL.');
     }
     
-    console.log(`Fetching metadata for video ID: ${videoId}`);
+    // If no YouTube API key is available, use a fallback approach
+    if (!YOUTUBE_API_KEY) {
+      console.warn('YouTube API key is not set. Using fallback method to extract video info.');
+      return handleVideoWithoutAPIKey(extractedId);
+    }
+    
+    console.log(`Fetching metadata for video ID: ${extractedId}`);
     
     const response = await axios.get(
-      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${YOUTUBE_API_KEY}&part=snippet,contentDetails,statistics`
+      `https://www.googleapis.com/youtube/v3/videos?id=${extractedId}&key=${YOUTUBE_API_KEY}&part=snippet,contentDetails,statistics`
     );
     
     if (!response.data.items || response.data.items.length === 0) {
@@ -56,7 +64,25 @@ export async function processYoutubeVideo(videoId: string) {
     
     console.log(`Successfully fetched metadata for video: ${snippet.title}`);
     
+    // Fetch transcript and generate summary
+    let transcript = null;
+    let summary = null;
+    
+    try {
+      console.log("Fetching transcript for video...");
+      transcript = await getYoutubeTranscript(videoId);
+      
+      if (transcript && isOpenAIConfigured()) {
+        console.log("Generating summary from transcript...");
+        summary = await generateTranscriptSummary(transcript, snippet.title);
+      }
+    } catch (transcriptError) {
+      console.warn("Could not fetch transcript:", transcriptError);
+      // Don't throw an error here, just continue without transcript
+    }
+    
     return {
+      youtubeId: videoId,
       title: snippet.title,
       channel: snippet.channelTitle,
       thumbnail,
@@ -66,7 +92,9 @@ export async function processYoutubeVideo(videoId: string) {
       description,
       tags,
       viewCount,
-      likeCount
+      likeCount,
+      transcript,
+      summary
     };
   } catch (error) {
     console.error('Error fetching YouTube video metadata:', error);
@@ -275,4 +303,101 @@ function formatTimestamp(seconds: number): string {
   const remainingSeconds = Math.floor(seconds % 60);
   
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Extract YouTube ID from a URL or ID string
+ */
+function extractYoutubeId(url: string): string | null {
+  if (!url) return null;
+  
+  // If the input is already just an ID (11 characters of letters, numbers, underscore, and dash)
+  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
+    return url;
+  }
+  
+  // Extract from various YouTube URL formats
+  const regexPatterns = [
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})(?:&.+)?/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\?.+)?/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})(?:\?.+)?/,
+    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})(?:\?.+)?/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})(?:\?.+)?/
+  ];
+  
+  for (const pattern of regexPatterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Fallback method to handle videos when no YouTube API key is available
+ * This uses web scraping to extract basic video information
+ */
+async function handleVideoWithoutAPIKey(videoId: string) {
+  try {
+    console.log(`Using fallback method to extract info for video ID: ${videoId}`);
+    
+    // Fetch the YouTube watch page
+    const response = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    const html = response.data;
+    
+    // Extract title using regex
+    const titleRegex = /<title>(.*?)<\/title>/;
+    const titleMatch = html.match(titleRegex);
+    const fullTitle = titleMatch ? titleMatch[1] : 'Untitled Video';
+    // Remove " - YouTube" from the end of the title
+    const title = fullTitle.replace(/ - YouTube$/, '');
+    
+    // Extract channel name (this is approximate and may not always work)
+    const channelRegex = /"channelName":"([^"]+)"/;
+    const channelMatch = html.match(channelRegex);
+    const channel = channelMatch ? channelMatch[1] : 'Unknown Channel';
+    
+    // Try to extract thumbnail URL
+    const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    
+    // Get transcript for summary generation
+    let transcript = null;
+    let summary = null;
+    
+    try {
+      transcript = await getYoutubeTranscript(videoId);
+      if (transcript && isOpenAIConfigured()) {
+        summary = await generateTranscriptSummary(transcript, title);
+      }
+    } catch (error) {
+      console.warn('Could not fetch transcript:', error);
+    }
+    
+    // Return a simplified video object
+    return {
+      youtubeId: videoId,
+      title,
+      channel,
+      thumbnail: thumbnailUrl,
+      duration: 'Unknown',  // Can't reliably get duration without API
+      publishDate: 'Unknown date',  // Can't reliably get publish date without API
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      description: 'Description not available without YouTube API key',
+      tags: [],
+      viewCount: 'N/A',
+      likeCount: 'N/A',
+      transcript,
+      summary
+    };
+  } catch (error) {
+    console.error('Error in fallback video processing:', error);
+    throw new Error('Failed to extract video information. Please try again with a YouTube API key.');
+  }
 }
