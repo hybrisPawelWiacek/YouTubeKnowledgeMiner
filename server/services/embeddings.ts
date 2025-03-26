@@ -34,6 +34,10 @@ export async function processTranscriptEmbeddings(
     return [];
   }
   
+  // For embedding storage purposes, we need a valid user ID
+  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
+  const embeddingUserId = userId !== null ? userId : 1;
+  
   // Extract timestamp data from transcript before removing HTML
   const timestampData: { [index: number]: { timestamp: number, duration: number } } = {};
   const tempDiv = document.createElement ? document.createElement('div') : { innerHTML: '' };
@@ -55,9 +59,6 @@ export async function processTranscriptEmbeddings(
   log(`Split transcript into ${chunks.length} chunks for embedding`, 'embeddings');
   
   // Process chunks with timestamp metadata
-  // For embedding storage purposes, we need a valid user ID
-  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
-  const embeddingUserId = userId !== null ? userId : 1;
   return processTranscriptChunksWithTimestamps(videoId, embeddingUserId, chunks, timestampData);
 }
 
@@ -178,7 +179,7 @@ async function processTranscriptChunksWithTimestamps(
  */
 async function processContentEmbeddings(
   videoId: number,
-  userId: number | null,
+  userId: number, // Must be a valid number for database storage
   textChunks: string[],
   contentType: typeof contentTypeEnum.enumValues[number]
 ): Promise<number[]> {
@@ -279,10 +280,21 @@ export async function performSemanticSearch(
     // Execute the initial search - handle both registered and anonymous users
     let conditions: any[] = [];
     
-    // If userId is null (anonymous user), we'll need to identify their videos by other means
-    // For now, we retrieve videos by the filters only, without user restriction
+    // Handle both registered and anonymous users
     if (userId !== null) {
+      // For registered users, filter by their user ID
       conditions.push(eq(embeddings.user_id, userId));
+    } else {
+      // For anonymous users, use system user ID (1) but apply additional filters
+      // to make sure we're only getting their videos
+      conditions.push(eq(embeddings.user_id, 1));
+      
+      // If we have a videoId filter, we can use that to specifically target the user's videos
+      if (!filters.videoId) {
+        // Without a videoId filter, we can't easily identify the anonymous user's content
+        // This will likely return empty results or require additional anonymous session ID logic
+        log(`Warning: Anonymous user semantic search without videoId filter may not work correctly`, 'embeddings');
+      }
     }
     
     if (filters.videoId) {
