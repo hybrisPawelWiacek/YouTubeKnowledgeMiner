@@ -182,19 +182,35 @@ The product serves audiences who consume educational, informational, and profess
 - ✅ Storage of Google-provided user metadata
 
 #### Strategic Account Creation Prompts (✅ IMPLEMENTED)
-- ✅ Detection for unauthenticated users
-- ✅ Modal prompts at key moments:
-  - ✅ When saving a video after analysis
-  - ✅ When accessing the video library
+- ✅ Detection for unauthenticated users with stateful tracking
+- ✅ Progressive engagement tracking system:
+  - ✅ Tracks user interactions with application features
+  - ✅ Uses different thresholds based on previous prompts
+  - ✅ Prevents excessive prompting while guiding toward account creation
+- ✅ Modal prompts at strategic moments:
+  - ✅ When saving a video after analysis to highlight data persistence
+  - ✅ When accessing the library to emphasize organization benefits
+  - ✅ After reaching the 3-video limit to encourage premium features
+  - ✅ When attempting high-value actions (collections, export, etc.)
 - ✅ Non-intrusive prompt UI with clear value proposition
-- ✅ Option to continue as guest or create account
-- ✅ "Remind me later" functionality
+- ✅ Option to continue as guest with limited functionality
+- ✅ "Remind me later" functionality with increasing thresholds
+- ✅ Visual indicators showing usage limits (3 videos maximum)
 
 #### Anonymous-to-Authenticated Transition (✅ IMPLEMENTED)
-- ✅ Temporary local storage for unauthenticated user actions
-- ✅ Migration of temporary data to user account upon signup
-- ✅ Handling of data conflicts
-- ✅ Feedback during data migration process
+- ✅ Standardized localStorage schema for anonymous users:
+  - ✅ JSON structure with videos, collections, and metadata tracking
+  - ✅ Full video objects with all required fields for database compatibility
+  - ✅ Consistent typing with server-side models
+  - ✅ Automatic limit tracking for enforcing the 3-video maximum
+- ✅ Comprehensive data migration path:
+  - ✅ getLocalData() and setLocalData() functions for consistent storage access
+  - ✅ migrateLocalData() function for seamless transition to authenticated state
+  - ✅ Optimized data transfer preserving all user-created content
+  - ✅ Cleanup of localStorage after successful migration
+- ✅ Conflict resolution strategies for duplicate content
+- ✅ Progress indicators during migration process
+- ✅ Error handling with fallback options for failed migrations
 
 #### Authentication UX Enhancements (✅ IMPLEMENTED)
 - ✅ Persistent login state with secure token storage
@@ -242,11 +258,33 @@ The product serves audiences who consume educational, informational, and profess
 - **Transcript Processing:** YouTube transcript API extraction
 
 ### Data Model
-The application uses a hybrid architecture:
-- Neon PostgreSQL for primary data storage
-- pgvector extension for vector operations
-- Dual-mode architecture allowing operation with or without Supabase integration
-- Local storage for anonymous users with migration path to persistent storage
+The application uses a hybrid architecture with multi-tier storage approach:
+
+**Primary Storage (Authenticated Users):**
+- Neon PostgreSQL for persistent relational data storage
+- pgvector extension for vector operations and semantic search
+- Standardized schema with proper relationships and constraints
+- Type-safe database operations via Drizzle ORM
+
+**Anonymous User Storage:**
+- Structured localStorage implementation with consistent schema
+- JSON serialization with well-defined object structure:
+  ```typescript
+  {
+    videos: Video[],
+    collections: Collection[],
+    videoCount: number,
+    // Additional metadata for tracking
+  }
+  ```
+- Maximum limit enforcement (3 videos for anonymous users)
+- Data compatibility with database schema for seamless migration
+
+**Authentication Integration:**
+- Supabase for user authentication and session management
+- Dual-mode architecture allowing operation with or without authentication
+- Clean migration path from anonymous to authenticated state
+- Fallback mechanisms for operation without Supabase configuration
 
 ### Key Libraries
 - **Frontend:** @radix-ui components, @tanstack/react-query, react-hook-form, zod, tailwind, lucide-react, recharts, wouter
@@ -316,9 +354,20 @@ The application uses a hybrid architecture:
   - Local storage fallback for anonymous users
 
 ### 2. Authentication Strategy
-- Supabase is used specifically for authentication services (Google OAuth)
-- User experience prioritizes non-intrusive authentication prompts
-- Anonymous-to-authenticated data migration path is implemented
+- Hybrid architecture supporting both anonymous and authenticated users:
+  - Anonymous users can use core functionality without creating an account
+  - Local storage persistence for anonymous user data
+  - Strategic authentication prompts at key engagement points
+  - Graceful transition from anonymous to authenticated state
+- Supabase is used specifically for authentication services:
+  - Google OAuth integration for seamless signup/login
+  - Magic link email authentication for non-Google users
+  - Secure token storage with persistent login
+- Strategic user conversion approach:
+  - Progressive engagement tracking through user interactions
+  - Value-driven authentication prompts (data persistence, organization, etc.)
+  - Feature limitations to encourage account creation (3-video limit)
+  - Clear migration path for user data when creating an account
 - Fallback mechanisms exist for operation without Supabase configuration
 
 ### 3. AI Integration
@@ -342,6 +391,28 @@ The application uses a hybrid architecture:
 - Client-side caching for optimized data retrieval
 
 ## 9. Recent Improvements (UPDATED)
+
+### Hybrid Authentication Architecture (March 2025)
+- **Implemented flexible user authentication system:**
+  - Developed dual-mode architecture supporting both anonymous and authenticated users
+  - Created localStorage-based data persistence for anonymous users
+  - Added strategic authentication prompts at key engagement points
+  - Built seamless data migration path from anonymous to authenticated state
+- **Anonymous user experience:**
+  - Limited anonymous users to 3 videos to encourage account creation
+  - Provided clear visual indicators of usage limits in the interface
+  - Implemented non-intrusive authentication prompts with clear value propositions
+  - Enabled core functionality without requiring immediate sign-up
+- **Data integrity and transition:**
+  - Standardized data structures between localStorage and database
+  - Created mechanisms to prevent data loss during authentication transitions
+  - Implemented robust error handling for data migration edge cases
+  - Added progress indicators during data migration process
+- **User flow optimization:**
+  - Added progressive engagement tracking to show prompts at optimal moments
+  - Designed authentication UI with minimal friction
+  - Implemented "remind me later" functionality with increasing thresholds
+  - Created clear visualizations of benefits for authenticated users
 
 ### Infinite Scroll Implementation (March 2025)
 - **Enhanced library browsing with efficient pagination:**
