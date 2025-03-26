@@ -206,8 +206,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async insertVideo(video: InsertVideo): Promise<Video> {
-    const result = await db.insert(videos).values(video).returning();
-    return result[0];
+    console.log('✯✯✯ DATABASE STORAGE - INSERT VIDEO ✯✯✯');
+    console.log('Video data being inserted:', JSON.stringify(video, null, 2));
+    console.log('User ID in insert request:', video.user_id, '(type:', typeof video.user_id, ')');
+    
+    // Ensure the user_id is a number
+    if (typeof video.user_id === 'string') {
+      console.log('Converting user_id from string to number');
+      video.user_id = parseInt(video.user_id, 10);
+      console.log('Converted user_id:', video.user_id);
+    }
+    
+    try {
+      const result = await db.insert(videos).values(video).returning();
+      console.log('Inserted video result:', JSON.stringify(result[0], null, 2));
+      return result[0];
+    } catch (error) {
+      console.error('❌ Error inserting video:', error);
+      throw error;
+    }
   }
 
   async updateVideo(id: number, data: Partial<Video>): Promise<Video | undefined> {
