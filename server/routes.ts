@@ -173,15 +173,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user_id from headers or default to 1
       let userId = 1;
       
+      // Debug: log all headers for troubleshooting
+      console.log("Request headers for /api/videos:", JSON.stringify(req.headers));
+      
       if (req.headers['x-user-id']) {
         try {
-          userId = Number(req.headers['x-user-id']);
+          // Log the raw user ID value
+          console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
+          
+          // Extract just the numeric portion if it's a string with non-numeric characters
+          const headerValue = req.headers['x-user-id'] as string;
+          const numericMatch = headerValue.match(/\d+/);
+          
+          if (numericMatch) {
+            userId = parseInt(numericMatch[0], 10);
+            console.log("Extracted numeric user ID:", userId);
+          } else {
+            userId = Number(headerValue);
+            console.log("Converted user ID directly:", userId);
+          }
+          
           if (isNaN(userId)) {
+            console.error("Failed to parse user ID, got NaN:", headerValue);
             return res.status(400).json({ message: "Invalid user ID format" });
           }
+          
+          // Always ensure we have a valid positive integer
+          if (!Number.isInteger(userId) || userId <= 0) {
+            console.error("Invalid user ID (must be positive integer):", userId);
+            return res.status(400).json({ message: "User ID must be a positive integer" });
+          }
+          
+          console.log("Using user ID for video save:", userId);
         } catch (e) {
+          console.error("Error processing user ID:", e);
           return res.status(400).json({ message: "Failed to parse user ID" });
         }
+      } else {
+        console.log("No x-user-id header found, using default user ID:", userId);
       }
 
       // Save to database through storage interface
@@ -263,15 +292,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user_id from headers, session or default to 1
       let userId = 1;
       
+      // Debug: log all headers for troubleshooting
+      console.log("Request headers for GET /api/videos:", JSON.stringify(req.headers));
+      
       if (req.headers['x-user-id']) {
         try {
-          userId = Number(req.headers['x-user-id']);
+          // Log the raw user ID value
+          console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
+          
+          // Extract just the numeric portion if it's a string with non-numeric characters
+          const headerValue = req.headers['x-user-id'] as string;
+          const numericMatch = headerValue.match(/\d+/);
+          
+          if (numericMatch) {
+            userId = parseInt(numericMatch[0], 10);
+            console.log("Extracted numeric user ID:", userId);
+          } else {
+            userId = Number(headerValue);
+            console.log("Converted user ID directly:", userId);
+          }
+          
           if (isNaN(userId)) {
+            console.error("Failed to parse user ID, got NaN:", headerValue);
             return res.status(400).json({ message: "Invalid user ID format" });
           }
+          
+          // Always ensure we have a valid positive integer
+          if (!Number.isInteger(userId) || userId <= 0) {
+            console.error("Invalid user ID (must be positive integer):", userId);
+            return res.status(400).json({ message: "User ID must be a positive integer" });
+          }
+          
+          console.log("Using user ID for fetching videos:", userId);
         } catch (e) {
+          console.error("Error processing user ID:", e);
           return res.status(400).json({ message: "Failed to parse user ID" });
         }
+      } else {
+        console.log("No x-user-id header found in GET /api/videos, using default user ID:", userId);
       }
 
       // Check if search parameters were provided

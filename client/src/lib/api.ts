@@ -27,6 +27,7 @@ export async function apiRequest(
 
   // Add auth header if user is authenticated
   if (currentSession?.user) {
+    console.log('Current session:', JSON.stringify(currentSession));
     // Extract the numeric user ID and ensure it's sent as a number
     const userId = currentSession.user.id;
     
@@ -35,15 +36,30 @@ export async function apiRequest(
     
     // Try to convert to a clean number regardless of format (strip any prefixes)
     // This ensures we always pass a valid number to the server
-    const cleanUserId = userId === undefined ? undefined : 
-                        (typeof userId === 'number' ? userId : 
-                         Number(String(userId).replace(/\D/g, '')));
+    let cleanUserId;
+    
+    if (userId === undefined) {
+      cleanUserId = undefined;
+    } else if (typeof userId === 'number') {
+      cleanUserId = userId;
+    } else {
+      // Extract numbers from the string if it contains non-numeric characters
+      const match = String(userId).match(/\d+/);
+      cleanUserId = match ? parseInt(match[0], 10) : NaN;
+      console.log('Extracted numeric ID from string:', cleanUserId);
+    }
     
     console.log('Clean user ID for x-user-id header:', cleanUserId);
     
     if (cleanUserId !== undefined && !isNaN(cleanUserId)) {
-      (options.headers as Record<string, string>)['x-user-id'] = String(cleanUserId);
+      const headerValue = String(cleanUserId);
+      (options.headers as Record<string, string>)['x-user-id'] = headerValue;
+      console.log('Setting x-user-id header to:', headerValue);
+    } else {
+      console.warn('Unable to set x-user-id header - invalid user ID:', userId);
     }
+  } else {
+    console.log('No current session or user available for API call');
   }
 
   if (data) {
