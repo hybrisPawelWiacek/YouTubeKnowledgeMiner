@@ -351,13 +351,13 @@ export function VideoResult({ video }: VideoResultProps) {
                                 {category.name} (Global)
                               </SelectItem>
                             ))}
-                            
+
                           {/* Separator if we have both global and user categories */}
                           {categories.some((category: Category) => category.is_global) && 
                            categories.some((category: Category) => !category.is_global) && (
                             <SelectSeparator />
                           )}
-                            
+
                           {/* User categories */}
                           {categories
                             .filter((category: Category) => !category.is_global)
