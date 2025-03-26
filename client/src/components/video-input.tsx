@@ -10,7 +10,7 @@ import { YoutubeVideo } from "@/types";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
-import { useRouter } from 'next/router';
+import { useLocation } from "wouter";
 
 interface VideoInputProps {
   onVideoProcessed: (video: YoutubeVideo) => void;
@@ -22,7 +22,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   const { user } = useSupabase();
   const { showAuthPrompt, promptType, promptAuth, closePrompt } = useAuthPrompt();
   const [pendingVideo, setPendingVideo] = useState<YoutubeVideo | null>(null);
-  const router = useRouter();
+  const [location, setLocation] = useLocation();
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
