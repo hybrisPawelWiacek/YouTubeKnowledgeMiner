@@ -1,9 +1,16 @@
 import { db } from '../db';
 import { log } from '../vite';
-import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history } from '@shared/schema';
+import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history, videos, collection_videos } from '@shared/schema';
 import { calculateCosineSimilarity } from './supabase';
 import { chunkText, generateEmbeddingsBatch } from './openai';
 import { eq, and, sql, inArray } from 'drizzle-orm';
+
+// Format timestamp function (copied from youtube.ts to avoid circular dependency)
+function formatTimestamp(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
 
 // Maximum number of text chunks to process in a single batch
 const MAX_BATCH_SIZE = 20;
@@ -27,11 +34,28 @@ export async function processTranscriptEmbeddings(
     return [];
   }
   
-  // Split transcript into chunks
-  const chunks = chunkText(transcript);
+  // Extract timestamp data from transcript before removing HTML
+  const timestampData: { [index: number]: { timestamp: number, duration: number } } = {};
+  const tempDiv = document.createElement ? document.createElement('div') : { innerHTML: '' };
+  tempDiv.innerHTML = transcript;
+  
+  // In Node, we need a different approach - using regex to extract data attributes
+  const timestampRegex = /<p class="mb-3 transcript-line"[^>]*?data-timestamp="([^"]*)"[^>]*?data-duration="([^"]*)"[^>]*?data-index="([^"]*)"[^>]*?>/g;
+  let match;
+  while ((match = timestampRegex.exec(transcript)) !== null) {
+    const timestamp = parseFloat(match[1]);
+    const duration = parseFloat(match[2]);
+    const index = parseInt(match[3]);
+    timestampData[index] = { timestamp, duration };
+  }
+  
+  // Split transcript into chunks, removing HTML tags
+  const plainText = transcript.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const chunks = chunkText(plainText);
   log(`Split transcript into ${chunks.length} chunks for embedding`, 'embeddings');
   
-  return processContentEmbeddings(videoId, userId, chunks, 'transcript');
+  // Process chunks with timestamp metadata
+  return processTranscriptChunksWithTimestamps(videoId, userId, chunks, timestampData);
 }
 
 /**
@@ -76,6 +100,68 @@ export async function processNotesEmbeddings(
   log(`Split notes into ${chunks.length} chunks for embedding`, 'embeddings');
   
   return processContentEmbeddings(videoId, userId, chunks, 'note');
+}
+
+/**
+ * Helper function to process transcript chunks with timestamp metadata
+ */
+async function processTranscriptChunksWithTimestamps(
+  videoId: number,
+  userId: number,
+  textChunks: string[],
+  timestampData: { [index: number]: { timestamp: number, duration: number } }
+): Promise<number[]> {
+  const embeddingIds: number[] = [];
+  const validChunks = textChunks.filter(chunk => chunk.trim().length > 0);
+  
+  // Process in batches to avoid rate limits
+  for (let i = 0; i < validChunks.length; i += MAX_BATCH_SIZE) {
+    const batchChunks = validChunks.slice(i, i + MAX_BATCH_SIZE);
+    
+    try {
+      // Generate embeddings for this batch
+      const batchEmbeddings = await generateEmbeddingsBatch(batchChunks);
+      
+      // Store each embedding in the database
+      const insertPromises = batchChunks.map((chunk, index) => {
+        // Find closest timestamp data
+        const chunkIndex = i + index;
+        // Estimate which original transcript chunk this corresponds to
+        const originalIndex = Math.floor(chunkIndex * (Object.keys(timestampData).length / validChunks.length));
+        const nearestTimestamp = timestampData[originalIndex] || { timestamp: 0, duration: 0 };
+        
+        const insertData: InsertEmbedding = {
+          video_id: videoId,
+          user_id: userId,
+          content_type: 'transcript',
+          chunk_index: chunkIndex,
+          content: chunk,
+          embedding: batchEmbeddings[index],
+          metadata: { 
+            position: chunkIndex,
+            length: chunk.length,
+            timestamp: nearestTimestamp.timestamp,
+            duration: nearestTimestamp.duration,
+            formatted_timestamp: formatTimestamp(nearestTimestamp.timestamp),
+            created_at: new Date().toISOString()
+          },
+        };
+        
+        return db.insert(embeddings).values(insertData).returning({ id: embeddings.id });
+      });
+      
+      // Wait for all inserts to complete
+      const results = await Promise.all(insertPromises);
+      embeddingIds.push(...results.map(r => r[0].id));
+      
+    } catch (error) {
+      log(`Error processing transcript embeddings batch: ${error}`, 'embeddings');
+      // Continue with the next batch even if this one failed
+    }
+  }
+  
+  log(`Stored ${embeddingIds.length} transcript embeddings with timestamps for video ${videoId}`, 'embeddings');
+  return embeddingIds;
 }
 
 /**
@@ -208,26 +294,20 @@ export async function performSemanticSearch(
     // If we're filtering by category, get videos with that category
     if (filters.categoryId) {
       const videosInCategory = await db.query.videos.findMany({
-        where: eq(embeddings.user_id, userId),
+        where: eq(videos.category_id, filters.categoryId),
         columns: {
           id: true
-        },
-        with: {
-          category: true
         }
       });
       
-      const videoIdsInCategory = videosInCategory
-        .filter(v => v.category?.id === filters.categoryId)
-        .map(v => v.id);
-      
+      const videoIdsInCategory = videosInCategory.map(v => v.id);
       filteredResults = filteredResults.filter(r => videoIdsInCategory.includes(r.video_id));
     }
     
     // If we're filtering by collection, get videos in that collection
     if (filters.collectionId) {
       const videoIdsInCollection = await db.query.collection_videos.findMany({
-        where: eq(embeddings.user_id, userId),
+        where: eq(collection_videos.collection_id, filters.collectionId),
         columns: {
           video_id: true
         }
@@ -240,10 +320,7 @@ export async function performSemanticSearch(
     // If we're filtering by favorite status, get favorite videos
     if (filters.isFavorite) {
       const favoriteVideos = await db.query.videos.findMany({
-        where: and(
-          eq(embeddings.user_id, userId),
-          eq(embeddings.user_id, filters.isFavorite)
-        ),
+        where: eq(videos.is_favorite, true),
         columns: {
           id: true
         }

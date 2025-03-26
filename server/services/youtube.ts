@@ -172,10 +172,14 @@ async function processTranscriptUrl(captionUrl: string): Promise<string> {
     
     console.log(`Successfully parsed ${transcriptItems.length} transcript items`);
     
-    // Format the transcript into a readable format with timestamps
-    const formattedTranscript = transcriptItems.map(item => {
+    // Format the transcript into a readable format with timestamps and data attributes for citation
+    const formattedTranscript = transcriptItems.map((item, index) => {
       const timestamp = formatTimestamp(item.start);
-      return `<p class="mb-3"><span class="text-gray-400">[${timestamp}]</span> ${item.text}</p>`;
+      // Add data attributes for citation functionality
+      return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
+        <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
+        <span class="transcript-text">${item.text}</span>
+      </p>`;
     }).join('');
     
     return formattedTranscript;
