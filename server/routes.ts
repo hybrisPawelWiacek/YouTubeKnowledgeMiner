@@ -1209,8 +1209,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's export format preference
   app.get("/api/export/preferences", async (req, res) => {
     try {
-      // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      // Get user ID using our helper function (now async)
+      const userId = await getUserIdFromRequest(req);
       
       console.log("GET EXPORT PREFERENCES: Using user ID from request:", userId);
 
@@ -1233,8 +1233,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get user ID using our helper function
-      const userId = getUserIdFromRequest(req);
+      // Get user ID using our helper function (now async)
+      const userId = await getUserIdFromRequest(req);
       
       console.log("SAVE EXPORT PREFERENCES: Using user ID from request:", userId);
 
@@ -1364,18 +1364,19 @@ async function getUserInfoFromRequest(req: Request): Promise<{
 
 /**
  * Simplified version that just returns the user ID
- * Kept for backward compatibility with existing code
+ * Enhanced to handle anonymous sessions while maintaining backward compatibility
  * 
  * @param req Express request object
  * @returns The user ID (authenticated user ID or 1 for anonymous)
  */
-function getUserIdFromRequest(req: Request): number {
+async function getUserIdFromRequest(req: Request): Promise<number> {
   console.log("[Auth Helper] Extracting user ID from request headers");
   
   // Default to anonymous user (1) only if we can't find a valid user ID
   let userId = 1;
+  let isAnonymous = true;
   
-  // Check if we have a user ID header
+  // Check if we have a user ID header first (authenticated user)
   if (req.headers['x-user-id']) {
     try {
       const headerValue = req.headers['x-user-id'];
@@ -1394,10 +1395,14 @@ function getUserIdFromRequest(req: Request): number {
       
       const parsedId = parseInt(cleanValue, 10);
       
-      // Validate the parsed ID
-      if (!isNaN(parsedId) && parsedId > 0) {
+      // Validate the parsed ID - exclude 1 since that's reserved for anonymous users
+      if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
         userId = parsedId;
-        console.log("[Auth Helper] Successfully parsed user ID:", userId, "(type: number)");
+        isAnonymous = false; // This is an authenticated user
+        console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
+      } else if (!isNaN(parsedId) && parsedId === 1) {
+        // ID is 1, which is our anonymous user, so we'll check for session below
+        console.log("[Auth Helper] Found user ID 1 (anonymous), will check for session ID");
       } else {
         console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
       }
@@ -1405,7 +1410,41 @@ function getUserIdFromRequest(req: Request): number {
       console.error("[Auth Helper] Error parsing user ID from header:", error);
     }
   } else {
-    console.log("[Auth Helper] No x-user-id header found, using default user ID:", userId);
+    console.log("[Auth Helper] No x-user-id header found, checking for anonymous session");
+  }
+  
+  // If this is an anonymous user, try to get their session
+  if (isAnonymous) {
+    const sessionHeader = req.headers['x-anonymous-session'];
+    if (sessionHeader) {
+      try {
+        const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+        console.log("[Auth Helper] Found anonymous session header:", sessionId);
+        
+        // Get or create session and update last active time
+        let session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
+        
+        if (session) {
+          console.log("[Auth Helper] Found existing anonymous session, updating last active time");
+          await dbStorage.updateAnonymousSessionLastActive(sessionId);
+        } else {
+          console.log("[Auth Helper] Creating new anonymous session");
+          session = await dbStorage.createAnonymousSession({
+            session_id: sessionId,
+            user_agent: req.headers['user-agent'] || null,
+            ip_address: req.ip || null
+          });
+        }
+        
+        // We still return user_id=1 for anonymous users, but the session ID
+        // in the header is what ties videos to specific anonymous users
+        console.log("[Auth Helper] Using anonymous session ID:", sessionId);
+      } catch (error) {
+        console.error("[Auth Helper] Error handling anonymous session:", error);
+      }
+    } else {
+      console.log("[Auth Helper] No anonymous session header found, using default anonymous user ID");
+    }
   }
   
   console.log("[Auth Helper] Final user ID being used:", userId, "(type: number)");
