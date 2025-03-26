@@ -188,7 +188,7 @@ export default function VideoDetailPage() {
   
   const video = videoQuery.data;
   const categories = categoriesQuery.data || [];
-  const categoryName = categories?.find((c: Category) => c.id === video.category_id)?.name;
+  const videoCategory = categories?.find((c: Category) => c.id === video.category_id);
   
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -287,10 +287,14 @@ export default function VideoDetailPage() {
                       </Badge>
                     )}
                     
-                    {categoryName && (
-                      <Badge variant="outline">
+                    {videoCategory && (
+                      <Badge 
+                        variant={videoCategory.is_global ? "secondary" : "outline"}
+                        className={videoCategory.is_global ? "font-medium" : ""}
+                      >
                         <Tag className="h-3 w-3 mr-1" />
-                        {categoryName}
+                        {videoCategory.name}
+                        {videoCategory.is_global && " (Global)"}
                       </Badge>
                     )}
                   </div>
