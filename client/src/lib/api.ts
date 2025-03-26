@@ -16,8 +16,10 @@ export async function apiRequest(
   // Add auth header if user is authenticated
   const { session } = useAuthStore.getState();
   if (session?.user) {
-    // Ensure user ID is sent as a number
-    (options.headers as Record<string, string>)['x-user-id'] = String(session.user.id);
+    // Ensure user ID is sent as a number in string format
+    const userId = session.user.id;
+    (options.headers as Record<string, string>)['x-user-id'] = typeof userId === 'number' ? 
+      String(userId) : String(Number(userId));
   }
 
   if (data) {

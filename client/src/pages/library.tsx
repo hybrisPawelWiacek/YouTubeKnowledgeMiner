@@ -425,6 +425,8 @@ export default function Library() {
       }
     } else if (user) {
       // Load videos for logged in users
+      // Send user ID as a number to API
+      const userId = typeof user.id === 'number' ? user.id : Number(user.id);
       // ... existing videosQuery logic ...
     }
 
