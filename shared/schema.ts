@@ -210,11 +210,22 @@ export const exportPreferencesSchema = z.object({
   user_id: z.number(),
 });
 
+// Citation schema
+export const citationSchema = z.object({
+  video_id: z.number(),
+  video_title: z.string(),
+  content: z.string(),
+  content_type: z.enum(['transcript', 'summary', 'note']),
+  timestamp: z.string().optional(),
+  chunk_index: z.number().optional(),
+});
+
 // Q&A Message schema
 export const qaMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
   timestamp: z.date().optional(),
+  citations: z.array(citationSchema).optional(),
 });
 
 // Q&A Request schema
@@ -271,6 +282,7 @@ export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
 export type InsertExportPreferences = z.infer<typeof insertExportPreferencesSchema>;
 export type QAMessage = z.infer<typeof qaMessageSchema>;
 export type QAQuestion = z.infer<typeof qaQuestionSchema>;
+export type Citation = z.infer<typeof citationSchema>;
 export type YoutubeUrlRequest = z.infer<typeof youtubeUrlSchema>;
 export type VideoMetadataRequest = z.infer<typeof videoMetadataSchema>;
 export type SearchParams = z.infer<typeof searchParamsSchema>;
