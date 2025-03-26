@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -66,6 +66,8 @@ export default function Library() {
   // Track scroll position to maintain when returning to library view
   const [scrollPosition, setScrollPosition] = useState<number>(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   
   // Save scroll position when leaving the page
   useEffect(() => {
@@ -82,6 +84,8 @@ export default function Library() {
       listRef.current.scrollTop = scrollPosition;
     }
   }, [scrollPosition]);
+  
+
   
   // Queries
   const videosQuery = useQuery<{
@@ -131,21 +135,25 @@ export default function Library() {
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
-    },
-    onSuccess: (data) => {
-      // When filters change, we're on page 1 and replace videos
-      if (page === 1 && cursor === undefined) {
-        setAllVideos(data.videos);
-      } else {
-        // For pagination, append new videos to existing ones
-        setAllVideos(prev => [...prev, ...data.videos]);
-      }
-      setHasMore(data.hasMore);
-      setTotalCount(data.totalCount);
-      setCursor(data.nextCursor);
-      setIsLoadingMore(false);
     }
   });
+  
+  // Handle query result data for pagination
+  useEffect(() => {
+    if (videosQuery.data) {
+      // When filters change, we're on page 1 and replace videos
+      if (page === 1 && cursor === undefined) {
+        setAllVideos(videosQuery.data.videos);
+      } else {
+        // For pagination, append new videos to existing ones
+        setAllVideos(prev => [...prev, ...videosQuery.data.videos]);
+      }
+      setHasMore(videosQuery.data.hasMore);
+      setTotalCount(videosQuery.data.totalCount);
+      setCursor(videosQuery.data.nextCursor);
+      setIsLoadingMore(false);
+    }
+  }, [videosQuery.data, page, cursor]);
   
   const categoriesQuery = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -359,7 +367,7 @@ export default function Library() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
       
-      <main className="flex-grow">
+      <main className="flex-grow" ref={listRef}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
@@ -612,7 +620,7 @@ export default function Library() {
               )}
               
               {/* Empty State */}
-              {!videosQuery.isLoading && (!videosQuery.data || videosQuery.data.length === 0) && (
+              {!videosQuery.isLoading && (!allVideos || allVideos.length === 0) && (
                 <div className="text-center py-10">
                   <div className="inline-flex items-center justify-center p-4 bg-zinc-900 rounded-full mb-4">
                     <Search className="h-6 w-6 text-gray-400" />
@@ -633,9 +641,9 @@ export default function Library() {
               )}
               
               {/* Grid View */}
-              {!videosQuery.isLoading && videosQuery.data && videosQuery.data.length > 0 && isGridView && (
+              {!videosQuery.isLoading && allVideos && allVideos.length > 0 && isGridView && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {videosQuery.data.map((video: Video) => (
+                  {allVideos.map((video: Video) => (
                     <VideoCard
                       key={video.id}
                       video={video}
@@ -648,13 +656,13 @@ export default function Library() {
               )}
               
               {/* List View */}
-              {!videosQuery.isLoading && videosQuery.data && videosQuery.data.length > 0 && !isGridView && (
+              {!videosQuery.isLoading && allVideos && allVideos.length > 0 && !isGridView && (
                 <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
                   <div className="flex items-center p-3 border-b border-zinc-800 bg-zinc-800/50">
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={selectedVideos.length === videosQuery.data.length}
+                        checked={selectedVideos.length === allVideos.length}
                         onChange={toggleSelectAll}
                         className="h-4 w-4 rounded border-zinc-600"
                       />
@@ -667,7 +675,7 @@ export default function Library() {
                   </div>
                   
                   <div>
-                    {videosQuery.data.map((video: Video) => (
+                    {allVideos.map((video: Video) => (
                       <VideoListItem
                         key={video.id}
                         video={video}
@@ -677,6 +685,30 @@ export default function Library() {
                       />
                     ))}
                   </div>
+                </div>
+              )}
+              
+              {/* Load More / Pagination */}
+              {!videosQuery.isLoading && allVideos && allVideos.length > 0 && hasMore && (
+                <div className="flex justify-center mt-8 mb-4">
+                  <Button
+                    onClick={() => {
+                      // For infinite scroll, we increase the page number to fetch more results
+                      setPage(prevPage => prevPage + 1);
+                    }}
+                    disabled={isLoadingMore || videosQuery.isLoading}
+                    className="flex items-center gap-2"
+                  >
+                    {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Load More Videos
+                  </Button>
+                </div>
+              )}
+              
+              {/* Summary stats */}
+              {allVideos && allVideos.length > 0 && (
+                <div className="text-center text-sm text-gray-500 mt-2 mb-4">
+                  Showing {allVideos.length} of {totalCount} videos
                 </div>
               )}
             </div>
