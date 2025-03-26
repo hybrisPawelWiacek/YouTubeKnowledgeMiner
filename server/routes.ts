@@ -170,9 +170,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         collection_ids: req.body.collection_ids
       });
 
-      // In a real app, we would get the user_id from the session
-      // For now, use a mock user ID until auth is fully implemented
-      const userId = 1; // This would come from session in real implementation
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       // Save to database through storage interface
       const video = await dbStorage.insertVideo({
@@ -462,8 +472,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all collections for a user
   app.get("/api/collections", async (req, res) => {
     try {
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       const collections = await dbStorage.getCollectionsByUserId(userId);
       return res.status(200).json(collections);
@@ -478,8 +499,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertCollectionSchema.parse(req.body);
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       const collection = await dbStorage.createCollection({
         ...validatedData,
@@ -626,8 +658,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all saved searches for a user
   app.get("/api/saved-searches", async (req, res) => {
     try {
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       const savedSearches = await dbStorage.getSavedSearchesByUserId(userId);
       return res.status(200).json(savedSearches);
@@ -642,8 +685,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertSavedSearchSchema.parse(req.body);
 
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers or default to 1
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       const savedSearch = await dbStorage.createSavedSearch({
         ...validatedData,
