@@ -1,11 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExportButton } from "@/components/export/export-button";
 
 interface SummarySectionProps {
   summary: string[];
+  videoId: number;
 }
 
-export function SummarySection({ summary }: SummarySectionProps) {
+export function SummarySection({ summary, videoId }: SummarySectionProps) {
   if (!summary || summary.length === 0) {
     return null;
   }

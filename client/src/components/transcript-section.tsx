@@ -3,12 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Expand, Copy, Clipboard, ChevronsUpDown } from "lucide-react";
+import { ExportButton } from "@/components/export/export-button";
 
 interface TranscriptSectionProps {
   transcript: string;
+  videoId: number;
 }
 
-export function TranscriptSection({ transcript }: TranscriptSectionProps) {
+export function TranscriptSection({ transcript, videoId }: TranscriptSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const { toast } = useToast();
 
@@ -44,6 +46,11 @@ export function TranscriptSection({ transcript }: TranscriptSectionProps) {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Video Transcript</h2>
         <div className="flex items-center gap-2">
+          <ExportButton 
+            videoId={videoId}
+            hasTranscript={!!transcript}
+            small
+          />
           <Button
             variant="outline"
             size="sm"
