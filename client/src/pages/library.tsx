@@ -155,6 +155,45 @@ export default function Library() {
     }
   }, [videosQuery.data, page, cursor]);
   
+  // Setup IntersectionObserver for infinite scroll
+  useEffect(() => {
+    // Only set up observer if we have more items to load
+    if (!hasMore || isLoadingMore || videosQuery.isLoading) return;
+    
+    // Disconnect any existing observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+    
+    // Create a new observer
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        // If the load more sentinel is visible and we have more data to load
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          // Load more videos by incrementing the page
+          setPage((prevPage) => prevPage + 1);
+        }
+      },
+      {
+        // Start loading when user is 200px away from the end
+        rootMargin: "0px 0px 200px 0px",
+        threshold: 0.1,
+      }
+    );
+    
+    // Observe the load more sentinel element
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
+    }
+    
+    // Clean up observer on unmount
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, isLoadingMore, videosQuery.isLoading]);
+  
   const categoriesQuery = useQuery<Category[]>({
     queryKey: ["/api/categories"],
   });
@@ -690,18 +729,35 @@ export default function Library() {
               
               {/* Load More / Pagination */}
               {!videosQuery.isLoading && allVideos && allVideos.length > 0 && hasMore && (
-                <div className="flex justify-center mt-8 mb-4">
-                  <Button
-                    onClick={() => {
-                      // For infinite scroll, we increase the page number to fetch more results
-                      setPage(prevPage => prevPage + 1);
-                    }}
-                    disabled={isLoadingMore || videosQuery.isLoading}
-                    className="flex items-center gap-2"
-                  >
-                    {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Load More Videos
-                  </Button>
+                <div className="mt-8 mb-4">
+                  {/* Visible load more button for manual loading */}
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => {
+                        // For manual loading, we increase the page number to fetch more results
+                        setPage(prevPage => prevPage + 1);
+                      }}
+                      disabled={isLoadingMore || videosQuery.isLoading}
+                      className="flex items-center gap-2"
+                    >
+                      {isLoadingMore && !hasMore && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Load More Videos
+                    </Button>
+                  </div>
+                  
+                  {/* Invisible sentinel element for infinite scroll */}
+                  <div 
+                    ref={loadMoreRef} 
+                    className="h-4 w-full my-4"
+                    aria-hidden="true"
+                  />
+                </div>
+              )}
+              
+              {/* Loading spinner during infinite scroll - only show when we're loading more but not at the end */}
+              {isLoadingMore && hasMore && !videosQuery.isLoading && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               )}
               
