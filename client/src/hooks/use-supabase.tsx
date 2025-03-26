@@ -331,6 +331,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Import here to avoid circular dependencies
+      const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+      
       // Check if user was authenticated with direct method
       const isDirectAuth = user?.user_metadata?.direct_auth === true;
       
@@ -341,6 +344,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         
         // Clear the session in our API module
         updateCurrentSession(null);
+        
+        // Clear any anonymous session when signing out
+        console.log("Clearing anonymous session data on direct auth signout");
+        clearAnonymousSession();
         
         toast({
           title: "Signed out",
@@ -355,6 +362,11 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       if (error) {
         throw error;
       }
+      
+      // Clear any anonymous session when signing out
+      // This ensures users who sign out completely start fresh
+      console.log("Clearing anonymous session data on supabase signout");
+      clearAnonymousSession();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -423,41 +435,87 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     if (!user || !supabase) return;
 
     try {
+      // Import here to avoid circular dependencies
+      const { clearAnonymousSession, hasAnonymousSession } = await import('@/lib/anonymous-session');
+      
+      // Check for both legacy local storage data and newer anonymous session data
       const localData = getLocalData();
+      const hasAnonymousSessionData = hasAnonymousSession();
 
-      if (Object.keys(localData).length > 0) {
-        if (localData.videos && localData.videos.length > 0) {
-          const response = await fetch('/api/import-anonymous-data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              userData: localData,
-              userId: user.id
-            })
+      // Handle old format local data (previous implementation)
+      if (Object.keys(localData).length > 0 && localData.videos && localData.videos.length > 0) {
+        console.log("Found legacy local data to migrate:", localData.videos.length, "videos");
+        
+        const response = await fetch('/api/import-anonymous-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userData: localData,
+            userId: user.id
+          })
+        });
+
+        if (response.ok) {
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+
+          toast({
+            title: "Data Migration Complete",
+            description: "Your previously saved data has been added to your account",
           });
-
-          if (response.ok) {
-            localStorage.removeItem(LOCAL_STORAGE_KEY);
-
-            toast({
-              title: "Data Migration Complete",
-              description: "Your previously saved data has been added to your account",
-            });
-          } else {
-            const error = await response.json();
-            throw new Error(error.message || 'Data migration failed');
-          }
+        } else {
+          const error = await response.json();
+          throw new Error(error.message || 'Legacy data migration failed');
         }
+      }
+      
+      // Handle anonymous session data
+      if (hasAnonymousSessionData) {
+        console.log("Found anonymous session data to migrate");
+        
+        // Here we would implement the migration of newer anonymous session videos
+        // This would typically be a server-side operation where videos with this
+        // anonymous_session_id would be reassigned to the user's account
+        
+        // For now, let's clear the anonymous session since the user is logged in
+        clearAnonymousSession();
+        
+        toast({
+          title: "Anonymous data cleared",
+          description: "You're now using your authenticated account",
+        });
       }
     } catch (error: any) {
       console.error('Error migrating data:', error);
+      toast({
+        title: "Data Migration Error",
+        description: error.message || "Failed to migrate your anonymous data",
+        variant: "destructive",
+      });
     }
   };
 
   // Function to check if anonymous user has reached the video limit
   const hasReachedAnonymousLimit = () => {
-    const data = getLocalData();
-    return data.videoCount >= 3; // Allow up to 3 videos
+    try {
+      // Import here to avoid circular dependencies
+      const { getLocalAnonymousVideoCount } = require('@/lib/anonymous-session');
+      
+      // First check the new approach using session-based video count
+      const sessionCount = getLocalAnonymousVideoCount();
+      if (sessionCount >= 3) {
+        return true;
+      }
+      
+      // As a fallback, check the legacy approach for older data
+      const data = getLocalData();
+      const legacyLimitReached = data.videoCount >= 3;
+      
+      // Return true if either limit is reached
+      return legacyLimitReached;
+    } catch (error) {
+      console.error("Error checking anonymous limit:", error);
+      return false; // Default to allowing videos if we can't determine
+    }
   };
 
   return (
