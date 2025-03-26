@@ -1404,7 +1404,8 @@ async function getUserInfoFromRequest(req: Request): Promise<{
   console.log("[Auth Helper] Extracting user info from request headers");
   
   // 1. Try to get the user ID from the x-user-id header (for authenticated users)
-  let userId = 1;
+  // Default to null for anonymous users (not 1)
+  let userId: number | null = null;
   let isAnonymous = true;
   let anonymousSessionId: string | undefined = undefined;
   
@@ -1446,7 +1447,7 @@ async function getUserInfoFromRequest(req: Request): Promise<{
     console.log("[Auth Helper] No x-user-id header found, checking for anonymous session");
   }
   
-  // 2. If this is an anonymous user (userId === 1), look for session tracking
+  // 2. If this is an anonymous user (userId is null), look for session tracking
   if (isAnonymous) {
     // Check for anonymous session header
     const sessionHeader = req.headers['x-anonymous-session'];
