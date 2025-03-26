@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,19 @@ interface VideoInputProps {
 export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   const [url, setUrl] = useState("");
   const { toast } = useToast();
-  const { user } = useSupabase();
+  const { user, getLocalData, setLocalData, hasReachedAnonymousLimit } = useSupabase();
   const { showAuthPrompt, promptType, promptAuth, closePrompt } = useAuthPrompt();
   const [pendingVideo, setPendingVideo] = useState<YoutubeVideo | null>(null);
   const [location, setLocation] = useLocation();
+  const [anonymousCount, setAnonymousCount] = useState(0);
+
+  // Keep anonymous count updated
+  useEffect(() => {
+    if (!user) {
+      const localData = getLocalData();
+      setAnonymousCount(localData.videos?.length || 0);
+    }
+  }, [user, getLocalData]);
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
@@ -31,12 +40,29 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     },
     onSuccess: (data) => {
       setPendingVideo(data);
+      
       if (!user) {
-        const anonymousVideos = getLocalData().videos || [];
-        if (anonymousVideos.length >= 3) {
+        // Check if we've reached the limit
+        if (hasReachedAnonymousLimit()) {
           promptAuth('analyze_again');
         } else {
+          // Add video to local storage for anonymous users
+          const localData = getLocalData();
+          const updatedVideos = [...(localData.videos || []), data];
+          setLocalData({ ...localData, videos: updatedVideos });
           handleVideoProcessed(data);
+          
+          // Update displayed count
+          setAnonymousCount(updatedVideos.length);
+          
+          // If this was the 3rd video, show an informational toast
+          if (updatedVideos.length === 3) {
+            toast({
+              title: "Video limit reached",
+              description: "You've reached the limit of 3 videos. Sign in to analyze more videos.",
+              variant: "default",
+            });
+          }
         }
       } else {
         handleVideoProcessed(data);
@@ -86,21 +112,14 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       return;
     }
 
+    // Check if anonymous user has reached the limit before even making the API call
+    if (!user && hasReachedAnonymousLimit()) {
+      setPendingVideo(null);
+      promptAuth('analyze_again');
+      return;
+    }
+
     analyzeVideo(url);
-  };
-
-  const getLocalData = () => {
-    const data = localStorage.getItem('anonymousVideos');
-    return data ? JSON.parse(data) : { videos: [] };
-  };
-
-  const setLocalData = (data: { videos: YoutubeVideo[] }) => {
-    localStorage.setItem('anonymousVideos', JSON.stringify(data));
-  };
-
-  const hasReachedAnonymousLimit = () => {
-    const anonymousVideos = getLocalData().videos || [];
-    return anonymousVideos.length >= 3;
   };
 
 

@@ -10,13 +10,45 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 export function Header() {
-  const { user, signOut } = useSupabase();
+  const { user, signOut, getLocalData } = useSupabase();
   const [location] = useLocation();
   const { toast } = useToast();
+  const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
+  const [maxAllowedVideos] = useState(3); // Maximum videos allowed for anonymous users
+
+  // Track anonymous video count
+  useEffect(() => {
+    if (!user) {
+      const localData = getLocalData();
+      setAnonymousVideoCount(localData.videos?.length || 0);
+
+      // Setup localStorage change listener
+      const handleStorageChange = () => {
+        const updatedData = getLocalData();
+        setAnonymousVideoCount(updatedData.videos?.length || 0);
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      
+      // Also poll for changes every 5 seconds (as localStorage events don't fire in the same tab)
+      const interval = setInterval(() => {
+        const updatedData = getLocalData();
+        setAnonymousVideoCount(updatedData.videos?.length || 0);
+      }, 5000);
+
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(interval);
+      };
+    }
+  }, [user, getLocalData]);
 
   const isActive = (path: string) => location === path;
+  const showVideoCounter = !user && anonymousVideoCount > 0;
 
   const handleSignOut = async () => {
     try {
@@ -73,6 +105,11 @@ export function Header() {
                 >
                   <FolderOpen className="h-4 w-4 mr-1" />
                   <span>Library</span>
+                  {showVideoCounter && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      {anonymousVideoCount}/{maxAllowedVideos}
+                    </Badge>
+                  )}
                 </Button>
               </Link>
             </nav>
