@@ -94,9 +94,10 @@ export function AuthPromptDialog({
     onClose();
   };
 
-  const handleRemindLater = () => {
+  const handleRemindLater = async () => {
     // Only allow "remind later" if they haven't reached the limit
-    if (!hasReachedAnonymousLimit()) {
+    const limitReached = await hasReachedAnonymousLimit();
+    if (!limitReached) {
       const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
       localStorage.setItem('suppress_auth_prompts_until', suppressUntil.toString());
       if (onContinueAsGuest) {
@@ -106,8 +107,25 @@ export function AuthPromptDialog({
     onClose();
   };
 
-  // Determine if user has reached the video limit
-  const reachedLimit = hasReachedAnonymousLimit();
+  // State for tracking limit status
+  const [reachedLimit, setReachedLimit] = useState(false);
+  
+  // Check if user has reached the video limit
+  useEffect(() => {
+    const checkVideoLimit = async () => {
+      try {
+        const limitReached = await hasReachedAnonymousLimit();
+        setReachedLimit(limitReached);
+      } catch (error) {
+        console.error("Error checking anonymous limit:", error);
+        setReachedLimit(false);
+      }
+    };
+    
+    if (isOpen) {
+      checkVideoLimit();
+    }
+  }, [isOpen, hasReachedAnonymousLimit]);
   
   // Customize message based on limit status
   let description = promptMessages[promptType].description;

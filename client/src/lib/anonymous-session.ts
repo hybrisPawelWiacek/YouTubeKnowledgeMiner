@@ -5,8 +5,14 @@
  * Each anonymous user gets their own unique session ID that persists across visits.
  */
 
+import { apiRequest } from './api';
+
 // LocalStorage key for anonymous session ID
 const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+// LocalStorage key for video count cache
+const ANONYMOUS_VIDEO_COUNT_KEY = 'ytk_anonymous_video_count';
+// Maximum videos per anonymous session
+const ANONYMOUS_VIDEO_LIMIT = 3;
 
 /**
  * Generate a unique session ID for anonymous users
@@ -43,6 +49,7 @@ export function getOrCreateAnonymousSessionId(): string {
  */
 export function clearAnonymousSession(): void {
   localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+  localStorage.removeItem(ANONYMOUS_VIDEO_COUNT_KEY);
   console.log('[Anonymous Session] Session cleared');
 }
 
@@ -54,11 +61,11 @@ export function hasAnonymousSession(): boolean {
 }
 
 /**
- * Get the current video count for anonymous users 
- * (this will be managed server-side but can be cached locally)
+ * Get the current video count for anonymous users from local cache
+ * This should only be used for UI hints while waiting for server response
  */
 export function getLocalAnonymousVideoCount(): number {
-  const countStr = localStorage.getItem('ytk_anonymous_video_count');
+  const countStr = localStorage.getItem(ANONYMOUS_VIDEO_COUNT_KEY);
   return countStr ? parseInt(countStr, 10) : 0;
 }
 
@@ -67,13 +74,49 @@ export function getLocalAnonymousVideoCount(): number {
  * This is just a helper for the UI to show limits without server roundtrips
  */
 export function setLocalAnonymousVideoCount(count: number): void {
-  localStorage.setItem('ytk_anonymous_video_count', count.toString());
+  localStorage.setItem(ANONYMOUS_VIDEO_COUNT_KEY, count.toString());
 }
 
 /**
  * Check if anonymous user has reached their video limit
+ * First tries to get data from server, falls back to local cache if needed
  */
-export function hasReachedAnonymousLimit(): boolean {
-  const ANONYMOUS_VIDEO_LIMIT = 3; // Maximum videos per anonymous session
+export async function hasReachedAnonymousLimit(): Promise<boolean> {
+  try {
+    if (!hasAnonymousSession()) {
+      return false;
+    }
+    
+    const sessionId = getOrCreateAnonymousSessionId();
+    const headers = {
+      'x-anonymous-session': sessionId
+    };
+    
+    const response = await apiRequest<{ count: number, max_allowed: number }>('/api/anonymous/videos/count', {
+      headers
+    });
+    
+    // Update local cache for future reference
+    if (response && typeof response.count === 'number') {
+      setLocalAnonymousVideoCount(response.count);
+      const maxAllowed = response.max_allowed || ANONYMOUS_VIDEO_LIMIT;
+      return response.count >= maxAllowed;
+    }
+    
+    // Fall back to local cache if server response is invalid
+    return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
+  } catch (error) {
+    console.error('Error checking anonymous limit:', error);
+    
+    // Fall back to local cache on error
+    return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
+  }
+}
+
+/**
+ * Synchronous version of hasReachedAnonymousLimit that only uses local cache
+ * Use this when you need an immediate response without waiting for a network request
+ */
+export function hasReachedAnonymousLimitSync(): boolean {
   return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
 }

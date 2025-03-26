@@ -19,7 +19,7 @@ type SupabaseContextType = {
   getLocalData: () => any;
   setLocalData: (data: any) => void;
   migrateLocalData: () => Promise<void>;
-  hasReachedAnonymousLimit: () => boolean;
+  hasReachedAnonymousLimit: () => Promise<boolean>;
 };
 
 const SupabaseContext = createContext<SupabaseContextType>({
@@ -35,7 +35,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   getLocalData: () => ({}),
   setLocalData: () => {},
   migrateLocalData: async () => {},
-  hasReachedAnonymousLimit: () => false,
+  hasReachedAnonymousLimit: async () => false,
 });
 
 export function SupabaseProvider({ children }: { children: ReactNode }) {
@@ -495,26 +495,19 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   };
 
   // Function to check if anonymous user has reached the video limit
-  const hasReachedAnonymousLimit = () => {
+  const hasReachedAnonymousLimit = async () => {
     try {
       // Import here to avoid circular dependencies
-      const { getLocalAnonymousVideoCount } = require('@/lib/anonymous-session');
+      const { hasReachedAnonymousLimit: checkAnonymousLimit, hasReachedAnonymousLimitSync } = await import('@/lib/anonymous-session');
       
-      // First check the new approach using session-based video count
-      const sessionCount = getLocalAnonymousVideoCount();
-      if (sessionCount >= 3) {
-        return true;
-      }
-      
-      // As a fallback, check the legacy approach for older data
-      const data = getLocalData();
-      const legacyLimitReached = data.videoCount >= 3;
-      
-      // Return true if either limit is reached
-      return legacyLimitReached;
+      // Use the async function that checks with server first
+      return await checkAnonymousLimit();
     } catch (error) {
       console.error("Error checking anonymous limit:", error);
-      return false; // Default to allowing videos if we can't determine
+      
+      // Fall back to sync version that uses only local cache if async version fails
+      const { hasReachedAnonymousLimitSync } = require('@/lib/anonymous-session');
+      return hasReachedAnonymousLimitSync();
     }
   };
 
