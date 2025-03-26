@@ -1148,19 +1148,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse request and add userId
       const exportRequest = req.body;
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      if (req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
+      console.log("EXPORT: Using user ID from request:", userId);
       
       exportRequest.userId = userId;
 
@@ -1201,19 +1192,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's export format preference
   app.get("/api/export/preferences", async (req, res) => {
     try {
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      if (req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
+      console.log("GET EXPORT PREFERENCES: Using user ID from request:", userId);
 
       const format = await getExportPreference(userId);
       return res.status(200).json({ format });
@@ -1234,19 +1216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // Get user ID using our helper function
+      const userId = getUserIdFromRequest(req);
       
-      if (req.headers['x-user-id']) {
-        try {
-          userId = Number(req.headers['x-user-id']);
-          if (isNaN(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
-          }
-        } catch (e) {
-          return res.status(400).json({ message: "Failed to parse user ID" });
-        }
-      }
+      console.log("SAVE EXPORT PREFERENCES: Using user ID from request:", userId);
 
       await saveExportPreference(userId, format);
       return res.status(200).json({ format });
