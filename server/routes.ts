@@ -250,8 +250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all videos for a user
   app.get("/api/videos", async (req, res) => {
     try {
-      // In a real app, get user_id from session
-      const userId = 1; // This would come from session
+      // Get user_id from headers, session or default to 1
+      const userId = req.headers['x-user-id'] 
+        ? parseInt(req.headers['x-user-id'] as string) 
+        : 1;
 
       // Check if search parameters were provided
       if (Object.keys(req.query).length > 0) {
