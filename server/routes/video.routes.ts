@@ -224,6 +224,13 @@ router.get('/', async (req: Request, res: Response) => {
     // Convert string parameters to appropriate types before parsing
     const parsedQuery: Record<string, any> = { ...req.query };
     
+    // Handle empty string values
+    Object.keys(parsedQuery).forEach(key => {
+      if (parsedQuery[key] === '') {
+        delete parsedQuery[key]; // Remove empty string values
+      }
+    });
+    
     // Convert numeric parameters from strings to numbers
     if (parsedQuery.category_id) parsedQuery.category_id = Number(parsedQuery.category_id);
     if (parsedQuery.collection_id) parsedQuery.collection_id = Number(parsedQuery.collection_id);
