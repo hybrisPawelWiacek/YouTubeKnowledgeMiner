@@ -30,15 +30,15 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('txt');
   
   // Fetch user's preferred export format
-  const formatPreferenceQuery = useQuery({
+  const formatPreferenceQuery = useQuery<{ format: ExportFormat }>({
     queryKey: ['/api/export/preferences'],
     enabled: isDialogOpen, // Only fetch when dialog is open
   });
   
   // Set the format based on user preference when data is available
   useEffect(() => {
-    if (formatPreferenceQuery.data && formatPreferenceQuery.data.format && isDialogOpen) {
-      setSelectedFormat(formatPreferenceQuery.data.format as ExportFormat);
+    if (formatPreferenceQuery.data?.format && isDialogOpen) {
+      setSelectedFormat(formatPreferenceQuery.data.format);
       setIsDialogOpen(false); // Close the dialog to prevent infinite loop
     }
   }, [formatPreferenceQuery.data, isDialogOpen]);
@@ -57,21 +57,24 @@ export function BatchExportButton({ videoIds, disabled = false }: BatchExportBut
       format: ExportFormat;
       video_ids: number[];
     }) => {
-      return apiRequest("POST", '/api/export', data);
+      const response = await apiRequest("POST", '/api/export', data);
+      // Cast to unknown first as TypeScript recommends
+      return (response as unknown) as {
+        content: string;
+        mimeType: string;
+        filename: string;
+      };
     },
-    onSuccess: async (response) => {
+    onSuccess: (response) => {
       // Save format preference if it has changed
       saveFormatPreferenceMutation.mutate(selectedFormat);
       
-      // Parse the response to get the content, mimeType, and filename
-      const data = await response;
-      
       // Create a download link for the exported content
-      const blob = new Blob([data.content], { type: data.mimeType });
+      const blob = new Blob([response.content], { type: response.mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = data.filename;
+      a.download = response.filename;
       document.body.appendChild(a);
       a.click();
       

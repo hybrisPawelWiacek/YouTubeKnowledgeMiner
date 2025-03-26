@@ -76,11 +76,13 @@ export function ExportButton({
       video_ids: number[];
       qa_conversation_id?: number;
     }) => {
-      return apiRequest<{
+      const response = await apiRequest("POST", '/api/export', data);
+      // Cast to unknown first as TypeScript recommends
+      return (response as unknown) as {
         content: string;
         mimeType: string;
         filename: string;
-      }>("POST", '/api/export', data);
+      };
     },
     onSuccess: async (response) => {
       // Save format preference if it has changed
