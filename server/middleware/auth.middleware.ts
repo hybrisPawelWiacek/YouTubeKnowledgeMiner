@@ -37,14 +37,58 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
  * Returns 401 if no valid session exists
  */
 export function requireSession(req: Request, res: Response, next: NextFunction) {
-  const userInfo = res.locals.userInfo;
-  if (!userInfo || (userInfo.is_anonymous && !userInfo.anonymous_session_id)) {
-    return res.status(401).json({ 
-      message: "Valid session required",
-      code: "SESSION_REQUIRED" 
-    });
+  // First, ensure we have user info from previous middleware
+  if (!res.locals.userInfo) {
+    // If getUserInfo middleware hasn't run yet, run it now
+    try {
+      console.log("[Auth Middleware] User info not found, extracting from request");
+      const userInfoPromise = getUserInfoFromRequest(req);
+      
+      // Handle the promise synchronously to maintain middleware flow
+      userInfoPromise.then(userInfo => {
+        res.locals.userInfo = userInfo;
+        console.log("[Auth Middleware] Successfully extracted user info:", userInfo);
+        
+        // Now check if session is valid
+        if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
+          return res.status(401).json({ 
+            message: "Valid session required",
+            code: "SESSION_REQUIRED" 
+          });
+        }
+        next();
+      }).catch(error => {
+        console.error("[Auth Middleware] Error extracting user info:", error);
+        return res.status(401).json({ 
+          message: "Valid session required",
+          code: "SESSION_REQUIRED" 
+        });
+      });
+      
+      return; // Don't call next() here as it will be called by the promise
+    } catch (error) {
+      console.error("[Auth Middleware] Synchronous error in requireSession:", error);
+      return res.status(401).json({ 
+        message: "Valid session required",
+        code: "SESSION_REQUIRED" 
+      });
+    }
+  } else {
+    // We already have user info from previous middleware
+    const userInfo = res.locals.userInfo;
+    
+    // For anonymous users, we need a valid session ID
+    if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
+      console.log("[Auth Middleware] Anonymous user without valid session ID");
+      return res.status(401).json({ 
+        message: "Valid session required",
+        code: "SESSION_REQUIRED" 
+      });
+    }
+    
+    // Session is valid, proceed
+    next();
   }
-  next();
 }
 
 /**

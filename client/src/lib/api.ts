@@ -104,8 +104,8 @@ export async function apiRequest(
       // Add anonymous session header
       (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
       
-      // No longer setting x-user-id=1 for anonymous users
-      // Server will identify users solely by their session ID
+      // Log the headers being sent
+      console.log('[API] Request headers for anonymous user:', options.headers);
     }
   }
 

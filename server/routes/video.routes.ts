@@ -34,18 +34,41 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
   try {
     // Get the anonymous session ID from the request header
     const sessionHeader = req.headers['x-anonymous-session'];
+    
+    console.log('[video routes] Anonymous session header:', sessionHeader);
+    
     if (!sessionHeader) {
+      console.log('[video routes] No anonymous session header found');
       return sendSuccess(res, { count: 0 });
     }
     
     const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
+    console.log('[video routes] Looking up session:', sessionId);
+    
     const session = await dbStorage.getAnonymousSessionBySessionId(sessionId as string);
     
     if (!session) {
-      return sendSuccess(res, { count: 0 });
+      console.log('[video routes] No session found for ID:', sessionId);
+      // Create the session if it doesn't exist
+      try {
+        const newSession = await dbStorage.createAnonymousSession({
+          session_id: sessionId as string,
+          user_agent: req.headers['user-agent'] || null,
+          ip_address: req.ip || null
+        });
+        console.log('[video routes] Created new anonymous session:', newSession);
+        return sendSuccess(res, { count: 0 });
+      } catch (err) {
+        console.error('[video routes] Error creating anonymous session:', err);
+        return sendSuccess(res, { count: 0 });
+      }
     }
     
-    return sendSuccess(res, { count: session.video_count || 0 });
+    console.log('[video routes] Found session with video count:', session.video_count);
+    return sendSuccess(res, { 
+      count: session.video_count || 0,
+      max_allowed: 3 
+    });
   } catch (error) {
     console.error("Error getting anonymous video count:", error);
     return sendError(res, "Failed to get video count", 500);
@@ -66,10 +89,20 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       "session:", userInfo.anonymous_session_id
     );
     
+    // Debug incoming headers
+    console.log("[video routes] Request headers:", {
+      'x-user-id': req.headers['x-user-id'],
+      'x-anonymous-session': req.headers['x-anonymous-session'],
+      'content-type': req.headers['content-type']
+    });
+    
     // For anonymous users, check if they've reached the limit
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
       // Get current video count for this anonymous session
       const session = await dbStorage.getAnonymousSessionBySessionId(userInfo.anonymous_session_id);
+      
+      // Log session info for debugging
+      console.log("[video routes] Anonymous session info:", session);
       
       // Check if session has video count attribute
       if (session && session.video_count && session.video_count >= 3) {

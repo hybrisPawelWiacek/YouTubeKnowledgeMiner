@@ -92,6 +92,8 @@ export async function hasReachedAnonymousLimit(): Promise<boolean> {
       'x-anonymous-session': sessionId
     };
     
+    console.log('[Anonymous] Checking video limit with session ID:', sessionId);
+    
     // Use fetch directly to avoid circular dependencies
     const response = await fetch('/api/anonymous/videos/count', {
       method: 'GET',
@@ -100,20 +102,25 @@ export async function hasReachedAnonymousLimit(): Promise<boolean> {
     });
     
     if (!response.ok) {
-      throw new Error(`Error getting video count: ${response.status}`);
+      console.warn(`[Anonymous] Error getting video count: ${response.status}`);
+      return false;
     }
     
     const data = await response.json();
+    console.log('[Anonymous] Video count result:', data);
     
     if (data && typeof data.count === 'number') {
       const maxAllowed = data.max_allowed || ANONYMOUS_VIDEO_LIMIT;
-      return data.count >= maxAllowed;
+      const hasReached = data.count >= maxAllowed;
+      console.log(`[Anonymous] Video count: ${data.count}/${maxAllowed} - Limit reached: ${hasReached}`);
+      return hasReached;
     }
     
     // If we can't determine the count, assume they haven't reached the limit
+    console.log('[Anonymous] Could not determine video count, assuming limit not reached');
     return false;
   } catch (error) {
-    console.error('Error checking anonymous limit:', error);
+    console.error('[Anonymous] Error checking anonymous limit:', error);
     
     // If we can't check the limit due to an error, assume they haven't reached it
     // This errs on the side of letting users continue rather than blocking them incorrectly

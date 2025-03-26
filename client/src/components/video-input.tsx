@@ -36,6 +36,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           
           // Get count from API
           const headers = { 'x-anonymous-session': sessionId };
+          console.log('[VideoInput] Fetching video count with session:', sessionId);
           const response = await fetch('/api/anonymous/videos/count', {
             method: 'GET',
             headers,
@@ -84,6 +85,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
             const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
             const sessionId = getOrCreateAnonymousSessionId();
             const headers = { 'x-anonymous-session': sessionId };
+            console.log('[VideoInput] Refreshing video count with session:', sessionId);
             const response = await fetch('/api/anonymous/videos/count', {
               method: 'GET',
               headers,
