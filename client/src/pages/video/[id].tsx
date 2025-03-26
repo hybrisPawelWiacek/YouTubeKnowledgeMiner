@@ -12,6 +12,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -338,11 +339,37 @@ export default function VideoDetailPage() {
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-800 border-zinc-700">
                         <SelectItem value="none">None</SelectItem>
-                        {categories?.map((category: Category) => (
-                          <SelectItem key={category.id} value={category.id.toString()}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
+                        
+                        {/* Global categories first */}
+                        {categories
+                          ?.filter((category: Category) => category.is_global)
+                          .map((category: Category) => (
+                            <SelectItem 
+                              key={category.id} 
+                              value={category.id.toString()}
+                              className="font-medium text-blue-400"
+                            >
+                              {category.name} (Global)
+                            </SelectItem>
+                          ))}
+                          
+                        {/* Separator if we have both global and user categories */}
+                        {categories?.some((category: Category) => category.is_global) && 
+                         categories?.some((category: Category) => !category.is_global) && (
+                          <SelectSeparator />
+                        )}
+                          
+                        {/* User categories */}
+                        {categories
+                          ?.filter((category: Category) => !category.is_global)
+                          .map((category: Category) => (
+                            <SelectItem 
+                              key={category.id} 
+                              value={category.id.toString()}
+                            >
+                              {category.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
