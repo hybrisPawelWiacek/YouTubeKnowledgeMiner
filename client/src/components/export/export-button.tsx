@@ -48,15 +48,15 @@ export function ExportButton({
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('txt');
   
   // Fetch user's preferred export format
-  const formatPreferenceQuery = useQuery({
+  const formatPreferenceQuery = useQuery<{ format: ExportFormat }>({
     queryKey: ['/api/export/preferences'],
     enabled: isExportDialogOpen, // Only fetch when dialog is open
   });
   
   // Set the format based on user preference when data is available
   useEffect(() => {
-    if (formatPreferenceQuery.data && formatPreferenceQuery.data.format && isExportDialogOpen) {
-      setSelectedFormat(formatPreferenceQuery.data.format as ExportFormat);
+    if (formatPreferenceQuery.data?.format && isExportDialogOpen) {
+      setSelectedFormat(formatPreferenceQuery.data.format);
       setIsExportDialogOpen(false); // Close the dialog to prevent infinite loop
     }
   }, [formatPreferenceQuery.data, isExportDialogOpen]);
@@ -76,21 +76,22 @@ export function ExportButton({
       video_ids: number[];
       qa_conversation_id?: number;
     }) => {
-      return apiRequest("POST", '/api/export', data);
+      return apiRequest<{
+        content: string;
+        mimeType: string;
+        filename: string;
+      }>("POST", '/api/export', data);
     },
     onSuccess: async (response) => {
       // Save format preference if it has changed
       saveFormatPreferenceMutation.mutate(selectedFormat);
       
-      // Parse the response to get the content, mimeType, and filename
-      const data = await response;
-      
       // Create a download link for the exported content
-      const blob = new Blob([data.content], { type: data.mimeType });
+      const blob = new Blob([response.content], { type: response.mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = data.filename;
+      a.download = response.filename;
       document.body.appendChild(a);
       a.click();
       
