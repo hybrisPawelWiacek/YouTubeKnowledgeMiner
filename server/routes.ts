@@ -251,9 +251,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/videos", async (req, res) => {
     try {
       // Get user_id from headers, session or default to 1
-      const userId = req.headers['x-user-id'] 
-        ? parseInt(req.headers['x-user-id'] as string) 
-        : 1;
+      let userId = 1;
+      
+      if (req.headers['x-user-id']) {
+        try {
+          userId = Number(req.headers['x-user-id']);
+          if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID format" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Failed to parse user ID" });
+        }
+      }
 
       // Check if search parameters were provided
       if (Object.keys(req.query).length > 0) {
