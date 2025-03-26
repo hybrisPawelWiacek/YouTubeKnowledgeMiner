@@ -52,7 +52,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(videos).where(eq(videos.user_id, userId));
   }
   
-  async searchVideos(userId: number, params: SearchParams): Promise<Video[]> {
+  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
     // Build query conditions
     let conditions = [eq(videos.user_id, userId)];
     
@@ -113,29 +113,79 @@ export class DatabaseStorage implements IStorage {
         query = query.where(inArray(videos.id, videoIds));
       } else {
         // If no videos in collection, return empty array
-        return [];
+        return { videos: [], totalCount: 0, hasMore: false };
       }
     }
     
     // Add sorting
-    if (params.sort_by) {
-      const sortOrder = params.sort_order === 'desc' ? desc : asc;
-      
-      switch (params.sort_by) {
-        case 'title':
-          query = query.orderBy(sortOrder(videos.title));
-          break;
-        case 'date':
-          query = query.orderBy(sortOrder(videos.created_at));
-          break;
-        case 'rating':
-          query = query.orderBy(sortOrder(videos.rating));
-          break;
-      }
+    let sortOrder = params.sort_order === 'desc' ? desc : asc;
+    let sortColumn;
+    
+    switch (params.sort_by) {
+      case 'title':
+        sortColumn = videos.title;
+        query = query.orderBy(sortOrder(videos.title));
+        break;
+      case 'rating':
+        sortColumn = videos.rating;
+        query = query.orderBy(sortOrder(videos.rating));
+        break;
+      case 'date':
+      default:
+        sortColumn = videos.created_at;
+        query = query.orderBy(sortOrder(videos.created_at));
+        break;
     }
     
+    // Get total count of matching records (without pagination)
+    const countQuery = query.toSQL();
+    const totalCountResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM (${sql.raw(countQuery.sql)}) as count_query
+    `, countQuery.params);
+    
+    const totalCount = parseInt(totalCountResult.rows[0].count, 10);
+    
+    // Cursor-based pagination
+    if (params.cursor !== undefined) {
+      // Add cursor condition based on the sort column and sort order
+      const cursorOp = params.sort_order === 'desc' ? lt : gt;
+      
+      // We need to get the cursor row to compare against
+      const cursorRow = await db.select().from(videos).where(eq(videos.id, params.cursor)).limit(1);
+      
+      if (cursorRow.length > 0) {
+        const cursorValue = cursorRow[0][sortColumn.name];
+        if (cursorValue !== undefined) {
+          query = query.where(cursorOp(sortColumn, cursorValue));
+        }
+      }
+    } else {
+      // Offset-based pagination as a fallback
+      const page = params.page || 1;
+      const offset = (page - 1) * (params.limit || 20);
+      query = query.offset(offset);
+    }
+    
+    // Apply limit
+    const limit = params.limit || 20;
+    query = query.limit(limit + 1); // Get one extra to determine if there are more pages
+    
     // Execute the query
-    return await query;
+    const results = await query;
+    
+    // Check if there are more results beyond the requested limit
+    const hasMore = results.length > limit;
+    const videos = hasMore ? results.slice(0, limit) : results;
+    
+    // Determine next cursor (last item's ID if there are more results)
+    const nextCursor = hasMore && videos.length > 0 ? videos[videos.length - 1].id : undefined;
+    
+    return {
+      videos,
+      totalCount,
+      hasMore,
+      nextCursor
+    };
   }
 
   async insertVideo(video: InsertVideo): Promise<Video> {

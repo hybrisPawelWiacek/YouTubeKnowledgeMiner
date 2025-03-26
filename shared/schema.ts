@@ -192,6 +192,9 @@ export const searchParamsSchema = z.object({
   sort_by: z.enum(['title', 'date', 'rating']).optional(),
   sort_order: z.enum(['asc', 'desc']).optional(),
   is_favorite: z.boolean().optional(),
+  page: z.number().optional().default(1),
+  limit: z.number().optional().default(20),
+  cursor: z.number().optional(), // For cursor-based pagination
 });
 
 // Export formats enum is defined at the top of the file
