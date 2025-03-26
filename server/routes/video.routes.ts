@@ -27,25 +27,29 @@ const router = Router();
 router.use(getUserInfo);
 
 /**
- * Debug endpoint for logging request information
- * Useful for debugging issues with headers or cookies
+ * Get the count of videos for an anonymous session
+ * This endpoint must be placed BEFORE the /:id route to avoid being captured as an ID parameter
  */
-router.get('/debug-info', (req: Request, res: Response) => {
-  console.log("================================================");
-  console.log("🔴 VIDEO DEBUG INFO 🔴");
-  console.log("================================================");
-  console.log(`Received ${req.method} ${req.path} request at ${new Date().toISOString()}`);
-  console.log("Request query params:", req.query);
-  console.log("Request cookies:", req.cookies);
-  console.log("Request headers:", req.headers);
-  console.log("User info:", res.locals.userInfo);
-  
-  return res.status(200).json({
-    message: "Debug info logged to console",
-    userInfo: res.locals.userInfo,
-    query: req.query,
-    headers: req.headers
-  });
+router.get('/anonymous/count', async (req: Request, res: Response) => {
+  try {
+    // Get the anonymous session ID from the request header
+    const sessionHeader = req.headers['x-anonymous-session'];
+    if (!sessionHeader) {
+      return sendSuccess(res, { count: 0 });
+    }
+    
+    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
+    const session = await dbStorage.getAnonymousSessionBySessionId(sessionId as string);
+    
+    if (!session) {
+      return sendSuccess(res, { count: 0 });
+    }
+    
+    return sendSuccess(res, { count: session.video_count || 0 });
+  } catch (error) {
+    console.error("Error getting anonymous video count:", error);
+    return sendError(res, "Failed to get video count", 500);
+  }
 });
 
 /**
@@ -70,7 +74,7 @@ router.get('/', async (req: Request, res: Response) => {
     console.log("Request headers for GET /api/videos:", req.headers);
     
     // Convert string parameters to appropriate types before parsing
-    const parsedQuery = { ...req.query };
+    const parsedQuery: Record<string, any> = { ...req.query };
     
     // Convert numeric parameters from strings to numbers
     if (parsedQuery.category_id) parsedQuery.category_id = Number(parsedQuery.category_id);
@@ -150,25 +154,6 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
- * Get a single video by ID
- */
-router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
-  try {
-    const videoId = parseInt(req.params.id);
-    
-    const video = await dbStorage.getVideo(videoId);
-    if (!video) {
-      return sendError(res, "Video not found", 404, "NOT_FOUND");
-    }
-
-    return sendSuccess(res, video);
-  } catch (error) {
-    console.error("Error fetching video:", error);
-    return sendError(res, "Failed to fetch video", 500);
-  }
-});
-
-/**
  * Process a YouTube video URL and save it
  */
 router.post('/process', requireSession, async (req: Request, res: Response) => {
@@ -204,7 +189,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     
     // Create the video in the database
     const video = await dbStorage.insertVideo({
-      youtube_id: videoData.youtubeId,
+      youtube_id: videoData.youtubeId || '',
       title: videoData.title,
       channel: videoData.channel,
       duration: videoData.duration,
@@ -255,6 +240,73 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     }
     console.error("Error processing video:", error);
     return sendError(res, "Failed to process video", 500);
+  }
+});
+
+/**
+ * Bulk update videos
+ */
+router.patch('/', async (req: Request, res: Response) => {
+  try {
+    const { ids, ...updates } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "Video IDs array is required", 400, "VALIDATION_ERROR");
+    }
+
+    const metadata = videoMetadataSchema.parse(updates);
+
+    const updateData: any = {
+      notes: metadata.notes,
+      category_id: metadata.category_id,
+      rating: metadata.rating,
+      is_favorite: metadata.is_favorite,
+      timestamps: metadata.timestamps
+    };
+
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
+    // Bulk update videos
+    const updatedCount = await dbStorage.bulkUpdateVideos(ids, updateData);
+
+    // If collections were specified, add all videos to those collections
+    if (metadata.collection_ids && metadata.collection_ids.length > 0) {
+      await dbStorage.bulkAddVideosToCollection(metadata.collection_ids[0], ids);
+    }
+
+    return sendSuccess(res, { count: updatedCount });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
+    }
+    console.error("Error bulk updating videos:", error);
+    return sendError(res, "Failed to update videos", 500);
+  }
+});
+
+/**
+ * Get a single video by ID
+ * This route MUST be placed after all other GET routes with specific paths
+ * as Express will match '/:id' for ANY path segment if placed earlier
+ */
+router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+  try {
+    const videoId = parseInt(req.params.id);
+    
+    const video = await dbStorage.getVideo(videoId);
+    if (!video) {
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
+    }
+
+    return sendSuccess(res, video);
+  } catch (error) {
+    console.error("Error fetching video:", error);
+    return sendError(res, "Failed to fetch video", 500);
   }
 });
 
@@ -311,77 +363,6 @@ router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Resp
   } catch (error) {
     console.error("Error deleting video:", error);
     return sendError(res, "Failed to delete video", 500);
-  }
-});
-
-/**
- * Bulk update videos
- */
-router.patch('/', async (req: Request, res: Response) => {
-  try {
-    const { ids, ...updates } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, "Video IDs array is required", 400, "VALIDATION_ERROR");
-    }
-
-    const metadata = videoMetadataSchema.parse(updates);
-
-    const updateData: any = {
-      notes: metadata.notes,
-      category_id: metadata.category_id,
-      rating: metadata.rating,
-      is_favorite: metadata.is_favorite,
-      timestamps: metadata.timestamps
-    };
-
-    // Remove undefined values
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === undefined) {
-        delete updateData[key];
-      }
-    });
-
-    // Bulk update videos
-    const updatedCount = await dbStorage.bulkUpdateVideos(ids, updateData);
-
-    // If collections were specified, add all videos to those collections
-    if (metadata.collection_ids && metadata.collection_ids.length > 0) {
-      await dbStorage.bulkAddVideosToCollection(metadata.collection_ids[0], ids);
-    }
-
-    return sendSuccess(res, { count: updatedCount });
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
-    }
-    console.error("Error bulk updating videos:", error);
-    return sendError(res, "Failed to update videos", 500);
-  }
-});
-
-/**
- * Get the count of videos for an anonymous session
- */
-router.get('/anonymous/count', async (req: Request, res: Response) => {
-  try {
-    // Get the anonymous session ID from the request header
-    const sessionHeader = req.headers['x-anonymous-session'];
-    if (!sessionHeader) {
-      return sendSuccess(res, { count: 0 });
-    }
-    
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
-    const session = await dbStorage.getAnonymousSessionBySessionId(sessionId as string);
-    
-    if (!session) {
-      return sendSuccess(res, { count: 0 });
-    }
-    
-    return sendSuccess(res, { count: session.video_count || 0 });
-  } catch (error) {
-    console.error("Error getting anonymous video count:", error);
-    return sendError(res, "Failed to get video count", 500);
   }
 });
 

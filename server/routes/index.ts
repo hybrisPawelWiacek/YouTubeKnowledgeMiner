@@ -7,6 +7,7 @@ import videoRoutes from './video.routes';
 import collectionRoutes from './collection.routes';
 import categoryRoutes from './category.routes';
 import authRoutes from './auth.routes';
+import debugRoutes from './debug-api';
 // The following routers will be created in later steps
 // import searchRoutes from './search.routes';
 // import exportRoutes from './export.routes';
@@ -51,6 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Register domain-specific routes
+  app.use('/api/debug', debugRoutes); // Must be registered before '/api/videos' to avoid capture issues
   app.use('/api/videos', videoRoutes);
   app.use('/api/collections', collectionRoutes);
   app.use('/api/categories', categoryRoutes);
@@ -83,11 +85,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
   
-  // Start server
-  const PORT = parseInt(process.env.PORT || "5000");
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[express] serving on port ${PORT}`);
-  });
+  // Create HTTP server (but don't start it)
+  const { createServer } = await import('http');
+  const server = createServer(app);
   
   return server;
 }
