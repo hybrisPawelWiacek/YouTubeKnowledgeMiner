@@ -100,40 +100,58 @@ export function useAuthPrompt() {
   // Function to prompt for authentication at strategic moments
   // When checkOnly=true, function performs all checks but doesn't show the prompt or update history
   const promptAuth = useCallback((type: AuthPromptType, checkOnly: boolean = false): boolean => {
+    console.log(`[AuthPrompt] Triggering prompt for type: ${type}, checkOnly: ${checkOnly}`);
+    
     // Only show prompt if user is not authenticated
-    if (loading || user) return false;
+    if (loading || user) {
+      console.log('[AuthPrompt] Skipping prompt - user is authenticated or loading');
+      return false;
+    }
     
     // Skip if prompts are suppressed
-    if (areSuppressed()) return false;
+    if (areSuppressed()) {
+      console.log('[AuthPrompt] Skipping prompt - prompts are suppressed');
+      return false;
+    }
     
     // Track engagement (only if not in check-only mode)
     if (!checkOnly) {
       incrementEngagement();
+      console.log(`[AuthPrompt] Incremented engagement count to ${getEngagementCount()}`);
     }
     
     // Don't show prompts until minimum engagement threshold is reached
     if (!hasMinimumEngagement() && type !== 'save_video') {
+      console.log('[AuthPrompt] Skipping prompt - insufficient user engagement');
       return false;
     }
     
     // Don't prompt too frequently
-    if (isTooFrequent()) return false;
+    if (isTooFrequent()) {
+      console.log('[AuthPrompt] Skipping prompt - too frequent');
+      return false;
+    }
     
     // Special case: If user has dismissed multiple prompts, suppress for longer
     if (getPromptHistory().length >= PROMPT_FREQUENCY.SESSION_LIMIT) {
       // If this would be the 4th prompt in a session, apply extended suppression
       if (!hasSeenPromptType(type)) {
-        if (!checkOnly) setExtendedSuppression();
+        if (!checkOnly) {
+          console.log('[AuthPrompt] Setting extended suppression - too many prompts');
+          setExtendedSuppression();
+        }
         return false;
       }
     }
     
     // If we're only checking eligibility, return true without showing prompt
     if (checkOnly) {
+      console.log('[AuthPrompt] Check only mode - user is eligible for this prompt');
       return true; // User is eligible for this prompt
     }
     
     // All checks passed, show the prompt
+    console.log('[AuthPrompt] Showing auth prompt for type:', type);
     setPromptType(type);
     setShowAuthPrompt(true);
     addToPromptHistory(type);

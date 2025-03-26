@@ -137,6 +137,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[VideoInput] Submit button clicked:", { url });
 
     if (!url) {
       toast({
@@ -158,14 +159,21 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
     // Check if anonymous user has reached the limit before even making the API call
     if (!user) {
-      const limitReached = await hasReachedAnonymousLimit();
-      if (limitReached) {
-        setPendingVideo(null);
-        promptAuth('analyze_again');
-        return;
+      console.log("[VideoInput] Checking anonymous limit before analyzing");
+      try {
+        const limitReached = await hasReachedAnonymousLimit();
+        console.log("[VideoInput] Anonymous limit reached:", limitReached);
+        if (limitReached) {
+          setPendingVideo(null);
+          promptAuth('analyze_again');
+          return;
+        }
+      } catch (error) {
+        console.error("[VideoInput] Error checking anonymous limit:", error);
       }
     }
 
+    console.log("[VideoInput] Proceeding to analyze video:", url);
     analyzeVideo(url);
   };
 
