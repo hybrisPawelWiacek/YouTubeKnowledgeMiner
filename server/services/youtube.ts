@@ -83,13 +83,13 @@ export async function processYoutubeVideo(videoId: string) {
     }
     
     return {
-      youtubeId: videoId,
+      youtubeId: extractedId, // Use the extracted ID for consistency
       title: snippet.title,
       channel: snippet.channelTitle,
       thumbnail,
       duration,
       publishDate,
-      url: `https://www.youtube.com/watch?v=${videoId}`,
+      url: `https://www.youtube.com/watch?v=${extractedId}`,
       description,
       tags,
       viewCount,
@@ -137,6 +137,7 @@ export async function getYoutubeTranscript(videoId: string) {
     }
     
     // Direct fetch approach using the YouTube transcript endpoint
+    // Always use the extracted ID for consistency
     const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -395,7 +396,7 @@ async function handleVideoWithoutAPIKey(videoId: string) {
     
     // Return a simplified video object
     return {
-      youtubeId: videoId,
+      youtubeId: videoId, // Already contains just the ID due to the extractedId check at the beginning of the processYoutubeVideo function
       title,
       channel,
       thumbnail: thumbnailUrl,
