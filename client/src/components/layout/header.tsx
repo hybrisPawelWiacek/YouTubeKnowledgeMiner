@@ -12,40 +12,37 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { getLocalAnonymousVideoCount } from "@/lib/anonymous-session";
+import { useQuery } from "@tanstack/react-query";
 
 export function Header() {
-  const { user, signOut, getLocalData } = useSupabase();
+  const { user, signOut } = useSupabase();
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
   const [maxAllowedVideos] = useState(3); // Maximum videos allowed for anonymous users
 
-  // Track anonymous video count
+  // Fetch anonymous session video count from server when not authenticated
+  const anonymousSessionVideoCountQuery = useQuery({
+    queryKey: ['/api/anonymous/videos/count'],
+    enabled: !user, // Only run this query for anonymous users
+    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchOnWindowFocus: true,
+    retry: 1
+  });
+
+  // Track anonymous video count using session-based approach
   useEffect(() => {
     if (!user) {
-      const localData = getLocalData();
-      setAnonymousVideoCount(localData.videos?.length || 0);
-
-      // Setup localStorage change listener
-      const handleStorageChange = () => {
-        const updatedData = getLocalData();
-        setAnonymousVideoCount(updatedData.videos?.length || 0);
-      };
-
-      window.addEventListener('storage', handleStorageChange);
-      
-      // Also poll for changes every 5 seconds (as localStorage events don't fire in the same tab)
-      const interval = setInterval(() => {
-        const updatedData = getLocalData();
-        setAnonymousVideoCount(updatedData.videos?.length || 0);
-      }, 5000);
-
-      return () => {
-        window.removeEventListener('storage', handleStorageChange);
-        clearInterval(interval);
-      };
+      // First try to get count from server response
+      if (anonymousSessionVideoCountQuery.data?.count !== undefined) {
+        setAnonymousVideoCount(anonymousSessionVideoCountQuery.data.count);
+      } else {
+        // Fall back to local cache while waiting for server response
+        setAnonymousVideoCount(getLocalAnonymousVideoCount());
+      }
     }
-  }, [user, getLocalData]);
+  }, [user, anonymousSessionVideoCountQuery.data]);
 
   const isActive = (path: string) => location === path;
   const showVideoCounter = !user && anonymousVideoCount > 0;

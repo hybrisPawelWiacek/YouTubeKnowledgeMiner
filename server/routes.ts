@@ -1248,6 +1248,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
+  // Anonymous Sessions API routes
+  
+  // Get video count for anonymous session
+  app.get("/api/anonymous/videos/count", async (req, res) => {
+    try {
+      // Get session ID from header
+      const sessionHeader = req.headers['x-anonymous-session'];
+      if (!sessionHeader) {
+        return res.status(200).json({ count: 0 });
+      }
+      
+      const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+      
+      // Get session from database
+      const session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
+      
+      if (!session) {
+        return res.status(200).json({ count: 0 });
+      }
+      
+      // Update last active timestamp for the session
+      await dbStorage.updateAnonymousSessionLastActive(sessionId);
+      
+      return res.status(200).json({ 
+        count: session.video_count,
+        session_id: sessionId,
+        max_allowed: 3 // Hard-coded limit for now, could move to config
+      });
+    } catch (error) {
+      console.error("Error getting anonymous video count:", error);
+      return res.status(500).json({ 
+        message: "Failed to get anonymous video count",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   return httpServer;
 }
 
