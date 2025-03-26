@@ -806,22 +806,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: message.content
       })) : [];
       
-      // Generate an answer using OpenAI
-      const answer = await generateAnswer(
+      // Perform semantic search to find relevant content for citations
+      await initializeVectorFunctions();
+      const searchResults = await performSemanticSearch(
+        conversation.user_id,
+        question,
+        { 
+          videoId: conversation.video_id,
+          contentTypes: ['transcript', 'summary', 'note'] 
+        },
+        5 // Limit to top 5 results for citation purposes
+      );
+      
+      // Generate an answer using OpenAI with citations
+      const { answer, citations } = await generateAnswer(
         video.transcript,
         video.title,
         question,
-        conversationHistory
+        conversationHistory,
+        searchResults
       );
       
       // Add the new question and answer to the messages
+      const newAssistantMessage = { 
+        role: 'assistant' as const, 
+        content: answer,
+        citations: citations || []
+      };
+      
       const updatedMessages = Array.isArray(messages) ? [
         ...messages,
         { role: 'user', content: question },
-        { role: 'assistant', content: answer }
+        newAssistantMessage
       ] : [
         { role: 'user', content: question },
-        { role: 'assistant', content: answer }
+        newAssistantMessage
       ];
       
       // Update the conversation with the new messages
@@ -832,7 +851,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       return res.status(200).json({
         conversation: updatedConversation,
-        answer
+        answer,
+        citations
       });
     } catch (error) {
       if (error instanceof ZodError) {

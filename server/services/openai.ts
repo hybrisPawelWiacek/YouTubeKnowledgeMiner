@@ -159,8 +159,16 @@ export async function generateAnswer(
   transcript: string, 
   videoTitle: string, 
   question: string,
-  conversationHistory: { role: 'user' | 'assistant', content: string }[] = []
-): Promise<string> {
+  conversationHistory: { role: 'user' | 'assistant', content: string }[] = [],
+  searchResults: Array<{
+    id: number,
+    video_id: number,
+    content: string,
+    content_type: string,
+    similarity: number,
+    metadata: any
+  }> = []
+): Promise<{ answer: string, citations: any[] }> {
   try {
     if (!isOpenAIConfigured()) {
       throw new Error('OpenAI API key not configured');
@@ -180,22 +188,52 @@ export async function generateAnswer(
       {
         role: "system" as const,
         content: `You are an AI assistant that helps users understand YouTube video content. 
-        You'll be given a transcript of a video and need to answer questions about it accurately.
-        Focus on information explicitly stated in the transcript. 
-        If the answer is not in the transcript, say you don't have enough information rather than guessing.
-        Give concise but comprehensive answers with specific timestamps or references when possible.`
+        You'll be given a transcript of a video and search results from the transcript, and need to answer questions accurately.
+        Focus on information explicitly stated in the transcript and search results. 
+        If the answer is not in the provided information, say you don't have enough information rather than guessing.
+        Give concise but comprehensive answers.
+        
+        IMPORTANT: For each piece of information you cite, indicate the source with citation markers [1], [2], etc.,
+        corresponding to the numbered search results. This allows users to verify information.`
       }
     ];
+
+    // Format search results to provide as context
+    let searchResultsText = '';
+    const citationMap: any[] = [];
+    
+    if (searchResults && searchResults.length > 0) {
+      searchResultsText = "Here are relevant excerpts from the video that might help answer the question:\n\n";
+      
+      searchResults.forEach((result, index) => {
+        const citation = {
+          id: index + 1,
+          video_id: result.video_id,
+          video_title: videoTitle,
+          content: result.content,
+          content_type: result.content_type,
+          timestamp: result.metadata?.timestamp || result.metadata?.formatted_timestamp || null,
+          chunk_index: result.metadata?.position || result.chunk_index
+        };
+        citationMap.push(citation);
+        
+        const timestamp = result.metadata?.formatted_timestamp 
+          ? `[${result.metadata.formatted_timestamp}]` 
+          : '';
+          
+        searchResultsText += `[${index + 1}] ${timestamp} ${result.content}\n\n`;
+      });
+    }
 
     // First message provides context
     messages.push({
       role: "user" as const,
-      content: `Here is the transcript of a YouTube video titled "${videoTitle}":\n\n${truncatedTranscript}\n\nPlease reference this transcript when answering questions.`
+      content: `Here is the transcript of a YouTube video titled "${videoTitle}":\n\n${truncatedTranscript}\n\n${searchResultsText}\nPlease reference this information when answering questions, using citation numbers [1], [2], etc.`
     });
     
     messages.push({
       role: "assistant" as const,
-      content: "I've reviewed the transcript and I'm ready to answer questions about this video."
+      content: "I've reviewed the transcript and relevant sections, and I'm ready to answer questions about this video with proper citations."
     });
 
     // Add conversation history if it exists
@@ -216,8 +254,28 @@ export async function generateAnswer(
       max_tokens: 800,  // Allow for longer answers
     });
 
-    // Extract and return the answer
-    return response.choices[0].message.content?.trim() || 'Sorry, I could not generate an answer.';
+    // Extract the answer
+    const answerContent = response.choices[0].message.content?.trim() || 'Sorry, I could not generate an answer.';
+    
+    // Create the used citations array based on citation numbers in the answer
+    const usedCitations = [];
+    const citationRegex = /\[(\d+)\]/g;
+    let match;
+    
+    while ((match = citationRegex.exec(answerContent)) !== null) {
+      const citationNumber = parseInt(match[1]);
+      if (citationNumber > 0 && citationNumber <= citationMap.length) {
+        const citation = citationMap[citationNumber - 1];
+        if (!usedCitations.some(c => c.id === citation.id)) {
+          usedCitations.push(citation);
+        }
+      }
+    }
+    
+    return {
+      answer: answerContent,
+      citations: usedCitations
+    };
   } catch (error) {
     log(`Error generating answer: ${error}`, 'openai');
     throw error;
