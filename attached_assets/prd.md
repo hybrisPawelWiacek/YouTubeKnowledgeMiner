@@ -101,6 +101,16 @@ The product serves audiences who consume educational, informational, and profess
 - ✅ Video deletion functionality
 - ✅ Favorite/bookmark functionality
 
+#### Category Management
+- ✅ Global category system with predefined options:
+  - ✅ Educational, AI Dev, and Agentic Flow global categories
+  - ✅ Visual distinction between global and user categories
+  - ✅ Consistent styling with blue color for global categories
+  - ✅ Clear "(Global)" label identifier in UI elements
+- ✅ User-specific custom categories
+- ✅ Authentication requirement for creating custom categories
+- ✅ Organized dropdown with separators between global and user categories
+
 ### Phase 3: Advanced Features & Refinement (⚠️ PARTIALLY IMPLEMENTED)
 
 #### Interactive Q&A System (✅ IMPLEMENTED)
