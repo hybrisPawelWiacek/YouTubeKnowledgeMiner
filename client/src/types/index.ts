@@ -34,6 +34,7 @@ export interface Category {
   id: number;
   name: string;
   user_id: number;
+  is_global?: boolean;
 }
 
 export interface User {
