@@ -38,13 +38,8 @@ export async function apiRequest(
   };
 
   // Add auth header if user is authenticated
-  // Use FORCE_USER_ID=3 for debugging - comment out in production
-  const FORCE_USER_ID = 3; // <-- Force user ID for testing, hardcoding as demouser
-  if (FORCE_USER_ID) {
-    console.log(`[API] FORCING USER ID FOR DEBUGGING: ${FORCE_USER_ID}`);
-    (options.headers as Record<string, string>)['x-user-id'] = String(FORCE_USER_ID);
-  } 
-  else if (currentSession?.user) {
+  // Only add the header when we have a valid session
+  if (currentSession?.user) {
     console.log('[API] Current session details:');
     console.log(`- User ID: ${currentSession.user.id} (${typeof currentSession.user.id})`);
     console.log(`- User Email: ${currentSession.user.email}`);
