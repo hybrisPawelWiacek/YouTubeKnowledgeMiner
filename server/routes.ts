@@ -178,18 +178,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Parsed metadata:", JSON.stringify(metadata, null, 2));
 
-      // Get the user ID from the request using our helper function
-      const userId = getUserIdFromRequest(req);
+      // Get user info from the request - this handles both authenticated and anonymous users
+      const userInfo = await getUserInfoFromRequest(req);
       
       console.log("================================================");
-      console.log("🔑 User ID extracted from request:", userId);
+      console.log("🔑 User info extracted from request:", JSON.stringify(userInfo, null, 2));
       console.log("================================================");
       
       // Debug: log all headers for troubleshooting 
       console.log("Request headers for /api/videos:", JSON.stringify(req.headers, null, 2));
-
+      
+      // For anonymous users with sessions, check video limit
+      if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+        // Get the current video count for this anonymous session
+        const anonymousSessionId = userInfo.anonymous_session_id;
+        
+        // Check if adding a new video would exceed the limit
+        // First we need to increment the video count
+        let newVideoCount;
+        try {
+          newVideoCount = await dbStorage.incrementAnonymousSessionVideoCount(anonymousSessionId);
+          console.log(`[Anonymous Limit] Current video count for session ${anonymousSessionId}: ${newVideoCount}`);
+          
+          // Check if this exceeds the limit (3 videos per anonymous session)
+          const ANONYMOUS_VIDEO_LIMIT = 3;
+          
+          if (newVideoCount > ANONYMOUS_VIDEO_LIMIT) {
+            console.log(`[Anonymous Limit] Session ${anonymousSessionId} has reached the video limit`);
+            return res.status(403).json({ 
+              message: "Anonymous users can only save up to 3 videos. Please sign up for a free account to save more videos.",
+              video_count: newVideoCount - 1,  // Subtract 1 because we already incremented
+              limit_reached: true
+            });
+          }
+        } catch (limitError) {
+          console.error(`[Anonymous Limit] Error checking video limit: ${limitError}`);
+          // Continue with saving since this is not a critical error
+        }
+      }
+      
       // Save to database through storage interface
-      const video = await dbStorage.insertVideo({
+      const videoData: any = {
         youtube_id: youtubeId,
         title,
         channel,
@@ -202,13 +231,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         likes: req.body.likeCount,
         description: req.body.description,
         tags: req.body.tags,
-        user_id: userId,
+        user_id: userInfo.user_id,
         notes: metadata.notes,
         category_id: metadata.category_id,
         rating: metadata.rating,
         is_favorite: metadata.is_favorite,
         timestamps: metadata.timestamps
-      });
+      };
+      
+      // For anonymous users with sessions, add the session ID
+      if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+        videoData.anonymous_session_id = userInfo.anonymous_session_id;
+      }
+      
+      const video = await dbStorage.insertVideo(videoData);
 
       // If collections were specified, add the video to those collections
       if (metadata.collection_ids && metadata.collection_ids.length > 0) {
@@ -222,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (video.id && transcript) {
         try {
           log(`Processing transcript embeddings for video ${video.id}`, 'routes');
-          await processTranscriptEmbeddings(video.id, userId, transcript);
+          await processTranscriptEmbeddings(video.id, userInfo.user_id, transcript);
         } catch (embeddingError) {
           log(`Error processing transcript embeddings: ${embeddingError}`, 'routes');
           // Non-critical, continue
@@ -233,7 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (video.id && summary && summary.length > 0) {
         try {
           log(`Processing summary embeddings for video ${video.id}`, 'routes');
-          await processSummaryEmbeddings(video.id, userId, summary);
+          await processSummaryEmbeddings(video.id, userInfo.user_id, summary);
         } catch (embeddingError) {
           log(`Error processing summary embeddings: ${embeddingError}`, 'routes');
           // Non-critical, continue
@@ -244,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (video.id && metadata.notes) {
         try {
           log(`Processing notes embeddings for video ${video.id}`, 'routes');
-          await processNotesEmbeddings(video.id, userId, metadata.notes);
+          await processNotesEmbeddings(video.id, userInfo.user_id, metadata.notes);
         } catch (embeddingError) {
           log(`Error processing notes embeddings: ${embeddingError}`, 'routes');
           // Non-critical, continue
@@ -270,30 +306,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Received GET /api/videos request at", new Date().toISOString());
       console.log("Request query params:", JSON.stringify(req.query, null, 2));
       
-      // Get the user ID from the request using our helper function
-      const userId = getUserIdFromRequest(req);
+      // Get user info from the request - this handles both authenticated and anonymous users
+      const userInfo = await getUserInfoFromRequest(req);
       
       console.log("================================================");
-      console.log("🔑 User ID extracted from request:", userId);
+      console.log("🔑 User info extracted from request:", JSON.stringify(userInfo, null, 2));
       console.log("================================================");
       
       // Debug: log all headers for troubleshooting
       console.log("Request headers for GET /api/videos:", JSON.stringify(req.headers, null, 2));
 
-      // Check if search parameters were provided
-      if (Object.keys(req.query).length > 0) {
-        const searchParams = searchParamsSchema.parse(req.query);
-        const result = await dbStorage.searchVideos(userId, searchParams);
-        return res.status(200).json(result);
+      // For anonymous users with session ID, we need to get videos by anonymous session ID
+      let videos = [];
+      
+      if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+        console.log(`[Anonymous Session] Getting videos for anonymous session: ${userInfo.anonymous_session_id}`);
+        
+        // Get videos associated with this anonymous session ID
+        videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+        
+        // Return the videos with the same structure as other API responses
+        if (Object.keys(req.query).length > 0) {
+          // If there were search parameters, we would filter these videos, but for simplicity
+          // we'll just return all videos for this demo
+          return res.status(200).json({
+            videos,
+            totalCount: videos.length,
+            hasMore: false,
+            nextCursor: undefined
+          });
+        } else {
+          return res.status(200).json({
+            videos,
+            totalCount: videos.length,
+            hasMore: false
+          });
+        }
       } else {
-        // For direct getVideosByUserId, wrap the result in the same format
-        // for consistency with the frontend
-        const videos = await dbStorage.getVideosByUserId(userId);
-        return res.status(200).json({
-          videos,
-          totalCount: videos.length,
-          hasMore: false
-        });
+        // For regular authenticated users, continue with normal flow
+        // Check if search parameters were provided
+        if (Object.keys(req.query).length > 0) {
+          const searchParams = searchParamsSchema.parse(req.query);
+          const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
+          return res.status(200).json(result);
+        } else {
+          // For direct getVideosByUserId, wrap the result in the same format
+          // for consistency with the frontend
+          const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
+          return res.status(200).json({
+            videos,
+            totalCount: videos.length,
+            hasMore: false
+          });
+        }
       }
     } catch (error) {
       if (error instanceof ZodError) {
@@ -1194,6 +1259,116 @@ function extractYoutubeId(url: string): string | null {
 
 // Helper function to extract and validate user ID from request headers
 // Returns a valid user ID or falls back to an anonymous user
+/**
+ * Gets detailed user information from request headers
+ * Handles both authenticated users and anonymous sessions
+ * 
+ * @param req Express request object
+ * @returns User information including ID, session details, and authentication status
+ */
+async function getUserInfoFromRequest(req: Request): Promise<{ 
+  user_id: number; 
+  anonymous_session_id?: string;
+  is_anonymous: boolean;
+}> {
+  console.log("[Auth Helper] Extracting user info from request headers");
+  
+  // 1. Try to get the user ID from the x-user-id header (for authenticated users)
+  let userId = 1;
+  let isAnonymous = true;
+  let anonymousSessionId: string | undefined = undefined;
+  
+  // Check if we have a user ID header
+  if (req.headers['x-user-id']) {
+    try {
+      const headerValue = req.headers['x-user-id'];
+      console.log("[Auth Helper] Found x-user-id header:", headerValue);
+      
+      // Handle both string and array formats
+      const idValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+      
+      // Try to extract a numeric value - be strict about this being a number
+      // First convert to string in case it's something else
+      const stringValue = String(idValue);
+      
+      // Use regex to extract just the numeric portion if mixed with other characters
+      const matches = stringValue.match(/(\d+)/);
+      const cleanValue = matches ? matches[1] : stringValue;
+      
+      const parsedId = parseInt(cleanValue, 10);
+      
+      // Validate the parsed ID - specifically don't treat 1 as authenticated
+      // since that's our anonymous user ID
+      if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
+        userId = parsedId;
+        isAnonymous = false;
+        console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
+      } else if (!isNaN(parsedId) && parsedId === 1) {
+        // This is an anonymous user, so check for a session header
+        console.log("[Auth Helper] Found user ID 1 (anonymous), checking for session");
+      } else {
+        console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
+      }
+    } catch (error) {
+      console.error("[Auth Helper] Error parsing user ID from header:", error)
+    }
+  } else {
+    console.log("[Auth Helper] No x-user-id header found, checking for anonymous session");
+  }
+  
+  // 2. If this is an anonymous user (userId === 1), look for session tracking
+  if (isAnonymous) {
+    // Check for anonymous session header
+    const sessionHeader = req.headers['x-anonymous-session'];
+    if (sessionHeader) {
+      const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+      console.log("[Auth Helper] Found anonymous session header:", sessionId);
+      
+      // Check if this session exists in the database
+      let session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
+      
+      if (!session) {
+        // Create a new session if it doesn't exist
+        console.log("[Auth Helper] Creating new anonymous session in database");
+        session = await dbStorage.createAnonymousSession({
+          session_id: sessionId,
+          user_agent: req.headers['user-agent'] || null,
+          ip_address: req.ip || null
+        });
+      } else {
+        console.log("[Auth Helper] Using existing anonymous session from database");
+      }
+      
+      // Update the session's last active timestamp
+      await dbStorage.updateAnonymousSessionLastActive(sessionId);
+      
+      // Set the anonymous session ID for return
+      anonymousSessionId = sessionId;
+    } else {
+      console.log("[Auth Helper] No anonymous session header found, using default anonymous user");
+    }
+  }
+  
+  console.log("[Auth Helper] Final user info:", { 
+    user_id: userId, 
+    is_anonymous: isAnonymous, 
+    has_session: !!anonymousSessionId 
+  });
+  
+  return {
+    user_id: userId,
+    anonymous_session_id: anonymousSessionId,
+    is_anonymous: isAnonymous
+  };
+}
+
+/**
+ * Simplified version that just returns the user ID
+ * Kept for backward compatibility with existing code
+ * 
+ * @param req Express request object
+ * @returns The user ID (authenticated user ID or 1 for anonymous)
+ */
 function getUserIdFromRequest(req: Request): number {
   console.log("[Auth Helper] Extracting user ID from request headers");
   
