@@ -38,7 +38,8 @@ export default function Library() {
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  
+  const [showedPrompt, setShowedPrompt] = useState(false); // Track if prompt has been shown
+
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
   const [selectedCollection, setSelectedCollection] = useState<number | undefined>(undefined);
@@ -46,7 +47,7 @@ export default function Library() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "title" | "rating">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  
+
   // Hooks
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -54,7 +55,7 @@ export default function Library() {
   const { promptAuth, incrementEngagement } = useAuthPrompt();
   const [, navigate] = useLocation();
   const [libraryInteractions, setLibraryInteractions] = useState(0);
-  
+
   // Pagination state
   const [page, setPage] = useState<number>(1);
   const [cursor, setCursor] = useState<number | undefined>(undefined);
@@ -62,13 +63,13 @@ export default function Library() {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  
+
   // Track scroll position to maintain when returning to library view
   const [scrollPosition, setScrollPosition] = useState<number>(0);
   const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  
+
   // Save scroll position when leaving the page
   useEffect(() => {
     return () => {
@@ -77,16 +78,14 @@ export default function Library() {
       }
     };
   }, []);
-  
+
   // Restore scroll position when returning to the page
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = scrollPosition;
     }
   }, [scrollPosition]);
-  
 
-  
   // Queries
   const videosQuery = useQuery<{
     videos: Video[];
@@ -98,46 +97,46 @@ export default function Library() {
     queryFn: async () => {
       setIsLoadingMore(page > 1 || cursor !== undefined);
       let url = "/api/videos?";
-      
+
       // Add search query if present
       if (searchQuery) {
         url += `query=${encodeURIComponent(searchQuery)}&`;
       }
-      
+
       // Add filters
       if (selectedCategory) {
         url += `category_id=${selectedCategory}&`;
       }
-      
+
       if (selectedCollection) {
         url += `collection_id=${selectedCollection}&`;
       }
-      
+
       if (selectedRating) {
         url += `rating_min=${selectedRating}&`;
       }
-      
+
       if (showFavoritesOnly) {
         url += "is_favorite=true&";
       }
-      
+
       // Add sorting
       url += `sort_by=${sortBy}&sort_order=${sortOrder}`;
-      
+
       // Add pagination
       url += `&page=${page}&limit=20`;
-      
+
       // Add cursor if available (preferred over offset pagination)
       if (cursor) {
         url += `&cursor=${cursor}`;
       }
-      
+
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
   });
-  
+
   // Handle query result data for pagination
   useEffect(() => {
     if (videosQuery.data) {
@@ -154,17 +153,17 @@ export default function Library() {
       setIsLoadingMore(false);
     }
   }, [videosQuery.data, page, cursor]);
-  
+
   // Setup IntersectionObserver for infinite scroll
   useEffect(() => {
     // Only set up observer if we have more items to load
     if (!hasMore || isLoadingMore || videosQuery.isLoading) return;
-    
+
     // Disconnect any existing observer
     if (observerRef.current) {
       observerRef.current.disconnect();
     }
-    
+
     // Create a new observer
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -180,12 +179,12 @@ export default function Library() {
         threshold: 0.1,
       }
     );
-    
+
     // Observe the load more sentinel element
     if (loadMoreRef.current) {
       observerRef.current.observe(loadMoreRef.current);
     }
-    
+
     // Clean up observer on unmount
     return () => {
       if (observerRef.current) {
@@ -193,15 +192,15 @@ export default function Library() {
       }
     };
   }, [hasMore, isLoadingMore, videosQuery.isLoading]);
-  
+
   const categoriesQuery = useQuery<Category[]>({
     queryKey: ["/api/categories"],
   });
-  
+
   const collectionsQuery = useQuery<Collection[]>({
     queryKey: ["/api/collections"],
   });
-  
+
   // Mutations
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
@@ -224,7 +223,7 @@ export default function Library() {
       });
     },
   });
-  
+
   const bulkToggleFavoriteMutation = useMutation({
     mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
       const response = await apiRequest("PATCH", "/api/videos/bulk", { 
@@ -248,7 +247,7 @@ export default function Library() {
       });
     },
   });
-  
+
   const addToCollectionMutation = useMutation({
     mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
       const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
@@ -272,14 +271,14 @@ export default function Library() {
       });
     },
   });
-  
+
   // Effect to close sidebar on mobile when navigating away
   useEffect(() => {
     if (isMobile) {
       setIsFilterSidebarOpen(false);
     }
   }, [isMobile]);
-  
+
   // Track engagement levels and show auth prompt at strategic points
   useEffect(() => {
     if (!user) {
@@ -287,7 +286,7 @@ export default function Library() {
       // Use different thresholds based on prompt history
       const hasSeenPromptBefore = promptAuth('access_library', true);
       const threshold = hasSeenPromptBefore ? 8 : 3;
-      
+
       // Only show prompt if we've reached the threshold
       if (libraryInteractions >= threshold) {
         const shouldPrompt = promptAuth('access_library');
@@ -295,7 +294,7 @@ export default function Library() {
       }
     }
   }, [user, promptAuth, libraryInteractions]);
-  
+
   // Track significant user engagement with library features
   const trackEngagement = useCallback(() => {
     if (!user) {
@@ -305,17 +304,17 @@ export default function Library() {
         return newCount;
       });
       incrementEngagement();
-      
+
       // Use progressive threshold - higher for repeated prompts
       const primaryThreshold = 3;
       const secondaryThreshold = 8;
-      
+
       // If user reaches engagement threshold, consider prompting
       // Different thresholds based on whether they've seen this prompt before
       // Use checkOnly mode to query without triggering the prompt
       const hasSeenPromptBefore = promptAuth('access_library', true);
       const effectiveThreshold = hasSeenPromptBefore ? secondaryThreshold : primaryThreshold;
-      
+
       if (libraryInteractions >= effectiveThreshold && !showAuthPrompt) {
         console.log(`Engagement threshold reached (${effectiveThreshold}), showing auth prompt`);
         const shouldPrompt = promptAuth('access_library');
@@ -323,7 +322,7 @@ export default function Library() {
       }
     }
   }, [user, libraryInteractions, incrementEngagement, promptAuth, showAuthPrompt]);
-  
+
   // Toggle select all videos
   const toggleSelectAll = () => {
     if (selectedVideos.length === allVideos.length) {
@@ -334,44 +333,44 @@ export default function Library() {
       if (!user) trackEngagement();
     }
   };
-  
+
   // Toggle selection of a single video
   const toggleSelectVideo = (videoId: number) => {
     if (selectedVideos.includes(videoId)) {
       setSelectedVideos(selectedVideos.filter(id => id !== videoId));
     } else {
       setSelectedVideos([...selectedVideos, videoId]);
-      
+
       // Track engagement when selecting videos 
       if (!user) trackEngagement();
     }
   };
-  
+
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
-    
+
     if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
       bulkDeleteMutation.mutate(selectedVideos);
     }
   };
-  
+
   const handleToggleFavorite = (isFavorite: boolean) => {
     if (selectedVideos.length === 0) return;
     bulkToggleFavoriteMutation.mutate({ ids: selectedVideos, isFavorite });
-    
+
     // Track engagement when adding/removing from favorites
     if (!user) trackEngagement();
   };
-  
+
   const handleAddToCollection = (collectionId: number) => {
     if (selectedVideos.length === 0) return;
     addToCollectionMutation.mutate({ videoIds: selectedVideos, collectionId });
-    
+
     // Track engagement when adding to collections
     if (!user) trackEngagement();
   };
-  
+
   // Clear all filters
   const handleClearFilters = () => {
     setSearchQuery("");
@@ -382,7 +381,7 @@ export default function Library() {
     setSortBy("date");
     setSortOrder("desc");
   };
-  
+
   // Render loading skeleton
   const renderSkeletons = () => {
     return Array.from({ length: 6 }).map((_, index) => (
@@ -401,11 +400,120 @@ export default function Library() {
       </div>
     ));
   };
-  
+
+  // Helper functions for anonymous user limits
+  const getLocalData = () => {
+    try {
+      const storedData = localStorage.getItem('anonymousLibraryData');
+      return storedData ? JSON.parse(storedData) : { videos: [], collections: [] };
+    } catch (error) {
+      console.error("Error getting local data:", error);
+      return { videos: [], collections: [] };
+    }
+  };
+
+  const hasReachedAnonymousLimit = () => {
+    const localData = getLocalData();
+    return localData.videos.length >= 3;
+  };
+
+  const saveLocalData = (data: { videos: any[]; collections: any[]; }) => {
+    try {
+      localStorage.setItem('anonymousLibraryData', JSON.stringify(data));
+    } catch (error) {
+      console.error("Error saving local data:", error);
+    }
+  };
+
+  useEffect(() => {
+    // For anonymous users
+    if (!user && !showedPrompt) {
+      // Check video count - only show prompt if they've reached the limit
+      if (hasReachedAnonymousLimit()) {
+        setShowAuthPrompt(true);
+        setShowedPrompt(true);
+      } else {
+        setShowedPrompt(true);
+      }
+
+
+      // Load videos from local storage
+      const localData = getLocalData();
+      if (localData.videos.length > 0) {
+        setAllVideos(localData.videos);
+        setTotalCount(localData.videos.length);
+        setHasMore(false);
+        setIsLoadingMore(false);
+      }
+    } else if (user) {
+      // Load videos for logged in users
+      // ... existing videosQuery logic ...
+    }
+
+    // Load categories
+    async function loadCategories() {
+      try {
+        if (!user) {
+          // For anonymous users, just set empty categories or mock data
+          setSelectedCategory([]);
+          return;
+        }
+        const response = await fetch('/api/categories');
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedCategory(data);
+        }
+      } catch (error) {
+        console.error('Failed to load categories:', error);
+      }
+    }
+    loadCategories();
+
+    // Load collections
+    async function loadCollections() {
+      try {
+        if (!user) {
+          // For anonymous users, get collections from local storage
+          const localData = getLocalData();
+          setSelectedCollection(localData.collections || []);
+          return;
+        }
+        const response = await fetch('/api/collections');
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedCollection(data);
+        }
+      } catch (error) {
+        console.error('Failed to load collections:', error);
+      }
+    }
+    loadCollections();
+
+    // Load saved searches
+    async function loadSavedSearches() {
+      try {
+        if (!user) {
+          // Anonymous users don't have saved searches
+          setSearchQuery([]);
+          return;
+        }
+        const response = await fetch('/api/saved-searches');
+        if (response.ok) {
+          const data = await response.json();
+          setSearchQuery(data);
+        }
+      } catch (error) {
+        console.error('Failed to load saved searches:', error);
+      }
+    }
+    loadSavedSearches();
+  }, [user, showedPrompt]);
+
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
-      
+
       <main className="flex-grow" ref={listRef}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Page Header */}
@@ -416,7 +524,7 @@ export default function Library() {
                 Manage and organize your saved YouTube videos
               </p>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -430,7 +538,7 @@ export default function Library() {
                 <Filter className="h-4 w-4" />
                 <span className="hidden sm:inline">Filters</span>
               </Button>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -443,7 +551,7 @@ export default function Library() {
                 <FolderPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">New Collection</span>
               </Button>
-              
+
               <div className="flex border rounded-md overflow-hidden">
                 <Button
                   variant={isGridView ? "default" : "ghost"}
@@ -470,7 +578,7 @@ export default function Library() {
               </div>
             </div>
           </div>
-          
+
           {/* Search and Selection Bar */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-grow">
@@ -489,7 +597,7 @@ export default function Library() {
                 }}
               />
             </div>
-            
+
             {/* Active Filters */}
             <div className="flex items-center gap-2 flex-wrap">
               {(selectedCategory || selectedCollection || selectedRating || showFavoritesOnly || searchQuery || sortBy !== "date" || sortOrder !== "desc") && (
@@ -504,7 +612,7 @@ export default function Library() {
               )}
             </div>
           </div>
-          
+
           {/* Bulk Actions (when videos are selected) */}
           {selectedVideos.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-6 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
@@ -513,7 +621,7 @@ export default function Library() {
                   {selectedVideos.length} {selectedVideos.length === 1 ? "video" : "videos"} selected
                 </span>
               </div>
-              
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -524,7 +632,7 @@ export default function Library() {
                   <Heart className="h-4 w-4" />
                   <span>Add to Favorites</span>
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -534,7 +642,7 @@ export default function Library() {
                   <Heart className="h-4 w-4 fill-current" />
                   <span>Remove from Favorites</span>
                 </Button>
-                
+
                 {/* Add to Collection Dropdown */}
                 <div className="relative group">
                   <Button
@@ -545,7 +653,7 @@ export default function Library() {
                     <FolderPlus className="h-4 w-4" />
                     <span>Add to Collection</span>
                   </Button>
-                  
+
                   {/* Dropdown Menu */}
                   <div className="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-zinc-900 border border-zinc-800 hidden group-hover:block z-10">
                     <div className="py-1">
@@ -558,13 +666,13 @@ export default function Library() {
                           {collection.name}
                         </button>
                       ))}
-                      
+
                       {(!collectionsQuery.data || collectionsQuery.data.length === 0) && (
                         <div className="px-4 py-2 text-sm text-gray-500">
                           No collections available
                         </div>
                       )}
-                      
+
                       <div className="border-t border-zinc-800 mt-1 pt-1">
                         <button
                           className="flex items-center gap-1 w-full text-left px-4 py-2 text-sm text-primary hover:bg-zinc-800"
@@ -577,7 +685,7 @@ export default function Library() {
                     </div>
                   </div>
                 </div>
-                
+
                 <Button
                   variant="destructive"
                   size="sm"
@@ -587,11 +695,11 @@ export default function Library() {
                   <Trash2 className="h-4 w-4" />
                   <span>Delete</span>
                 </Button>
-                
+
                 <BatchExportButton
                   videoIds={selectedVideos}
                 />
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -602,7 +710,7 @@ export default function Library() {
               </div>
             </div>
           )}
-          
+
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Sidebar for filters (desktop) */}
@@ -627,7 +735,7 @@ export default function Library() {
                 onCreateCollection={() => setIsCreateCollectionOpen(true)}
               />
             </div>
-            
+
             {/* Sidebar for filters (mobile) */}
             <FilterSidebar
               categories={categoriesQuery.data || []}
@@ -648,7 +756,7 @@ export default function Library() {
               onClose={() => setIsFilterSidebarOpen(false)}
               onCreateCollection={() => setIsCreateCollectionOpen(true)}
             />
-            
+
             {/* Main Content Area */}
             <div className="flex-grow">
               {/* Loading State */}
@@ -657,7 +765,7 @@ export default function Library() {
                   {renderSkeletons()}
                 </div>
               )}
-              
+
               {/* Empty State */}
               {!videosQuery.isLoading && (!allVideos || allVideos.length === 0) && (
                 <div className="text-center py-10">
@@ -670,7 +778,7 @@ export default function Library() {
                       ? "No videos match your current filters. Try adjusting your search criteria."
                       : "Your video library is currently empty. Process YouTube videos to add them to your library."}
                   </p>
-                  
+
                   {(searchQuery || selectedCategory || selectedCollection || selectedRating || showFavoritesOnly) && (
                     <Button onClick={handleClearFilters}>
                       Clear All Filters
@@ -678,7 +786,7 @@ export default function Library() {
                   )}
                 </div>
               )}
-              
+
               {/* Grid View */}
               {!videosQuery.isLoading && allVideos && allVideos.length > 0 && isGridView && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -693,7 +801,7 @@ export default function Library() {
                   ))}
                 </div>
               )}
-              
+
               {/* List View */}
               {!videosQuery.isLoading && allVideos && allVideos.length > 0 && !isGridView && (
                 <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
@@ -712,7 +820,7 @@ export default function Library() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div>
                     {allVideos.map((video: Video) => (
                       <VideoListItem
@@ -726,7 +834,7 @@ export default function Library() {
                   </div>
                 </div>
               )}
-              
+
               {/* Load More / Pagination */}
               {!videosQuery.isLoading && allVideos && allVideos.length > 0 && hasMore && (
                 <div className="mt-8 mb-4">
@@ -744,7 +852,7 @@ export default function Library() {
                       Load More Videos
                     </Button>
                   </div>
-                  
+
                   {/* Invisible sentinel element for infinite scroll */}
                   <div 
                     ref={loadMoreRef} 
@@ -753,14 +861,14 @@ export default function Library() {
                   />
                 </div>
               )}
-              
+
               {/* Loading spinner during infinite scroll - only show when we're loading more but not at the end */}
               {isLoadingMore && hasMore && !videosQuery.isLoading && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               )}
-              
+
               {/* Summary stats */}
               {allVideos && allVideos.length > 0 && (
                 <div className="text-center text-sm text-gray-500 mt-2 mb-4">
@@ -771,9 +879,9 @@ export default function Library() {
           </div>
         </div>
       </main>
-      
+
       <Footer />
-      
+
       {/* Create Collection Dialog */}
       <CreateCollectionDialog
         isOpen={isCreateCollectionOpen}
@@ -791,7 +899,7 @@ export default function Library() {
           }
         }}
       />
-      
+
       {/* Auth Prompt Dialog */}
       <AuthPromptDialog
         isOpen={showAuthPrompt}

@@ -3,7 +3,7 @@ import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-
 import { useToast } from '@/hooks/use-toast';
 
 // Key for storing temporary data for anonymous users
-const LOCAL_STORAGE_KEY = 'youtube_knowledge_miner_anonymous_data';
+const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
 
 type SupabaseContextType = {
   supabase: SupabaseClient | null;
@@ -18,6 +18,7 @@ type SupabaseContextType = {
   getLocalData: () => any;
   setLocalData: (data: any) => void;
   migrateLocalData: () => Promise<void>;
+  hasReachedAnonymousLimit: () => boolean;
 };
 
 const SupabaseContext = createContext<SupabaseContextType>({
@@ -33,6 +34,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   getLocalData: () => ({}),
   setLocalData: () => {},
   migrateLocalData: async () => {},
+  hasReachedAnonymousLimit: () => false,
 });
 
 export function SupabaseProvider({ children }: { children: ReactNode }) {
@@ -43,41 +45,36 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Fetch Supabase configuration from the backend
     const fetchSupabaseConfig = async () => {
       try {
         const response = await fetch('/api/supabase-config');
         const config = await response.json();
-        
+
         if (config.initialized) {
-          // Use real Supabase credentials from our backend
           const client = createClient(
             config.url || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xyzcompany.supabase.co',
             config.anonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9'
           );
           setSupabase(client);
-          
-          // Get initial session
+
           const { data: { session } } = await client.auth.getSession();
           if (session) {
             setSession(session);
             setUser(session.user);
           }
-          
-          // Set up auth state listener
+
           const { data: { subscription } } = client.auth.onAuthStateChange(
             (event, currentSession) => {
               console.log('Auth state changed:', event);
               setSession(currentSession);
               setUser(currentSession?.user || null);
-              
+
               if (event === 'SIGNED_IN') {
                 toast({
                   title: "Signed in",
                   description: "You've been successfully signed in",
                 });
-                
-                // Attempt to migrate any locally stored data
+
                 setTimeout(() => {
                   migrateLocalData();
                 }, 1000);
@@ -89,11 +86,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               }
             }
           );
-          
+
           setLoading(false);
           console.log('Supabase configuration loaded from backend');
-          
-          // Cleanup subscription when the component unmounts
+
           return () => {
             subscription.unsubscribe();
           };
@@ -106,7 +102,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     };
-    
+
     fetchSupabaseConfig();
   }, []);
 
@@ -119,13 +115,13 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      
+
       if (error) {
         throw error;
       }
@@ -137,8 +133,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
     }
   };
-  
-  // Google OAuth sign in
+
   const signInWithGoogle = async () => {
     if (!supabase) {
       toast({
@@ -148,7 +143,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -160,7 +155,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           }
         }
       });
-      
+
       if (error) {
         throw error;
       }
@@ -182,7 +177,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signUp({
         email,
@@ -194,11 +189,11 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           }
         }
       });
-      
+
       if (error) {
         throw error;
       }
-      
+
       toast({
         title: "Account created",
         description: "Please check your email for verification",
@@ -221,10 +216,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         throw error;
       }
@@ -236,8 +231,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
     }
   };
-  
-  // Password reset function
+
   const resetPassword = async (email: string) => {
     if (!supabase) {
       toast({
@@ -247,16 +241,16 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
-      
+
       if (error) {
         throw error;
       }
-      
+
       toast({
         title: "Password reset email sent",
         description: "Please check your email for a password reset link",
@@ -269,39 +263,38 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
     }
   };
-  
+
   // Get anonymous user data from local storage
   const getLocalData = () => {
     try {
       const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-      return data ? JSON.parse(data) : {};
+      return data ? JSON.parse(data) : { videos: [], collections: [], videoCount: 0 };
     } catch (error) {
       console.error('Error retrieving local data:', error);
-      return {};
+      return { videos: [], collections: [], videoCount: 0 };
     }
   };
-  
+
   // Save anonymous user data to local storage
   const setLocalData = (data: any) => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        ...data,
+        videoCount: data.videos.length
+      }));
     } catch (error) {
       console.error('Error saving local data:', error);
     }
   };
-  
-  // Migrate local data to user account when signing up or logging in
+
   const migrateLocalData = async () => {
     if (!user || !supabase) return;
-    
+
     try {
       const localData = getLocalData();
-      
+
       if (Object.keys(localData).length > 0) {
-        // Implementation will depend on specific data structure
-        // Example: migrate videos
         if (localData.videos && localData.videos.length > 0) {
-          // API call to import videos to user account
           const response = await fetch('/api/import-anonymous-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -310,11 +303,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               userId: user.id
             })
           });
-          
+
           if (response.ok) {
-            // Clear local storage after successful migration
             localStorage.removeItem(LOCAL_STORAGE_KEY);
-            
+
             toast({
               title: "Data Migration Complete",
               description: "Your previously saved data has been added to your account",
@@ -327,9 +319,13 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error migrating data:', error);
-      // Don't show error toast to avoid disrupting user experience
-      // Just log the error for debugging
     }
+  };
+
+  // Function to check if anonymous user has reached the video limit
+  const hasReachedAnonymousLimit = () => {
+    const data = getLocalData();
+    return data.videoCount >= 3; // Allow up to 3 videos
   };
 
   return (
@@ -347,6 +343,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         getLocalData,
         setLocalData,
         migrateLocalData,
+        hasReachedAnonymousLimit,
       }}
     >
       {children}

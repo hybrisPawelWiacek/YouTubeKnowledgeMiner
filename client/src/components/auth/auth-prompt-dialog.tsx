@@ -22,7 +22,6 @@ interface AuthPromptDialogProps {
   onContinueAsGuest?: () => void;
 }
 
-// Enhanced messages for different prompt types with specific benefits
 const promptMessages = {
   save_video: {
     title: "Save Your Knowledge",
@@ -67,37 +66,46 @@ export function AuthPromptDialog({
 }: AuthPromptDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
-  const { signInWithGoogle } = useSupabase();
+  const { signInWithGoogle, getAnonymousVideoCount } = useSupabase();
+  const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
 
-  // Handle Google sign in
+  useEffect(() => {
+    const fetchCount = async () => {
+      const count = await getAnonymousVideoCount();
+      setAnonymousVideoCount(count);
+    };
+    fetchCount();
+  }, []);
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
       await signInWithGoogle();
-      // The redirect will be handled by the OAuth provider
     } catch (error) {
       console.error('Error signing in with Google:', error);
       setIsLoading(false);
     }
   };
 
-  // Handle navigation to the auth page
   const handleGoToAuth = () => {
     setLocation('/auth');
     onClose();
   };
 
-  // Handle "remind me later" (continue as guest)
   const handleRemindLater = () => {
-    // Set a flag in localStorage to suppress prompts for some time
-    const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; 
     localStorage.setItem('suppress_auth_prompts_until', suppressUntil.toString());
-    
     if (onContinueAsGuest) {
       onContinueAsGuest();
     }
     onClose();
   };
+
+  const reachedLimit = anonymousVideoCount >= 3;
+  let description = promptMessages[promptType].description;
+  if (reachedLimit) {
+    description = `You've reached the limit of 3 videos as a guest. ${promptMessages[promptType].description}`;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -108,11 +116,10 @@ export function AuthPromptDialog({
             <DialogTitle>{promptMessages[promptType].title}</DialogTitle>
           </div>
           <DialogDescription>
-            {promptMessages[promptType].description}
+            {description}
           </DialogDescription>
         </DialogHeader>
-        
-        {/* Benefits list */}
+
         <div className="bg-muted/50 p-4 rounded-lg mb-4">
           <p className="text-sm font-medium mb-2">Benefits:</p>
           <ul className="space-y-2">
@@ -124,7 +131,7 @@ export function AuthPromptDialog({
             ))}
           </ul>
         </div>
-        
+
         <div className="flex flex-col gap-4 py-2">
           <Button
             variant="outline"
@@ -139,16 +146,14 @@ export function AuthPromptDialog({
             )}
             <span>{isLoading ? "Signing in..." : "Continue with Google"}</span>
           </Button>
-          
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={handleGoToAuth}
-          >
-            {promptMessages[promptType].buttonText}
-          </Button>
+
+          {!reachedLimit && (
+            <Button variant="default" className="w-full" onClick={handleGoToAuth}>
+              {promptMessages[promptType].buttonText}
+            </Button>
+          )}
         </div>
-        
+
         <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between">
           {onContinueAsGuest && (
             <Button

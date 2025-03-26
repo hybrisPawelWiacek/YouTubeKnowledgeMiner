@@ -10,6 +10,7 @@ import { YoutubeVideo } from "@/types";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
+import { useRouter } from 'next/router';
 
 interface VideoInputProps {
   onVideoProcessed: (video: YoutubeVideo) => void;
@@ -21,6 +22,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   const { user } = useSupabase();
   const { showAuthPrompt, promptType, promptAuth, closePrompt } = useAuthPrompt();
   const [pendingVideo, setPendingVideo] = useState<YoutubeVideo | null>(null);
+  const router = useRouter();
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
@@ -28,18 +30,15 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      // Store the video data
       setPendingVideo(data);
-      
-      // Show auth prompt for non-authenticated users
       if (!user) {
-        const prompted = promptAuth('analyze_again');
-        if (!prompted) {
-          // If the prompt wasn't shown (e.g., suppressed), continue with normal flow
+        const anonymousVideos = getLocalData().videos || [];
+        if (anonymousVideos.length >= 3) {
+          promptAuth('analyze_again');
+        } else {
           handleVideoProcessed(data);
         }
       } else {
-        // User is authenticated, proceed normally
         handleVideoProcessed(data);
       }
     },
@@ -52,7 +51,6 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     },
   });
 
-  // Function to handle the video processing after auth decision
   const handleVideoProcessed = (video: YoutubeVideo) => {
     onVideoProcessed(video);
     toast({
@@ -61,7 +59,6 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     });
   };
 
-  // Function when user chooses to continue as guest
   const handleContinueAsGuest = () => {
     if (pendingVideo) {
       handleVideoProcessed(pendingVideo);
@@ -70,7 +67,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!url) {
       toast({
         title: "Empty URL",
@@ -79,7 +76,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       });
       return;
     }
-    
+
     if (!isValidYoutubeUrl(url)) {
       toast({
         title: "Invalid URL",
@@ -88,9 +85,24 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       });
       return;
     }
-    
+
     analyzeVideo(url);
   };
+
+  const getLocalData = () => {
+    const data = localStorage.getItem('anonymousVideos');
+    return data ? JSON.parse(data) : { videos: [] };
+  };
+
+  const setLocalData = (data: { videos: YoutubeVideo[] }) => {
+    localStorage.setItem('anonymousVideos', JSON.stringify(data));
+  };
+
+  const hasReachedAnonymousLimit = () => {
+    const anonymousVideos = getLocalData().videos || [];
+    return anonymousVideos.length >= 3;
+  };
+
 
   return (
     <>
@@ -114,8 +126,8 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={isPending}
                     className="w-full md:w-auto"
                   >
@@ -144,8 +156,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           </CardContent>
         </Card>
       </section>
-      
-      {/* Authentication prompt dialog */}
+
       <AuthPromptDialog
         isOpen={showAuthPrompt}
         onClose={closePrompt}
