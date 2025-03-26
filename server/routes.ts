@@ -37,6 +37,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         log("Global categories initialized successfully", "routes");
       } catch (categoryError) {
         log(`Error initializing global categories: ${categoryError}`, "routes");
+        // Non-critical error, continue with application startup
       }
     } else {
       log("Failed to initialize Supabase vector functions", "routes");

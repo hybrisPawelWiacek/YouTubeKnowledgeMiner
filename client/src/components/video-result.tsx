@@ -4,7 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StarRating } from "@/components/ui/star-rating";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -339,15 +339,36 @@ export function VideoResult({ video }: VideoResultProps) {
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700">
-                          {categories.map((category: Category) => (
-                            <SelectItem 
-                              key={category.id} 
-                              value={category.id.toString()}
-                              className={category.is_global ? "font-medium" : ""}
-                            >
-                              {category.name} {category.is_global && "(Global)"}
-                            </SelectItem>
-                          ))}
+                          {/* Global categories first */}
+                          {categories
+                            .filter((category: Category) => category.is_global)
+                            .map((category: Category) => (
+                              <SelectItem 
+                                key={category.id} 
+                                value={category.id.toString()}
+                                className="font-medium text-blue-400"
+                              >
+                                {category.name} (Global)
+                              </SelectItem>
+                            ))}
+                            
+                          {/* Separator if we have both global and user categories */}
+                          {categories.some((category: Category) => category.is_global) && 
+                           categories.some((category: Category) => !category.is_global) && (
+                            <SelectSeparator />
+                          )}
+                            
+                          {/* User categories */}
+                          {categories
+                            .filter((category: Category) => !category.is_global)
+                            .map((category: Category) => (
+                              <SelectItem 
+                                key={category.id} 
+                                value={category.id.toString()}
+                              >
+                                {category.name}
+                              </SelectItem>
+                            ))}
                           {/* Add option to create new category */}
                           <SelectItem value="create-new" className="border-t border-zinc-700 mt-1 pt-1">
                             <PlusCircle className="mr-2 h-4 w-4 inline-block" /> Create new category...
