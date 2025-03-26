@@ -4,7 +4,7 @@ import { categories } from "../shared/schema";
 import { count, eq } from "drizzle-orm";
 import { log } from "../server/vite";
 
-async function addGlobalCategories() {
+export async function addGlobalCategories() {
   const globalCategories = [
     { name: "Educational", is_global: true },
     { name: "AI Dev", is_global: true },
@@ -14,14 +14,20 @@ async function addGlobalCategories() {
   log("Checking for existing global categories...", "migration");
   
   try {
-    // Check if we already have any global categories
-    const existingGlobals = await db.select({ count: count() })
+    // Check which global categories already exist
+    const existingGlobals = await db.select()
       .from(categories)
       .where(eq(categories.is_global, true));
     
-    if (existingGlobals[0].count > 0) {
-      log(`Found ${existingGlobals[0].count} existing global categories. Skipping migration.`, "migration");
-      return;
+    // If we already have all of them, we can skip
+    if (existingGlobals.length >= globalCategories.length) {
+      const existingNames = new Set(existingGlobals.map(category => category.name));
+      const allExist = globalCategories.every(category => existingNames.has(category.name));
+      
+      if (allExist) {
+        log(`All global categories already exist. Skipping migration.`, "migration");
+        return;
+      }
     }
     
     // Get the system user ID (typically 1)
@@ -30,26 +36,34 @@ async function addGlobalCategories() {
     
     log("Adding global categories...", "migration");
     
+    // Create a Set of existing category names for faster lookup
+    const existingNames = new Set();
+    const allCategories = await db.select().from(categories);
+    allCategories.forEach(category => existingNames.add(category.name));
+    
     // Add each global category
     for (const category of globalCategories) {
-      // Check if this category name already exists
-      const existingCategory = await db.select()
-        .from(categories)
-        .where(eq(categories.name, category.name));
-      
-      if (existingCategory.length === 0) {
-        await db.insert(categories).values({
-          name: category.name,
-          user_id: systemUserId,
-          is_global: true
-        });
-        log(`Added global category: ${category.name}`, "migration");
-      } else {
-        // Update existing category to be global
-        await db.update(categories)
-          .set({ is_global: true })
-          .where(eq(categories.name, category.name));
-        log(`Updated existing category to global: ${category.name}`, "migration");
+      try {
+        if (existingNames.has(category.name)) {
+          // Update existing category to be global
+          await db.update(categories)
+            .set({ is_global: true })
+            .where(eq(categories.name, category.name));
+          log(`Updated existing category to global: ${category.name}`, "migration");
+        } else {
+          // Add new global category
+          await db.insert(categories).values({
+            name: category.name,
+            user_id: systemUserId,
+            is_global: true
+          });
+          log(`Added global category: ${category.name}`, "migration");
+          // Add to our tracked set of names
+          existingNames.add(category.name);
+        }
+      } catch (err) {
+        // Handle race conditions or other errors
+        log(`Error processing category ${category.name}: ${err}`, "migration");
       }
     }
     
