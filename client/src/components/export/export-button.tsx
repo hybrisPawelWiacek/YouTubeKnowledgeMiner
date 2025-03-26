@@ -54,19 +54,17 @@ export function ExportButton({
   });
   
   // Set the format based on user preference when data is available
-  if (formatPreferenceQuery.data && isExportDialogOpen) {
-    setSelectedFormat(formatPreferenceQuery.data.format);
-    setIsExportDialogOpen(false); // Close the dialog to prevent infinite loop
-  }
+  useEffect(() => {
+    if (formatPreferenceQuery.data && formatPreferenceQuery.data.format && isExportDialogOpen) {
+      setSelectedFormat(formatPreferenceQuery.data.format as ExportFormat);
+      setIsExportDialogOpen(false); // Close the dialog to prevent infinite loop
+    }
+  }, [formatPreferenceQuery.data, isExportDialogOpen]);
   
   // Save format preference mutation
   const saveFormatPreferenceMutation = useMutation({
     mutationFn: async (format: ExportFormat) => {
-      return apiRequest({
-        url: '/api/export/preferences',
-        method: 'POST',
-        data: { format }
-      });
+      return apiRequest("POST", '/api/export/preferences', { format });
     }
   });
   
@@ -78,15 +76,14 @@ export function ExportButton({
       video_ids: number[];
       qa_conversation_id?: number;
     }) => {
-      return apiRequest({
-        url: '/api/export',
-        method: 'POST',
-        data
-      });
+      return apiRequest("POST", '/api/export', data);
     },
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       // Save format preference if it has changed
       saveFormatPreferenceMutation.mutate(selectedFormat);
+      
+      // Parse the response to get the content, mimeType, and filename
+      const data = response.json();
       
       // Create a download link for the exported content
       const blob = new Blob([data.content], { type: data.mimeType });

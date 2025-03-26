@@ -7,6 +7,7 @@ import { VideoCard } from "@/components/library/video-card";
 import { VideoListItem } from "@/components/library/video-list-item";
 import { FilterSidebar } from "@/components/library/filter-sidebar";
 import { CreateCollectionDialog } from "@/components/library/create-collection-dialog";
+import { BatchExportButton } from "@/components/export/batch-export-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -484,6 +485,10 @@ export default function Library() {
                   <Trash2 className="h-4 w-4" />
                   <span>Delete</span>
                 </Button>
+                
+                <BatchExportButton
+                  videoIds={selectedVideos}
+                />
                 
                 <Button
                   variant="outline"
