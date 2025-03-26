@@ -40,10 +40,8 @@ export async function processTranscriptEmbeddings(
   
   // Extract timestamp data from transcript before removing HTML
   const timestampData: { [index: number]: { timestamp: number, duration: number } } = {};
-  const tempDiv = document.createElement ? document.createElement('div') : { innerHTML: '' };
-  tempDiv.innerHTML = transcript;
   
-  // In Node, we need a different approach - using regex to extract data attributes
+  // Node.js environment - use regex to extract data attributes from HTML
   const timestampRegex = /<p class="mb-3 transcript-line"[^>]*?data-timestamp="([^"]*)"[^>]*?data-duration="([^"]*)"[^>]*?data-index="([^"]*)"[^>]*?>/g;
   let match;
   while ((match = timestampRegex.exec(transcript)) !== null) {
