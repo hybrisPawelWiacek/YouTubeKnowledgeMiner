@@ -45,13 +45,23 @@ export function VideoResult({ video }: VideoResultProps) {
 
   const { mutate: saveVideo, isPending } = useMutation({
     mutationFn: async (metadata: VideoMetadata) => {
-      // Add debug logging to track user authentication status
-      console.log('Saving video with user context:', {
+      // Detailed debugging information for authentication context
+      console.log('🎥 SAVING VIDEO - USER CONTEXT:', {
         userIsAuthenticated: !!user,
         userId: user?.id,
         userEmail: user?.email,
         userType: typeof user?.id
       });
+      
+      // Log current session from useSupabase
+      if (user) {
+        console.log('🔐 CURRENT USER SESSION DETAILS:');
+        console.log('- ID:', user.id, '(type:', typeof user.id, ')');
+        console.log('- Email:', user.email);
+        console.log('- Login method:', user.app_metadata?.provider || 'unknown');
+      } else {
+        console.log('⚠️ NO USER SESSION FOUND - User not authenticated');
+      }
       
       const videoData = {
         youtubeId: video.youtubeId,
@@ -64,15 +74,19 @@ export function VideoResult({ video }: VideoResultProps) {
         ...metadata,
       };
 
-      console.log('Video data being sent to API:', videoData);
+      console.log('📤 VIDEO DATA BEING SENT TO API:', videoData);
+      console.log('🧪 USING EXPERIMENTAL FORCED USER ID IN SERVER API ENDPOINT');
       
       try {
+        // Making the API request
+        console.log('📡 Making POST request to /api/videos');
         const response = await apiRequest("POST", "/api/videos", videoData);
         const result = await response.json();
-        console.log('Save video response:', result);
+        console.log('✅ SAVE VIDEO RESPONSE:', result);
+        console.log('🔍 Saved with user_id:', result.user_id);
         return result;
       } catch (err) {
-        console.error('Error saving video:', err);
+        console.error('❌ ERROR SAVING VIDEO:', err);
         throw err;
       }
     },

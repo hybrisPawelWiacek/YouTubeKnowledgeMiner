@@ -160,7 +160,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save video to library
   app.post("/api/videos", async (req, res) => {
     try {
-      console.log("------------------ New Video Save Request ------------------");
+      console.log("================================================");
+      console.log("🔴 NEW VIDEO SAVE REQUEST STARTING 🔴");
+      console.log("================================================");
       console.log("Received POST /api/videos request at", new Date().toISOString());
       console.log("Request body:", JSON.stringify(req.body, null, 2));
       
@@ -176,14 +178,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Parsed metadata:", JSON.stringify(metadata, null, 2));
 
-      // Explicitly use ID of demouser (ID 3) for testing
-      // IMPORTANT: This is only for debugging - would be removed in production
-      // let userId = 3; // Force demouser ID for testing
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
       
-      // Get user_id from headers or default to 1 
-      let userId = 1; // Default to testuser
+      console.log("⚠️ IMPORTANT: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
+      console.log("================================================");
       
-      // Debug: log all headers for troubleshooting
+      // Debug: log all headers for troubleshooting 
       console.log("Request headers for /api/videos:", JSON.stringify(req.headers, null, 2));
       
       if (req.headers['x-user-id']) {
