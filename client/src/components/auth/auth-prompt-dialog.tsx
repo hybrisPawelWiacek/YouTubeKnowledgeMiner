@@ -66,7 +66,7 @@ export function AuthPromptDialog({
 }: AuthPromptDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
-  const { signInWithGoogle, getLocalData, hasReachedAnonymousLimit } = useSupabase();
+  const { signInWithGoogle, hasReachedAnonymousLimit } = useSupabase();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
   const [maxAllowedVideos] = useState(3);
 
@@ -97,15 +97,14 @@ export function AuthPromptDialog({
           }
         } catch (error) {
           console.error('Error fetching anonymous video count:', error);
-          // Fall back to local data if server request fails
-          const localData = getLocalData();
-          setAnonymousVideoCount(localData.videos?.length || 0);
+          // Set to zero if we couldn't get the count from the server
+          setAnonymousVideoCount(0);
         }
       };
       
       fetchVideoCount();
     }
-  }, [isOpen, getLocalData]);
+  }, [isOpen]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
