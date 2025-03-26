@@ -1,4 +1,4 @@
-import { eq, and, or, like, ilike, sql, desc, asc, inArray } from 'drizzle-orm';
+import { eq, and, or, like, ilike, sql, desc, asc, inArray, lt, gt } from 'drizzle-orm';
 import { 
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,

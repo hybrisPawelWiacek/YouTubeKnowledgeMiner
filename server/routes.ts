@@ -245,11 +245,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if search parameters were provided
       if (Object.keys(req.query).length > 0) {
         const searchParams = searchParamsSchema.parse(req.query);
-        const videos = await dbStorage.searchVideos(userId, searchParams);
-        return res.status(200).json(videos);
+        const result = await dbStorage.searchVideos(userId, searchParams);
+        return res.status(200).json(result);
       } else {
+        // For direct getVideosByUserId, wrap the result in the same format
+        // for consistency with the frontend
         const videos = await dbStorage.getVideosByUserId(userId);
-        return res.status(200).json(videos);
+        return res.status(200).json({
+          videos,
+          totalCount: videos.length,
+          hasMore: false
+        });
       }
     } catch (error) {
       if (error instanceof ZodError) {

@@ -21,7 +21,7 @@ export interface IStorage {
   // Video methods
   getVideo(id: number): Promise<Video | undefined>;
   getVideosByUserId(userId: number): Promise<Video[]>;
-  searchVideos(userId: number, params: SearchParams): Promise<Video[]>;
+  searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }>;
   insertVideo(video: InsertVideo): Promise<Video>;
   updateVideo(id: number, data: Partial<Video>): Promise<Video | undefined>;
   deleteVideo(id: number): Promise<boolean>;
@@ -143,7 +143,7 @@ export class MemStorage implements IStorage {
     );
   }
   
-  async searchVideos(userId: number, params: SearchParams): Promise<Video[]> {
+  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
     let results = await this.getVideosByUserId(userId);
     
     // Filter by query (search in title, description, transcript)
@@ -236,7 +236,39 @@ export class MemStorage implements IStorage {
       }
     }
     
-    return results;
+    // Get the total count before pagination
+    const totalCount = results.length;
+    
+    // Apply cursor-based pagination if specified
+    if (params.cursor !== undefined) {
+      const cursorIndex = results.findIndex(video => video.id === params.cursor);
+      if (cursorIndex !== -1) {
+        results = results.slice(cursorIndex + 1);
+      }
+    }
+    
+    // Apply offset-based pagination as fallback
+    const limit = params.limit || 20;
+    const page = params.page || 1;
+    const startIndex = (page - 1) * limit;
+    
+    // Check if there are more results
+    const hasMore = startIndex + limit < results.length;
+    
+    // Get the paginated results
+    const paginatedResults = results.slice(startIndex, startIndex + limit);
+    
+    // Get the ID of the last item for cursor pagination
+    const nextCursor = paginatedResults.length > 0 
+      ? paginatedResults[paginatedResults.length - 1].id 
+      : undefined;
+    
+    return {
+      videos: paginatedResults,
+      totalCount,
+      hasMore,
+      nextCursor
+    };
   }
 
   async insertVideo(insertVideo: InsertVideo): Promise<Video> {

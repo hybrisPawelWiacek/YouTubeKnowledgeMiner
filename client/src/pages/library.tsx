@@ -55,10 +55,44 @@ export default function Library() {
   const [, navigate] = useLocation();
   const [libraryInteractions, setLibraryInteractions] = useState(0);
   
+  // Pagination state
+  const [page, setPage] = useState<number>(1);
+  const [cursor, setCursor] = useState<number | undefined>(undefined);
+  const [allVideos, setAllVideos] = useState<Video[]>([]);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  
+  // Track scroll position to maintain when returning to library view
+  const [scrollPosition, setScrollPosition] = useState<number>(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  
+  // Save scroll position when leaving the page
+  useEffect(() => {
+    return () => {
+      if (listRef.current) {
+        setScrollPosition(listRef.current.scrollTop);
+      }
+    };
+  }, []);
+  
+  // Restore scroll position when returning to the page
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = scrollPosition;
+    }
+  }, [scrollPosition]);
+  
   // Queries
-  const videosQuery = useQuery<Video[]>({
-    queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery],
+  const videosQuery = useQuery<{
+    videos: Video[];
+    totalCount: number;
+    hasMore: boolean;
+    nextCursor?: number;
+  }>({
+    queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery, page, cursor],
     queryFn: async () => {
+      setIsLoadingMore(page > 1 || cursor !== undefined);
       let url = "/api/videos?";
       
       // Add search query if present
@@ -86,10 +120,31 @@ export default function Library() {
       // Add sorting
       url += `sort_by=${sortBy}&sort_order=${sortOrder}`;
       
+      // Add pagination
+      url += `&page=${page}&limit=20`;
+      
+      // Add cursor if available (preferred over offset pagination)
+      if (cursor) {
+        url += `&cursor=${cursor}`;
+      }
+      
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     },
+    onSuccess: (data) => {
+      // When filters change, we're on page 1 and replace videos
+      if (page === 1 && cursor === undefined) {
+        setAllVideos(data.videos);
+      } else {
+        // For pagination, append new videos to existing ones
+        setAllVideos(prev => [...prev, ...data.videos]);
+      }
+      setHasMore(data.hasMore);
+      setTotalCount(data.totalCount);
+      setCursor(data.nextCursor);
+      setIsLoadingMore(false);
+    }
   });
   
   const categoriesQuery = useQuery<Category[]>({
@@ -224,10 +279,10 @@ export default function Library() {
   
   // Toggle select all videos
   const toggleSelectAll = () => {
-    if (selectedVideos.length === videosQuery.data?.length) {
+    if (selectedVideos.length === allVideos.length) {
       setSelectedVideos([]);
-    } else if (videosQuery.data) {
-      setSelectedVideos(videosQuery.data.map((video: Video) => video.id));
+    } else {
+      setSelectedVideos(allVideos.map((video: Video) => video.id));
       // Track engagement when user selects all videos
       if (!user) trackEngagement();
     }
