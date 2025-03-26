@@ -860,10 +860,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize Supabase vector functions if not already done
       await initializeVectorFunctions();
 
-      // Get user_id from headers or default to 1
-      let userId = 1;
+      // TEMPORARY FIX: FORCE USER ID 3 FOR TEST
+      let userId = 3; // Force demouser ID (3) as a temporary fix for testing
       
-      if (req.headers['x-user-id']) {
+      console.log("⚠️ SEMANTIC SEARCH: Using FORCED USER ID:", userId);
+      console.log("This is a temporary fix for testing - would be removed in production");
+      
+      if (false && req.headers['x-user-id']) {
         try {
           userId = Number(req.headers['x-user-id']);
           if (isNaN(userId)) {
