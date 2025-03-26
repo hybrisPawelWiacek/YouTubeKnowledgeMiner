@@ -1,12 +1,13 @@
 import { useSupabase } from '@/hooks/use-supabase';
+import { getOrCreateAnonymousSessionId, hasAnonymousSession } from '@/lib/anonymous-session';
 
 export function useLibraryQueryHeaders() {
   const { user } = useSupabase();
   
-  // If a userId is available, add it to the headers
+  // Initialize headers
   const headers: HeadersInit = {};
   
-  // Add extensive debugging to diagnose user ID issues
+  // If a userId is available, add it to the headers
   const userId = user?.id;
   console.log('use-library-query trying to set x-user-id header with user ID:', userId, 'type:', typeof userId);
   
@@ -33,7 +34,30 @@ export function useLibraryQueryHeaders() {
     headers['x-user-id'] = headerValue;
     console.log('Setting x-user-id header in library query to:', headerValue);
   } else {
-    console.warn('No user ID available for library query');
+    console.log('No authenticated user found, checking for anonymous session');
+    
+    // If no authenticated user, handle anonymous session
+    if (hasAnonymousSession()) {
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      console.log('Using anonymous session ID for library query:', anonymousSessionId);
+      
+      // Add anonymous session header
+      headers['x-anonymous-session'] = anonymousSessionId;
+      
+      // Also add default user ID for backward compatibility
+      headers['x-user-id'] = '1';
+    } else {
+      console.log('Creating new anonymous session for library query');
+      
+      // Create new anonymous session
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      
+      // Add anonymous session header
+      headers['x-anonymous-session'] = anonymousSessionId;
+      
+      // Also add default user ID for backward compatibility
+      headers['x-user-id'] = '1';
+    }
   }
   
   return headers;
