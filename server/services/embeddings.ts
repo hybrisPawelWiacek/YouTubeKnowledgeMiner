@@ -241,7 +241,7 @@ export async function deleteVideoEmbeddings(videoId: number): Promise<number> {
  * @returns An array of search results with similarity scores
  */
 export async function performSemanticSearch(
-  userId: number,
+  userId: number | null,
   query: string,
   filters: {
     contentTypes?: Array<typeof contentTypeEnum.enumValues[number]>;

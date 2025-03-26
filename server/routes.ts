@@ -347,17 +347,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if search parameters were provided
         if (Object.keys(req.query).length > 0) {
           const searchParams = searchParamsSchema.parse(req.query);
-          const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
+          // If user_id is null (anonymous user), use their session ID for lookup
+          const userId = userInfo.user_id ?? null;
+          const result = await dbStorage.searchVideos(userId, searchParams);
           return res.status(200).json(result);
         } else {
           // For direct getVideosByUserId, wrap the result in the same format
           // for consistency with the frontend
-          const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-          return res.status(200).json({
-            videos,
-            totalCount: videos.length,
-            hasMore: false
-          });
+          // If user_id is null (anonymous user with session), we need special handling
+          if (userInfo.user_id === null && userInfo.anonymous_session_id) {
+            // Get videos by anonymous session instead
+            const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+            return res.status(200).json({
+              videos,
+              totalCount: videos.length,
+              hasMore: false
+            });
+          } else if (userInfo.user_id !== null) {
+            // Normal user case
+            const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
+            return res.status(200).json({
+              videos,
+              totalCount: videos.length,
+              hasMore: false
+            });
+          } else {
+            // No user ID and no anonymous session
+            return res.status(200).json({
+              videos: [],
+              totalCount: 0,
+              hasMore: false
+            });
+          }
         }
       }
     } catch (error) {
@@ -1120,12 +1141,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // First check if this video already exists for the user
             // Since searchVideos doesn't have a direct filter for youtube_id, we'll search by title
             // and then filter the results in memory
+            // Convert the string userId to a number for this query
             const existingVideos = await dbStorage.searchVideos(Number(userId), {
-              query: video.title || ''
+              query: video.title || '',
+              page: 1,
+              limit: 10
             });
 
             // Check if any of the found videos match our youtube_id
-            const existingVideo = existingVideos.filter(v => v.youtube_id === video.youtube_id);
+            const existingVideo = existingVideos.videos.filter((v: any) => v.youtube_id === video.youtube_id);
 
             if (existingVideo.length === 0) {
               // Add video to user's library
@@ -1397,7 +1421,7 @@ function extractYoutubeId(url: string): string | null {
  * @returns User information including ID, session details, and authentication status
  */
 async function getUserInfoFromRequest(req: Request): Promise<{ 
-  user_id: number; 
+  user_id: number | null; 
   anonymous_session_id?: string;
   is_anonymous: boolean;
 }> {
