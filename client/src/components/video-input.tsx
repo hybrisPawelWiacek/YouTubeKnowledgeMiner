@@ -28,8 +28,35 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   // Keep anonymous count updated
   useEffect(() => {
     if (!user) {
-      const localData = getLocalData();
-      setAnonymousCount(localData.videos?.length || 0);
+      async function fetchAnonymousVideoCount() {
+        try {
+          // Import here to avoid circular dependencies
+          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+          const sessionId = getOrCreateAnonymousSessionId();
+          
+          // Get count from API
+          const response = await apiRequest('GET', '/api/anonymous/videos/count', null, {
+            headers: {
+              'x-anonymous-session': sessionId
+            }
+          });
+          
+          if (response && typeof response.count === 'number') {
+            setAnonymousCount(response.count);
+          } else {
+            // Fallback to local storage if API fails
+            const localData = getLocalData();
+            setAnonymousCount(localData.videos?.length || 0);
+          }
+        } catch (error) {
+          console.error('Error fetching anonymous video count:', error);
+          // Fallback to local storage
+          const localData = getLocalData();
+          setAnonymousCount(localData.videos?.length || 0);
+        }
+      }
+      
+      fetchAnonymousVideoCount();
     }
   }, [user, getLocalData]);
 
@@ -38,30 +65,41 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       const response = await apiRequest("POST", "/api/videos/analyze", { url: videoUrl });
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPendingVideo(data);
       
       if (!user) {
         // Check if we've reached the limit
-        if (hasReachedAnonymousLimit()) {
+        const limitReached = await hasReachedAnonymousLimit();
+        if (limitReached) {
           promptAuth('analyze_again');
         } else {
-          // Add video to local storage for anonymous users
-          const localData = getLocalData();
-          const updatedVideos = [...(localData.videos || []), data];
-          setLocalData({ ...localData, videos: updatedVideos });
+          // This will be processed by the server on the backend
+          // We only need to update the local UI state
           handleVideoProcessed(data);
           
-          // Update displayed count
-          setAnonymousCount(updatedVideos.length);
-          
-          // If this was the 3rd video, show an informational toast
-          if (updatedVideos.length === 3) {
-            toast({
-              title: "Video limit reached",
-              description: "You've reached the limit of 3 videos. Sign in to analyze more videos.",
-              variant: "default",
+          // Refresh count to get latest from server
+          try {
+            const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+            const sessionId = getOrCreateAnonymousSessionId();
+            const response = await apiRequest('GET', '/api/anonymous/videos/count', null, {
+              headers: { 'x-anonymous-session': sessionId }
             });
+            
+            if (response && typeof response.count === 'number') {
+              setAnonymousCount(response.count);
+              
+              // Show toast if we've reached the limit
+              if (response.count >= 3) {
+                toast({
+                  title: "Video limit reached",
+                  description: "You've reached the limit of 3 videos. Sign in to analyze more videos.",
+                  variant: "default",
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Error updating video count:', error);
           }
         }
       } else {
@@ -91,7 +129,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!url) {
@@ -113,10 +151,13 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     }
 
     // Check if anonymous user has reached the limit before even making the API call
-    if (!user && hasReachedAnonymousLimit()) {
-      setPendingVideo(null);
-      promptAuth('analyze_again');
-      return;
+    if (!user) {
+      const limitReached = await hasReachedAnonymousLimit();
+      if (limitReached) {
+        setPendingVideo(null);
+        promptAuth('analyze_again');
+        return;
+      }
     }
 
     analyzeVideo(url);
