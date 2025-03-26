@@ -17,6 +17,7 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
 import {
   Filter,
@@ -133,8 +134,16 @@ export default function Library() {
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
       
+      // Add anonymous session header for anonymous users
+      let headers: HeadersInit = {};
+      if (!user) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers = { 'x-anonymous-session': sessionId };
+        console.log('Library - Adding anonymous session header:', sessionId);
+      }
+      
       // Use our API request function which handles all the auth header logic for us
-      const response = await apiRequest("GET", url);
+      const response = await apiRequest("GET", url, undefined, headers);
       
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
