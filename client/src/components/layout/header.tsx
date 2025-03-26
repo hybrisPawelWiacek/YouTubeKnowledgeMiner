@@ -35,8 +35,9 @@ export function Header() {
   useEffect(() => {
     if (!user) {
       // First try to get count from server response
-      if (anonymousSessionVideoCountQuery.data?.count !== undefined) {
-        setAnonymousVideoCount(anonymousSessionVideoCountQuery.data.count);
+      const responseData = anonymousSessionVideoCountQuery.data;
+      if (responseData && typeof responseData.count === 'number') {
+        setAnonymousVideoCount(responseData.count);
       } else {
         // Fall back to local cache while waiting for server response
         setAnonymousVideoCount(getLocalAnonymousVideoCount());

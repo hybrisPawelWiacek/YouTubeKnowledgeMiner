@@ -92,15 +92,24 @@ export async function hasReachedAnonymousLimit(): Promise<boolean> {
       'x-anonymous-session': sessionId
     };
     
-    const response = await apiRequest<{ count: number, max_allowed: number }>('/api/anonymous/videos/count', {
-      headers
+    // Use fetch directly to avoid circular dependencies
+    const response = await fetch('/api/anonymous/videos/count', {
+      method: 'GET',
+      headers,
+      credentials: 'include'
     });
     
+    if (!response.ok) {
+      throw new Error(`Error getting video count: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
     // Update local cache for future reference
-    if (response && typeof response.count === 'number') {
-      setLocalAnonymousVideoCount(response.count);
-      const maxAllowed = response.max_allowed || ANONYMOUS_VIDEO_LIMIT;
-      return response.count >= maxAllowed;
+    if (data && typeof data.count === 'number') {
+      setLocalAnonymousVideoCount(data.count);
+      const maxAllowed = data.max_allowed || ANONYMOUS_VIDEO_LIMIT;
+      return data.count >= maxAllowed;
     }
     
     // Fall back to local cache if server response is invalid

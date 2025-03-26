@@ -35,11 +35,12 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           const sessionId = getOrCreateAnonymousSessionId();
           
           // Get count from API
-          const response = await apiRequest('GET', '/api/anonymous/videos/count', null, {
-            headers: {
-              'x-anonymous-session': sessionId
-            }
-          });
+          const headers = { 'x-anonymous-session': sessionId };
+          const response = await fetch('/api/anonymous/videos/count', {
+            method: 'GET',
+            headers,
+            credentials: 'include'
+          }).then(res => res.json());
           
           if (response && typeof response.count === 'number') {
             setAnonymousCount(response.count);
@@ -82,9 +83,12 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           try {
             const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
             const sessionId = getOrCreateAnonymousSessionId();
-            const response = await apiRequest('GET', '/api/anonymous/videos/count', null, {
-              headers: { 'x-anonymous-session': sessionId }
-            });
+            const headers = { 'x-anonymous-session': sessionId };
+            const response = await fetch('/api/anonymous/videos/count', {
+              method: 'GET',
+              headers,
+              credentials: 'include'
+            }).then(res => res.json());
             
             if (response && typeof response.count === 'number') {
               setAnonymousCount(response.count);
