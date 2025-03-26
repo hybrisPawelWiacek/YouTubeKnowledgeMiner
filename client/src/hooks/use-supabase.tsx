@@ -162,6 +162,8 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // Extract username from email or use directly if it's already a username
       const username = emailOrUsername.includes('@') ? emailOrUsername.split('@')[0] : emailOrUsername;
       
+      console.log("Attempting direct authentication for username:", username);
+      
       // Try to login using the direct database route
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -171,12 +173,28 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       
       if (response.ok) {
         const userData = await response.json();
+        console.log("Received user data from direct auth:", userData);
+        
+        // Ensure the ID is properly loaded as a number
+        const userId = typeof userData.id === 'number' ? userData.id : parseInt(userData.id, 10);
+        
+        if (isNaN(userId)) {
+          console.error("Direct auth returned invalid user ID:", userData.id);
+          toast({
+            title: "Authentication Error",
+            description: "Invalid user ID returned from server",
+            variant: "destructive",
+          });
+          return false;
+        }
+        
+        console.log("Using numeric user ID for direct auth:", userId, "type:", typeof userId);
         
         // Manually set up user state for direct authentication
         // Use the actual numeric ID from the database instead of a string prefix
         const directUser: User = {
           // Store the actual numeric ID to ensure proper database queries
-          id: userData.id,
+          id: userId,
           email: userData.email,
           user_metadata: {
             username: userData.username,
@@ -195,11 +213,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // This allows the app to work without Supabase verification
         const mockSession = {
           user: directUser,
-          access_token: `mock_token_${userData.id}`,
+          access_token: `mock_token_${userId}`,
           refresh_token: 'mock_refresh_token',
           expires_in: 3600,
           expires_at: Date.now() + 3600000
         } as Session;
+        
+        console.log("Setting up direct auth session with user ID:", userId);
+        console.log("Direct user object:", directUser);
+        console.log("Mock session:", mockSession);
         
         setUser(directUser);
         setSession(mockSession);
@@ -209,10 +231,13 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         
         toast({
           title: "Development mode login",
-          description: "Logged in with direct authentication (dev mode only)",
+          description: `Logged in with direct authentication as user ID: ${userId}`,
         });
         
         return true;
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Direct auth failed:", errorData);
       }
       
       return false;
