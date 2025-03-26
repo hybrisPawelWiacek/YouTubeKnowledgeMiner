@@ -173,12 +173,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         const userData = await response.json();
         
         // Manually set up user state for direct authentication
+        // Important: Keep the numeric ID as-is for API calls to work properly
         const directUser: User = {
-          id: `direct_${userData.id}`,
+          id: userData.id, // Use the numeric ID directly
           email: userData.email,
           user_metadata: {
             username: userData.username,
             full_name: userData.username,
+            is_direct_auth: true, // Add a flag to identify direct auth users
           },
           role: 'authenticated',
           aud: 'authenticated',
@@ -303,7 +305,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
     try {
       // Check if user was authenticated with direct method
-      const isDirectAuth = user?.id?.toString().startsWith('direct_');
+      const isDirectAuth = user?.user_metadata?.is_direct_auth === true;
       
       if (isDirectAuth) {
         // For direct auth users, just clear the user state

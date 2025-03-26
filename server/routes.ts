@@ -1075,11 +1075,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Since searchVideos doesn't have a direct filter for youtube_id, we'll search by title
             // and then filter the results in memory
             const existingVideos = await dbStorage.searchVideos(Number(userId), {
-              query: video.title || ''
+              query: video.title || '',
+              page: 1,
+              limit: 100,
+              sort_by: 'created_at',
+              sort_order: 'desc'
             });
 
             // Check if any of the found videos match our youtube_id
-            const existingVideo = existingVideos.filter(v => v.youtube_id === video.youtube_id);
+            const existingVideo = existingVideos.videos.filter(v => v.youtube_id === video.youtube_id);
 
             if (existingVideo.length === 0) {
               // Add video to user's library
