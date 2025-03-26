@@ -22,8 +22,8 @@ export interface IStorage {
   
   // Video methods
   getVideo(id: number): Promise<Video | undefined>;
-  getVideosByUserId(userId: number): Promise<Video[]>;
-  searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }>;
+  getVideosByUserId(userId: number | null): Promise<Video[]>;
+  searchVideos(userId: number | null, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }>;
   insertVideo(video: InsertVideo): Promise<Video>;
   updateVideo(id: number, data: Partial<Video>): Promise<Video | undefined>;
   deleteVideo(id: number): Promise<boolean>;
@@ -152,13 +152,17 @@ export class MemStorage implements IStorage {
     return this.videos.get(id);
   }
 
-  async getVideosByUserId(userId: number): Promise<Video[]> {
+  async getVideosByUserId(userId: number | null): Promise<Video[]> {
+    if (userId === null) {
+      // For anonymous users, return an empty array as they don't have videos without a session ID
+      return [];
+    }
     return Array.from(this.videos.values()).filter(
       (video) => video.user_id === userId
     );
   }
   
-  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
+  async searchVideos(userId: number | null, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
     let results = await this.getVideosByUserId(userId);
     
     // Filter by query (search in title, description, transcript)

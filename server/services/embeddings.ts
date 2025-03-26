@@ -267,8 +267,14 @@ export async function performSemanticSearch(
     }
     const queryEmbedding = queryEmbeddingsArray[0];
     
-    // Execute the initial search
-    let conditions = [eq(embeddings.user_id, userId)];
+    // Execute the initial search - handle both registered and anonymous users
+    let conditions: any[] = [];
+    
+    // If userId is null (anonymous user), we'll need to identify their videos by other means
+    // For now, we retrieve videos by the filters only, without user restriction
+    if (userId !== null) {
+      conditions.push(eq(embeddings.user_id, userId));
+    }
     
     if (filters.videoId) {
       conditions.push(eq(embeddings.video_id, filters.videoId));
@@ -374,18 +380,21 @@ export async function performSemanticSearch(
  * @param resultsCount Number of results returned
  */
 export async function saveSearchHistory(
-  userId: number,
+  userId: number | null,
   query: string,
   filterParams: Record<string, any> = {},
   resultsCount: number = 0
 ): Promise<void> {
   try {
-    await db.insert(search_history).values({
-      user_id: userId,
-      query,
-      filter_params: filterParams,
-      results_count: resultsCount,
-    });
+    // Don't save search history for anonymous users
+    if (userId !== null) {
+      await db.insert(search_history).values({
+        user_id: userId,
+        query,
+        filter_params: filterParams,
+        results_count: resultsCount,
+      });
+    }
   } catch (error) {
     log(`Error saving search history: ${error}`, 'embeddings');
     // Non-critical, can fail silently
