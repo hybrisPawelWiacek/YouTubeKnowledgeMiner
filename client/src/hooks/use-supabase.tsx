@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
+import { updateCurrentSession } from '@/lib/api';
 
 // Key for storing temporary data for anonymous users
 const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
@@ -61,6 +62,8 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           if (session) {
             setSession(session);
             setUser(session.user);
+            // Update the session in the API module for authenticated requests
+            updateCurrentSession(session);
           }
 
           const { data: { subscription } } = client.auth.onAuthStateChange(
@@ -68,6 +71,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               console.log('Auth state changed:', event);
               setSession(currentSession);
               setUser(currentSession?.user || null);
+              
+              // Keep our API module's session state in sync
+              updateCurrentSession(currentSession);
 
               if (event === 'SIGNED_IN') {
                 toast({
@@ -181,9 +187,21 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           },
         } as unknown as User;
         
-        // Manually set the local user without a session
+        // Manually set the local user and create a mock session
         // This allows the app to work without Supabase verification
+        const mockSession = {
+          user: directUser,
+          access_token: `mock_token_${userData.id}`,
+          refresh_token: 'mock_refresh_token',
+          expires_in: 3600,
+          expires_at: Date.now() + 3600000
+        } as Session;
+        
         setUser(directUser);
+        setSession(mockSession);
+        
+        // Update the global session state for API calls
+        updateCurrentSession(mockSession);
         
         toast({
           title: "Development mode login",
@@ -291,6 +309,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // For direct auth users, just clear the user state
         setUser(null);
         setSession(null);
+        
+        // Clear the session in our API module
+        updateCurrentSession(null);
         
         toast({
           title: "Signed out",
