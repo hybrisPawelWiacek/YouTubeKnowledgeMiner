@@ -106,7 +106,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     fetchSupabaseConfig();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (emailOrUsername: string, password: string) => {
     if (!supabase) {
       toast({
         title: "Error",
@@ -117,58 +117,28 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // First attempt Supabase authentication
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        // If Supabase authentication fails, try direct database authentication
-        // This is specifically for testing with unverified accounts
-        console.log('Supabase auth failed, trying direct auth:', error.message);
-        
-        // Try to login using the direct route that authenticates against the database
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            username: email.includes('@') ? email.split('@')[0] : email, // Use email local part as username
-            password 
-          })
+      // Determine if input is likely an email or username
+      const isEmail = emailOrUsername.includes('@');
+      
+      if (isEmail) {
+        // If it looks like an email, try Supabase authentication first
+        const { error } = await supabase.auth.signInWithPassword({
+          email: emailOrUsername,
+          password,
         });
+
+        if (error) {
+          // If Supabase auth fails, try direct auth as fallback
+          console.log('Supabase auth failed, trying direct auth:', error.message);
+          await tryDirectAuth(emailOrUsername, password);
+        }
+      } else {
+        // If it's a username, try direct auth first since Supabase requires email
+        const directAuthSuccess = await tryDirectAuth(emailOrUsername, password);
         
-        if (response.ok) {
-          const userData = await response.json();
-          
-          // Manually set up user state for direct authentication
-          const directUser: User = {
-            id: `direct_${userData.id}`,
-            email: userData.email,
-            user_metadata: {
-              username: userData.username,
-              full_name: userData.username,
-            },
-            role: 'authenticated',
-            aud: 'authenticated',
-            app_metadata: {
-              provider: 'direct'
-            },
-          } as unknown as User;
-          
-          // Manually set the local user without a session
-          // This allows the app to work without Supabase verification
-          setUser(directUser);
-          
-          toast({
-            title: "Development mode login",
-            description: "Logged in with direct authentication (dev mode only)",
-          });
-          
-          return;
-        } else {
-          // If both authentication methods fail, throw error
-          throw new Error('Authentication failed with both methods');
+        if (!directAuthSuccess) {
+          // If direct auth fails and it's not an email format, let the user know
+          throw new Error('Login failed. If you registered with email, please use your full email to sign in.');
         }
       }
     } catch (error: any) {
@@ -177,6 +147,56 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         description: error.message || "Failed to sign in",
         variant: "destructive",
       });
+    }
+  };
+  
+  // Helper function for direct database authentication
+  const tryDirectAuth = async (emailOrUsername: string, password: string): Promise<boolean> => {
+    try {
+      // Extract username from email or use directly if it's already a username
+      const username = emailOrUsername.includes('@') ? emailOrUsername.split('@')[0] : emailOrUsername;
+      
+      // Try to login using the direct database route
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        
+        // Manually set up user state for direct authentication
+        const directUser: User = {
+          id: `direct_${userData.id}`,
+          email: userData.email,
+          user_metadata: {
+            username: userData.username,
+            full_name: userData.username,
+          },
+          role: 'authenticated',
+          aud: 'authenticated',
+          app_metadata: {
+            provider: 'direct'
+          },
+        } as unknown as User;
+        
+        // Manually set the local user without a session
+        // This allows the app to work without Supabase verification
+        setUser(directUser);
+        
+        toast({
+          title: "Development mode login",
+          description: "Logged in with direct authentication (dev mode only)",
+        });
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Direct auth error:', error);
+      return false;
     }
   };
 
