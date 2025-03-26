@@ -202,6 +202,7 @@ export const exportRequestSchema = z.object({
   format: z.enum(['txt', 'csv', 'json']),
   video_ids: z.array(z.number()),
   qa_conversation_id: z.number().optional(),
+  userId: z.number().optional(), // Adding userId for internal use
 });
 
 // Export preferences schema
