@@ -355,7 +355,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For regular authenticated users, continue with normal flow
         // Check if search parameters were provided
         if (Object.keys(req.query).length > 0) {
-          const searchParams = searchParamsSchema.parse(req.query);
+          // Convert string parameters to appropriate types before parsing
+          const parsedQuery = { ...req.query };
+          
+          // Convert numeric parameters from strings to numbers
+          if (parsedQuery.category_id) parsedQuery.category_id = Number(parsedQuery.category_id);
+          if (parsedQuery.collection_id) parsedQuery.collection_id = Number(parsedQuery.collection_id);
+          if (parsedQuery.rating_min) parsedQuery.rating_min = Number(parsedQuery.rating_min);
+          if (parsedQuery.rating_max) parsedQuery.rating_max = Number(parsedQuery.rating_max);
+          if (parsedQuery.page) parsedQuery.page = Number(parsedQuery.page);
+          if (parsedQuery.limit) parsedQuery.limit = Number(parsedQuery.limit);
+          if (parsedQuery.cursor) parsedQuery.cursor = Number(parsedQuery.cursor);
+          
+          // Convert string boolean to actual boolean
+          if (parsedQuery.is_favorite === 'true') parsedQuery.is_favorite = true;
+          if (parsedQuery.is_favorite === 'false') parsedQuery.is_favorite = false;
+          
+          // Now parse with the schema
+          const searchParams = searchParamsSchema.parse(parsedQuery);
           // Handle anonymous and authenticated users
           if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
             // For anonymous users with a session, search their videos
@@ -1459,14 +1476,21 @@ function applySearchFilters(videos: Video[], params: SearchParams): Video[] {
     result = result.filter(v => v.is_favorite === params.is_favorite);
   }
   
-  // Apply rating filter
-  if (params.min_rating !== undefined) {
-    result = result.filter(v => v.rating !== null && v.rating >= params.min_rating);
+  // Apply rating filter (minimum rating)
+  if (params.rating_min !== undefined) {
+    const minRating = params.rating_min;
+    result = result.filter(v => v.rating !== null && v.rating >= minRating);
+  }
+  
+  // Apply rating filter (maximum rating)
+  if (params.rating_max !== undefined) {
+    const maxRating = params.rating_max;
+    result = result.filter(v => v.rating !== null && v.rating <= maxRating);
   }
   
   // Apply search term
-  if (params.search !== undefined && params.search.trim() !== '') {
-    const searchLower = params.search.toLowerCase();
+  if (params.query !== undefined && params.query.trim() !== '') {
+    const searchLower = params.query.toLowerCase();
     result = result.filter(v => 
       v.title.toLowerCase().includes(searchLower) || 
       v.channel.toLowerCase().includes(searchLower) ||
