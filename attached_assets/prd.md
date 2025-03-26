@@ -2,7 +2,7 @@
 ## Product Requirements Document (PRD)
 
 ### Document Information
-- **Version:** 2.0
+- **Version:** 2.1
 - **Date:** March 26, 2025
 - **Status:** Implementation In Progress
 
@@ -113,7 +113,7 @@ The product serves audiences who consume educational, informational, and profess
 
 #### Enhanced Summary Features (⚠️ PARTIALLY IMPLEMENTED)
 - ✅ Summary viewing capabilities
-- ❌ "Copy All" functionality for one-click copying
+- ✅ "Copy All" functionality for one-click copying
 - ❌ Summary editing capabilities
 - ❌ Visual highlighting for key moments
 - ❌ Timestamp references to summary points
@@ -281,7 +281,7 @@ The application uses a hybrid architecture:
 ## 7. Current Implementation Gaps & Priorities
 
 ### High Priority Items
-1. "Copy All" functionality for summaries
+1. ✅ "Copy All" functionality for summaries (COMPLETED)
 2. Citation system to reference source videos and timestamps
 3. Clear visualization of search matches
 4. Pagination or infinite scroll optimization
