@@ -27,10 +27,23 @@ export async function apiRequest(
 
   // Add auth header if user is authenticated
   if (currentSession?.user) {
-    // Ensure user ID is sent as a number in string format
+    // Extract the numeric user ID and ensure it's sent as a number
     const userId = currentSession.user.id;
-    (options.headers as Record<string, string>)['x-user-id'] = typeof userId === 'number' ? 
-      String(userId) : String(Number(userId));
+    
+    // Log the user ID for debugging
+    console.log('Current user ID in API call:', userId, 'type:', typeof userId);
+    
+    // Try to convert to a clean number regardless of format (strip any prefixes)
+    // This ensures we always pass a valid number to the server
+    const cleanUserId = userId === undefined ? undefined : 
+                        (typeof userId === 'number' ? userId : 
+                         Number(String(userId).replace(/\D/g, '')));
+    
+    console.log('Clean user ID for x-user-id header:', cleanUserId);
+    
+    if (cleanUserId !== undefined && !isNaN(cleanUserId)) {
+      (options.headers as Record<string, string>)['x-user-id'] = String(cleanUserId);
+    }
   }
 
   if (data) {
