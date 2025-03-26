@@ -6,8 +6,8 @@ import { ZodError } from 'zod';
 import videoRoutes from './video.routes';
 import collectionRoutes from './collection.routes';
 import categoryRoutes from './category.routes';
+import authRoutes from './auth.routes';
 // The following routers will be created in later steps
-// import authRoutes from './auth.routes';
 // import searchRoutes from './search.routes';
 // import exportRoutes from './export.routes';
 // import qaRoutes from './qa.routes';
@@ -51,13 +51,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Register domain-specific routes
-  // Only register the routes we've already refactored
   app.use('/api/videos', videoRoutes);
   app.use('/api/collections', collectionRoutes);
   app.use('/api/categories', categoryRoutes);
+  app.use('/api/anonymous', authRoutes);
   
   // These routes will be added as we refactor them
-  // app.use('/api/auth', authRoutes);
   // app.use('/api/search', searchRoutes);
   // app.use('/api/export', exportRoutes);
   // app.use('/api/qa', qaRoutes);
