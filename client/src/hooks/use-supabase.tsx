@@ -408,9 +408,11 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Get anonymous user data from local storage
+  // Retrieve anonymous user data - now deprecated as server tracks all data
   const getLocalData = () => {
+    console.warn('getLocalData is deprecated - server now tracks all user data through sessions');
     try {
+      // Check for legacy data for migration purposes only
       const data = localStorage.getItem(LOCAL_STORAGE_KEY);
       return data ? JSON.parse(data) : { videos: [], collections: [], videoCount: 0 };
     } catch (error) {
@@ -419,15 +421,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Save anonymous user data to local storage
+  // Save anonymous user data - now deprecated as server tracks all data
   const setLocalData = (data: any) => {
+    console.warn('setLocalData is deprecated - server now tracks all user data through sessions');
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-        ...data,
-        videoCount: data.videos.length
-      }));
+      // This is a no-op now, but we keep the function for backward compatibility
+      // with components that might still call it
     } catch (error) {
-      console.error('Error saving local data:', error);
+      console.error('Error in deprecated setLocalData:', error);
     }
   };
 
