@@ -321,7 +321,7 @@ function formatTimestamp(seconds: number): string {
 /**
  * Extract YouTube ID from a URL or ID string
  */
-function extractYoutubeId(url: string): string | null {
+export function extractYoutubeId(url: string): string | null {
   if (!url) return null;
   
   // If the input is already just an ID (11 characters of letters, numbers, underscore, and dash)

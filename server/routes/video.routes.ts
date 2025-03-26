@@ -13,7 +13,8 @@ import { sendSuccess, sendError } from '../utils/response.utils';
 import { 
   processYoutubeVideo, 
   getYoutubeTranscript, 
-  generateTranscriptSummary 
+  generateTranscriptSummary,
+  extractYoutubeId
 } from '../services/youtube';
 import { 
   processTranscriptEmbeddings,
@@ -89,6 +90,9 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       "session:", userInfo.anonymous_session_id
     );
     
+    // Debug all headers to help diagnose session issues
+    console.log("[video routes] REQUEST HEADERS:", JSON.stringify(req.headers, null, 2));
+    
     // Debug incoming headers
     console.log("[video routes] Request headers:", {
       'x-user-id': req.headers['x-user-id'],
@@ -135,8 +139,10 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     } = req.body;
 
     // Create the video in the database
+    // Extract just the YouTube ID from the URL (if it's a URL)
+    const extractedId = extractYoutubeId(youtubeId);
     const video = await dbStorage.insertVideo({
-      youtube_id: youtubeId || '',
+      youtube_id: extractedId || youtubeId || '',
       title,
       channel,
       duration,
@@ -306,6 +312,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // Process the YouTube video without saving
     const videoData = await processYoutubeVideo(url);
     
+    // Extract YouTube ID from URL if needed and ensure we're returning just the ID
+    const extractedId = extractYoutubeId(videoData.youtubeId);
+    videoData.youtubeId = extractedId || videoData.youtubeId;
+    
     // Return the processed video data
     return sendSuccess(res, videoData);
   } catch (error) {
@@ -333,6 +343,9 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
       "session:", userInfo.anonymous_session_id
     );
     
+    // Debug all headers to help diagnose session issues
+    console.log("[video routes] REQUEST HEADERS FOR /process:", JSON.stringify(req.headers, null, 2));
+    
     // For anonymous users, check if they've reached the limit
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
       // Get current video count for this anonymous session
@@ -352,8 +365,10 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     const videoData = await processYoutubeVideo(url);
     
     // Create the video in the database
+    // Extract just the YouTube ID from the URL (if it's a URL)
+    const extractedId = extractYoutubeId(videoData.youtubeId);
     const video = await dbStorage.insertVideo({
-      youtube_id: videoData.youtubeId || '',
+      youtube_id: extractedId || videoData.youtubeId || '',
       title: videoData.title,
       channel: videoData.channel,
       duration: videoData.duration,
