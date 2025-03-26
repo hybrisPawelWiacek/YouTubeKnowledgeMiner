@@ -1030,19 +1030,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Export video content (transcript, summary, or Q&A)
   app.post("/api/export", async (req, res) => {
     try {
-      const exportData = exportRequestSchema.parse(req.body);
+      // Parse request and add userId
+      const exportRequest = req.body;
       
       // In a real app, get user_id from session
       const userId = 1; // This would come from session
+      exportRequest.userId = userId;
+      
+      const exportData = exportRequestSchema.parse(exportRequest);
       
       let result;
       if (exportData.video_ids.length === 1) {
         // Single video export
-        result = await exportVideoContent({ 
-          ...exportData,
-          userId,
-          videoId: exportData.video_ids[0]
-        });
+        result = await exportVideoContent(exportData);
         
         return res.status(200).json({
           filename: result.filename,
@@ -1051,10 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         // Batch export
-        result = await exportBatchVideoContent({
-          ...exportData,
-          userId
-        });
+        result = await exportBatchVideoContent(exportData);
         
         return res.status(200).json({
           filename: result.filename,
