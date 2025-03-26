@@ -71,10 +71,39 @@ export function AuthPromptDialog({
   const [maxAllowedVideos] = useState(3);
 
   useEffect(() => {
-    // Update video count when dialog opens
+    // Update video count from server when dialog opens
     if (isOpen) {
-      const localData = getLocalData();
-      setAnonymousVideoCount(localData.videos?.length || 0);
+      // Fetch the anonymous video count from the server
+      const fetchVideoCount = async () => {
+        try {
+          // Import session utilities to avoid circular dependencies
+          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+          const sessionId = getOrCreateAnonymousSessionId();
+          
+          // Fetch count from server
+          const response = await fetch('/api/anonymous/videos/count', {
+            method: 'GET',
+            headers: {
+              'x-anonymous-session': sessionId
+            },
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data && typeof data.count === 'number') {
+              setAnonymousVideoCount(data.count);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching anonymous video count:', error);
+          // Fall back to local data if server request fails
+          const localData = getLocalData();
+          setAnonymousVideoCount(localData.videos?.length || 0);
+        }
+      };
+      
+      fetchVideoCount();
     }
   }, [isOpen, getLocalData]);
 

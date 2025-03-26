@@ -49,7 +49,7 @@ export function getOrCreateAnonymousSessionId(): string {
  */
 export function clearAnonymousSession(): void {
   localStorage.removeItem(ANONYMOUS_SESSION_KEY);
-  localStorage.removeItem(ANONYMOUS_VIDEO_COUNT_KEY);
+  // Video count is no longer stored in localStorage, it's tracked on the server
   console.log('[Anonymous Session] Session cleared');
 }
 
@@ -61,25 +61,25 @@ export function hasAnonymousSession(): boolean {
 }
 
 /**
- * Get the current video count for anonymous users from local cache
- * This should only be used for UI hints while waiting for server response
+ * Get the current video count from server or return 0 if not available
+ * This is a deprecated function that now just returns 0 because we no longer store counts in local storage
+ * @deprecated Use server API calls directly instead
  */
 export function getLocalAnonymousVideoCount(): number {
-  const countStr = localStorage.getItem(ANONYMOUS_VIDEO_COUNT_KEY);
-  return countStr ? parseInt(countStr, 10) : 0;
+  return 0;
 }
 
 /**
- * Update the local cache of anonymous video count
- * This is just a helper for the UI to show limits without server roundtrips
+ * This function is deprecated as we no longer store video counts in local storage
+ * @deprecated Use server API calls instead
  */
 export function setLocalAnonymousVideoCount(count: number): void {
-  localStorage.setItem(ANONYMOUS_VIDEO_COUNT_KEY, count.toString());
+  console.warn('setLocalAnonymousVideoCount is deprecated - server now tracks video counts');
 }
 
 /**
  * Check if anonymous user has reached their video limit
- * First tries to get data from server, falls back to local cache if needed
+ * This makes a server call to check the current count for this anonymous session
  */
 export async function hasReachedAnonymousLimit(): Promise<boolean> {
   try {
@@ -105,27 +105,29 @@ export async function hasReachedAnonymousLimit(): Promise<boolean> {
     
     const data = await response.json();
     
-    // Update local cache for future reference
     if (data && typeof data.count === 'number') {
-      setLocalAnonymousVideoCount(data.count);
       const maxAllowed = data.max_allowed || ANONYMOUS_VIDEO_LIMIT;
       return data.count >= maxAllowed;
     }
     
-    // Fall back to local cache if server response is invalid
-    return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
+    // If we can't determine the count, assume they haven't reached the limit
+    return false;
   } catch (error) {
     console.error('Error checking anonymous limit:', error);
     
-    // Fall back to local cache on error
-    return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
+    // If we can't check the limit due to an error, assume they haven't reached it
+    // This errs on the side of letting users continue rather than blocking them incorrectly
+    return false;
   }
 }
 
 /**
- * Synchronous version of hasReachedAnonymousLimit that only uses local cache
- * Use this when you need an immediate response without waiting for a network request
+ * Synchronous version that always assumes the user hasn't reached the limit
+ * This is a fallback for UI components that need immediate responses
+ * The proper way is to use the async version and handle loading states
  */
 export function hasReachedAnonymousLimitSync(): boolean {
-  return getLocalAnonymousVideoCount() >= ANONYMOUS_VIDEO_LIMIT;
+  // We no longer store this information locally, so this function 
+  // now only provides a safe fallback for components that can't wait for async
+  return false;
 }
