@@ -47,12 +47,12 @@ export class DatabaseStorage implements IStorage {
       // For anonymous users, only get global categories
       return db.select().from(categories).where(eq(categories.is_global, true));
     }
-  },
+  }
 
   // Legacy method for backward compatibility
   async getCategoriesByUserId(userId: number): Promise<Category[]> {
     return this.getCategories(userId);
-  },
+  }
 
   async createCategory(category: InsertCategory): Promise<Category> {
     const result = await db.insert(categories).values(category).returning();

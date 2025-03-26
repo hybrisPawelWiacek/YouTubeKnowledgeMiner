@@ -20,6 +20,7 @@ import {
 } from "./services/embeddings";
 import { initializeVectorFunctions, isSupabaseConfigured } from "./services/supabase";
 import { log } from "./vite";
+import { addGlobalCategories } from "../scripts/add-global-categories";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize Supabase and vector functions
@@ -889,7 +890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const deleted = await dbStorage.deleteQAConversation(conversationId);
       if (!deleted) {
-        return res.status404).json({ message: "Conversation not found" });
+        return res.status(404).json({ message: "Conversation not found" });
       }
 
       return res.status(204).end();
