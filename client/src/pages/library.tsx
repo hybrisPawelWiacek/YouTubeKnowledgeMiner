@@ -131,19 +131,10 @@ export default function Library() {
         url += `&cursor=${cursor}`;
       }
 
-      console.log('Library - Fetching videos for user:', user?.id);
+      console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
       
-      // Create auth headers
-      const headers: HeadersInit = {};
-      if (user?.id) {
-        headers['x-user-id'] = String(user.id);
-        console.log('Library - Setting x-user-id header to:', user.id);
-      }
-      
-      const response = await fetch(url, { 
-        headers,
-        credentials: 'include'
-      });
+      // Use our API request function which handles all the auth header logic for us
+      const response = await apiRequest("GET", url);
       
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
@@ -451,7 +442,7 @@ export default function Library() {
           setSelectedCategory(undefined);
           return;
         }
-        const response = await fetch('/api/categories');
+        const response = await apiRequest("GET", '/api/categories');
         if (response.ok) {
           const data = await response.json();
           setSelectedCategory(data);
@@ -471,7 +462,7 @@ export default function Library() {
           setSelectedCollection(localData.collections || []);
           return;
         }
-        const response = await fetch('/api/collections');
+        const response = await apiRequest("GET", '/api/collections');
         if (response.ok) {
           const data = await response.json();
           setSelectedCollection(data);
@@ -490,7 +481,7 @@ export default function Library() {
           // We're not changing the search query here
           return;
         }
-        const response = await fetch('/api/saved-searches');
+        const response = await apiRequest("GET", '/api/saved-searches');
         if (response.ok) {
           const data = await response.json();
           setSearchQuery(data);

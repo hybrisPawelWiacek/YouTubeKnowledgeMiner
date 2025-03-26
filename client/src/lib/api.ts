@@ -51,24 +51,35 @@ export async function apiRequest(
     // Log the user ID for debugging
     console.log('[API] Current user ID in API call:', userId, 'type:', typeof userId);
     
-    // Try to convert to a clean number regardless of format (strip any prefixes)
-    // This ensures we always pass a valid number to the server
+    // Ensure we always pass a valid numeric user ID to the server
     let cleanUserId;
     
     if (userId === undefined) {
       cleanUserId = undefined;
     } else if (typeof userId === 'number') {
+      // If it's already a number, use it directly
       cleanUserId = userId;
     } else {
-      // Extract numbers from the string if it contains non-numeric characters
-      const match = String(userId).match(/\d+/);
-      cleanUserId = match ? parseInt(match[0], 10) : NaN;
-      console.log('[API] Extracted numeric ID from string:', cleanUserId);
+      // For anything else, convert to string first, then extract only numeric part
+      const numericMatch = String(userId).match(/(\d+)/);
+      if (numericMatch) {
+        cleanUserId = parseInt(numericMatch[1], 10);
+        console.log('[API] Extracted numeric ID from string/mixed value:', cleanUserId);
+      } else {
+        // If no numeric part was found, try direct conversion
+        cleanUserId = Number(userId);
+        if (isNaN(cleanUserId)) {
+          console.error('[API] Failed to extract valid numeric ID from:', userId);
+          cleanUserId = undefined;
+        }
+      }
     }
     
-    console.log('[API] Clean user ID for x-user-id header:', cleanUserId);
+    console.log('[API] Clean user ID for x-user-id header:', cleanUserId, 'type:', typeof cleanUserId);
     
-    if (cleanUserId !== undefined && !isNaN(cleanUserId)) {
+    // Only set the header if we have a valid positive user ID
+    if (cleanUserId !== undefined && !isNaN(cleanUserId) && cleanUserId > 0) {
+      // Always send as string in the header
       const headerValue = String(cleanUserId);
       (options.headers as Record<string, string>)['x-user-id'] = headerValue;
       console.log('[API] Setting x-user-id header to:', headerValue);

@@ -187,54 +187,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Debug: log all headers for troubleshooting 
       console.log("Request headers for /api/videos:", JSON.stringify(req.headers, null, 2));
-      
-      if (req.headers['x-user-id']) {
-        try {
-          // Log the raw user ID value
-          console.log("Raw x-user-id header:", req.headers['x-user-id'], "Type:", typeof req.headers['x-user-id']);
-          
-          // Handle various header formats
-          let headerValue = req.headers['x-user-id'];
-          
-          // If it's an array (which can happen with headers), use the first value
-          if (Array.isArray(headerValue)) {
-            console.log("x-user-id is an array, using first value:", headerValue[0]);
-            headerValue = headerValue[0];
-          }
-          
-          // Convert to string if not already
-          headerValue = String(headerValue);
-          
-          // Extract just the numeric portion if it's a string with non-numeric characters
-          const numericMatch = headerValue.match(/\d+/);
-          
-          if (numericMatch) {
-            userId = parseInt(numericMatch[0], 10);
-            console.log("Extracted numeric user ID from string:", userId);
-          } else {
-            userId = Number(headerValue);
-            console.log("Converted user ID directly:", userId);
-          }
-          
-          if (isNaN(userId)) {
-            console.error("Failed to parse user ID, got NaN from:", headerValue);
-            return res.status(400).json({ message: "Invalid user ID format", originalValue: headerValue });
-          }
-          
-          // Always ensure we have a valid positive integer
-          if (!Number.isInteger(userId) || userId <= 0) {
-            console.error("Invalid user ID (must be positive integer):", userId);
-            return res.status(400).json({ message: "User ID must be a positive integer" });
-          }
-          
-          console.log("Using user ID for video save:", userId);
-        } catch (e) {
-          console.error("Error processing user ID:", e);
-          return res.status(400).json({ message: "Failed to parse user ID", error: String(e) });
-        }
-      } else {
-        console.log("No x-user-id header found, using default user ID:", userId);
-      }
 
       // Save to database through storage interface
       const video = await dbStorage.insertVideo({
@@ -1245,7 +1197,8 @@ function extractYoutubeId(url: string): string | null {
 function getUserIdFromRequest(req: Request): number {
   console.log("[Auth Helper] Extracting user ID from request headers");
   
-  let userId = 1; // Default anonymous user as fallback
+  // Default to anonymous user (1) only if we can't find a valid user ID
+  let userId = 1;
   
   // Check if we have a user ID header
   if (req.headers['x-user-id']) {
@@ -1256,15 +1209,22 @@ function getUserIdFromRequest(req: Request): number {
       // Handle both string and array formats
       const idValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
       
-      // Try to extract a numeric value
-      const parsedId = parseInt(idValue, 10);
+      // Try to extract a numeric value - be strict about this being a number
+      // First convert to string in case it's something else
+      const stringValue = String(idValue);
+      
+      // Use regex to extract just the numeric portion if mixed with other characters
+      const matches = stringValue.match(/(\d+)/);
+      const cleanValue = matches ? matches[1] : stringValue;
+      
+      const parsedId = parseInt(cleanValue, 10);
       
       // Validate the parsed ID
       if (!isNaN(parsedId) && parsedId > 0) {
         userId = parsedId;
-        console.log("[Auth Helper] Successfully parsed user ID:", userId);
+        console.log("[Auth Helper] Successfully parsed user ID:", userId, "(type: number)");
       } else {
-        console.warn("[Auth Helper] Invalid user ID format in header:", idValue);
+        console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
       }
     } catch (error) {
       console.error("[Auth Helper] Error parsing user ID from header:", error);
@@ -1273,5 +1233,6 @@ function getUserIdFromRequest(req: Request): number {
     console.log("[Auth Helper] No x-user-id header found, using default user ID:", userId);
   }
   
+  console.log("[Auth Helper] Final user ID being used:", userId, "(type: number)");
   return userId;
 }
