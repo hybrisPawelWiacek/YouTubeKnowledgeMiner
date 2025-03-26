@@ -26,7 +26,7 @@ const MAX_BATCH_SIZE = 20;
  */
 export async function processTranscriptEmbeddings(
   videoId: number,
-  userId: number,
+  userId: number | null,
   transcript: string
 ): Promise<number[]> {
   if (!transcript) {
@@ -67,7 +67,7 @@ export async function processTranscriptEmbeddings(
  */
 export async function processSummaryEmbeddings(
   videoId: number,
-  userId: number,
+  userId: number | null,
   summaryPoints: string[]
 ): Promise<number[]> {
   if (!summaryPoints || summaryPoints.length === 0) {
@@ -87,7 +87,7 @@ export async function processSummaryEmbeddings(
  */
 export async function processNotesEmbeddings(
   videoId: number,
-  userId: number,
+  userId: number | null,
   notes: string
 ): Promise<number[]> {
   if (!notes) {
@@ -107,7 +107,7 @@ export async function processNotesEmbeddings(
  */
 async function processTranscriptChunksWithTimestamps(
   videoId: number,
-  userId: number,
+  userId: number | null,
   textChunks: string[],
   timestampData: { [index: number]: { timestamp: number, duration: number } }
 ): Promise<number[]> {
@@ -169,7 +169,7 @@ async function processTranscriptChunksWithTimestamps(
  */
 async function processContentEmbeddings(
   videoId: number,
-  userId: number,
+  userId: number | null,
   textChunks: string[],
   contentType: typeof contentTypeEnum.enumValues[number]
 ): Promise<number[]> {
