@@ -6,9 +6,9 @@ import { config } from "dotenv";
 config();
 
 const app = express();
-// Parse JSON and URL-encoded bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// JSON middleware with increased size limits
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Ensure API routes are not intercepted by Vite
 app.use('/api', (req, res, next) => {
@@ -76,7 +76,7 @@ app.use((req, res, next) => {
       }
       next();
     });
-    
+
     // Special middleware to handle direct API requests from curl
     app.use('/api', (req, res, next) => {
       if (req.headers['user-agent'] && req.headers['user-agent'].includes('curl')) {
@@ -86,7 +86,7 @@ app.use((req, res, next) => {
         next();
       }
     });
-    
+
     await setupVite(app, server);
   } else {
     serveStatic(app);
