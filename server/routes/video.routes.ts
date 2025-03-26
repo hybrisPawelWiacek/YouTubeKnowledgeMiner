@@ -154,6 +154,28 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * Analyze a YouTube video URL without saving it
+ */
+router.post('/analyze', async (req: Request, res: Response) => {
+  try {
+    // Validate YouTube URL
+    const { url } = youtubeUrlSchema.parse(req.body);
+    
+    // Process the YouTube video without saving
+    const videoData = await processYoutubeVideo(url);
+    
+    // Return the processed video data
+    return sendSuccess(res, videoData);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
+    }
+    console.error("Error analyzing video:", error);
+    return sendError(res, "Failed to analyze video", 500);
+  }
+});
+
+/**
  * Process a YouTube video URL and save it
  */
 router.post('/process', requireSession, async (req: Request, res: Response) => {
