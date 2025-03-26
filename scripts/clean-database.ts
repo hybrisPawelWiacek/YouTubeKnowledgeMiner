@@ -45,7 +45,7 @@ async function cleanDatabase() {
     
     // Re-run the global categories migration to ensure they exist
     log('Re-creating global categories...', 'cleanup');
-    const { default: addGlobalCategories } = await import('./add-global-categories');
+    const { addGlobalCategories } = await import('./add-global-categories');
     await addGlobalCategories();
     
   } catch (error) {
