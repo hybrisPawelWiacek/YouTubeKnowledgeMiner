@@ -7,10 +7,9 @@ async function cleanDatabase() {
   log('Starting database cleanup...', 'cleanup');
   
   try {
-    // Disable foreign key checks to avoid constraint issues during deletion
-    await db.execute(sql`SET session_replication_role = 'replica'`);
-    
     // Delete data from tables in reverse dependency order
+    // This order is important to avoid foreign key constraint issues
+    
     log('Deleting data from embeddings table...', 'cleanup');
     await db.delete(schema.embeddings);
     
@@ -29,8 +28,10 @@ async function cleanDatabase() {
     log('Deleting data from collections table...', 'cleanup');
     await db.delete(schema.collections);
     
-    log('Deleting data from categories table...', 'cleanup');
-    await db.delete(schema.categories);
+    // For categories, we need to be careful as there may be references from videos
+    // Let's only delete non-global categories to preserve system ones
+    log('Deleting data from user categories...', 'cleanup');
+    await db.delete(schema.categories).where(sql`is_global = false`);
     
     log('Deleting data from saved_searches table...', 'cleanup');
     await db.delete(schema.saved_searches);
@@ -39,9 +40,6 @@ async function cleanDatabase() {
     // Uncomment the next line if you want to delete all users as well
     // log('Deleting data from users table...', 'cleanup');
     // await db.delete(schema.users);
-    
-    // Re-enable foreign key checks
-    await db.execute(sql`SET session_replication_role = 'origin'`);
     
     log('Database cleanup completed successfully!', 'cleanup');
     
