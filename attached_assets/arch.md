@@ -135,6 +135,7 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Vector Search:** Semantic search using text embeddings stored in pgvector
 - **AI Summary Generation:** Automatic summarization of video transcripts
 - **Q&A Conversations:** Interactive Q&A with AI based on video content
+- **Citation System:** Comprehensive citation tracking with source videos, timestamps, and content references
 - **Strategic Authentication:** Non-intrusive account creation prompts at key moments
 - **Anonymous User Support:** Temporary local storage with migration path to persistent storage
 - **Hybrid Database Approach:** Leverages Replit's native PostgreSQL while maintaining flexibility
