@@ -259,16 +259,61 @@ router.get('/', async (req: Request, res: Response) => {
     
     // Handle anonymous users with session
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-      // For anonymous users with session, search their videos
-      const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
-      // Filter these videos based on the search parameters
-      const filteredVideos = applySearchFilters(videos, searchParams);
-      
-      return sendSuccess(res, {
-        videos: filteredVideos,
-        totalCount: filteredVideos.length,
-        hasMore: false
-      });
+      try {
+        console.log("[video routes] Retrieving videos for anonymous session:", userInfo.anonymous_session_id);
+        // For anonymous users with session, search their videos
+        const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+        console.log("[video routes] Found", videos.length, "videos for anonymous session");
+        
+        // For anonymous users, skip Zod validation and manually handle search parameters
+        // to avoid type conversion issues
+        let filteredVideos = videos;
+        
+        // Apply simple filters manually instead of using searchParams
+        if (req.query.query) {
+          const searchTerm = String(req.query.query).toLowerCase();
+          filteredVideos = filteredVideos.filter(v => 
+            v.title.toLowerCase().includes(searchTerm) || 
+            v.channel.toLowerCase().includes(searchTerm) ||
+            (v.transcript && v.transcript.toLowerCase().includes(searchTerm))
+          );
+        }
+        
+        if (req.query.is_favorite === 'true') {
+          filteredVideos = filteredVideos.filter(v => v.is_favorite);
+        }
+        
+        // Apply sorting
+        const sortBy = req.query.sort_by as string || 'date';
+        const sortOrder = req.query.sort_order as string || 'desc';
+        
+        filteredVideos.sort((a, b) => {
+          if (sortBy === 'title') {
+            return sortOrder === 'asc' 
+              ? a.title.localeCompare(b.title)
+              : b.title.localeCompare(a.title);
+          } else if (sortBy === 'rating') {
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            return sortOrder === 'asc' ? ratingA - ratingB : ratingB - ratingA;
+          } else {
+            // Default: sort by date
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+          }
+        });
+        
+        console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
+        return sendSuccess(res, {
+          videos: filteredVideos,
+          totalCount: filteredVideos.length,
+          hasMore: false
+        });
+      } catch (error) {
+        console.error("[video routes] Error processing anonymous videos:", error);
+        return sendError(res, "Failed to process videos for anonymous user", 500);
+      }
     } 
     // Handle authenticated users
     else if (userInfo.user_id !== null) {
