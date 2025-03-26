@@ -460,7 +460,7 @@ export default function VideoDetailPage() {
               
               <TabsContent value="summary">
                 {video.summary && video.summary.length > 0 ? (
-                  <SummarySection summary={video.summary} />
+                  <SummarySection summary={video.summary} videoId={video.id} />
                 ) : (
                   <div className="text-center py-12">
                     <Bookmark className="h-12 w-12 text-gray-500 mx-auto mb-4" />
@@ -489,7 +489,7 @@ export default function VideoDetailPage() {
               
               <TabsContent value="transcript">
                 {video.transcript ? (
-                  <TranscriptSection transcript={video.transcript} />
+                  <TranscriptSection transcript={video.transcript} videoId={video.id} />
                 ) : (
                   <div className="text-center py-12">
                     <Bookmark className="h-12 w-12 text-gray-500 mx-auto mb-4" />
