@@ -18,9 +18,9 @@ async function createTestUser() {
 
     // Insert test user
     const result = await db.insert(users).values({
-      username: 'testuser',
+      username: 'demouser',
       password: 'testpassword',
-      email: 'pw@mail.com'
+      email: 'demo@example.com'
     }).returning();
 
     console.log('Test user created successfully:', result[0]);
