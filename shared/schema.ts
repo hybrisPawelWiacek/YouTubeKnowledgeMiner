@@ -6,6 +6,19 @@ import { sql } from "drizzle-orm";
 // Using pgvector for native vector operations in PostgreSQL
 export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note']);
 export const exportFormatEnum = pgEnum('export_format', ['txt', 'csv', 'json']);
+export const userTypeEnum = pgEnum('user_type', ['registered', 'anonymous']);
+
+// Table for storing anonymous user sessions
+export const anonymous_sessions = pgTable("anonymous_sessions", {
+  id: serial("id").primaryKey(),
+  session_id: text("session_id").notNull().unique(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  last_active_at: timestamp("last_active_at").defaultNow().notNull(),
+  video_count: integer("video_count").default(0).notNull(),
+  // Optional metadata
+  user_agent: text("user_agent"),
+  ip_address: text("ip_address"),
+});
 
 // Table for storing text chunks and their vector embeddings
 export const embeddings = pgTable("embeddings", {
@@ -60,6 +73,9 @@ export const videos = pgTable("videos", {
   tags: text("tags").array(),
   description: text("description"),
   user_id: integer("user_id").references(() => users.id).notNull(),
+  // Track if this is associated with an anonymous session
+  anonymous_session_id: text("anonymous_session_id").references(() => anonymous_sessions.session_id),
+  user_type: userTypeEnum("user_type").default("registered"),
   notes: text("notes"),
   category_id: integer("category_id").references(() => categories.id),
   rating: integer("rating"),
@@ -264,6 +280,13 @@ export const insertSearchHistorySchema = createInsertSchema(search_history).omit
   created_at: true,
 });
 
+export const insertAnonymousSessionSchema = createInsertSchema(anonymous_sessions).omit({
+  id: true,
+  created_at: true,
+  last_active_at: true,
+  video_count: true,
+});
+
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -274,6 +297,7 @@ export type InsertCollectionVideo = z.infer<typeof insertCollectionVideoSchema>;
 export type InsertSavedSearch = z.infer<typeof insertSavedSearchSchema>;
 export type InsertEmbedding = z.infer<typeof insertEmbeddingSchema>;
 export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
+export type InsertAnonymousSession = z.infer<typeof insertAnonymousSessionSchema>;
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Video = typeof videos.$inferSelect;
@@ -283,6 +307,7 @@ export type SavedSearch = typeof saved_searches.$inferSelect;
 export type QAConversation = typeof qa_conversations.$inferSelect;
 export type Embedding = typeof embeddings.$inferSelect;
 export type SearchHistory = typeof search_history.$inferSelect;
+export type AnonymousSession = typeof anonymous_sessions.$inferSelect;
 export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
 export type InsertExportPreferences = z.infer<typeof insertExportPreferencesSchema>;
 export type QAMessage = z.infer<typeof qaMessageSchema>;

@@ -1,10 +1,12 @@
 import { 
-  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations, export_preferences,
+  users, categories, videos, collections, collection_videos, saved_searches, qa_conversations, 
+  export_preferences, anonymous_sessions,
   type User, type InsertUser, type InsertCategory, type Category, 
   type Video, type InsertVideo, type Collection, type InsertCollection,
   type CollectionVideo, type InsertCollectionVideo, type SavedSearch,
   type InsertSavedSearch, type SearchParams, type QAConversation, type InsertQAConversation,
-  type QAMessage, type QAQuestion, type ExportPreferences, type InsertExportPreferences
+  type QAMessage, type QAQuestion, type ExportPreferences, type InsertExportPreferences,
+  type AnonymousSession, type InsertAnonymousSession
 } from "@shared/schema";
 
 export interface IStorage {
@@ -58,6 +60,15 @@ export interface IStorage {
   getExportPreferencesByUserId(userId: number): Promise<ExportPreferences | undefined>;
   createExportPreferences(preferences: InsertExportPreferences): Promise<ExportPreferences>;
   updateExportPreferences(id: number, data: Partial<ExportPreferences>): Promise<ExportPreferences | undefined>;
+  
+  // Anonymous session methods
+  getAnonymousSessionBySessionId(sessionId: string): Promise<AnonymousSession | undefined>;
+  createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession>;
+  updateAnonymousSession(sessionId: string, data: Partial<AnonymousSession>): Promise<AnonymousSession | undefined>;
+  updateAnonymousSessionLastActive(sessionId: string): Promise<void>;
+  incrementAnonymousSessionVideoCount(sessionId: string): Promise<number>;
+  getVideosByAnonymousSessionId(sessionId: string): Promise<Video[]>;
+  deleteInactiveAnonymousSessions(olderThanDays: number): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -69,6 +80,7 @@ export class MemStorage implements IStorage {
   private savedSearches: Map<number, SavedSearch>;
   private qaConversations: Map<number, QAConversation>;
   private exportPreferences: Map<number, ExportPreferences>;
+  private anonymousSessions: Map<string, AnonymousSession>;
   private userIdCounter: number;
   private categoryIdCounter: number;
   private videoIdCounter: number;
@@ -76,6 +88,7 @@ export class MemStorage implements IStorage {
   private savedSearchIdCounter: number;
   private qaConversationIdCounter: number;
   private exportPreferencesIdCounter: number;
+  private anonymousSessionIdCounter: number;
 
   constructor() {
     this.users = new Map();
@@ -86,6 +99,7 @@ export class MemStorage implements IStorage {
     this.savedSearches = new Map();
     this.qaConversations = new Map();
     this.exportPreferences = new Map();
+    this.anonymousSessions = new Map();
     this.userIdCounter = 1;
     this.categoryIdCounter = 1;
     this.videoIdCounter = 1;
@@ -93,6 +107,7 @@ export class MemStorage implements IStorage {
     this.savedSearchIdCounter = 1;
     this.qaConversationIdCounter = 1;
     this.exportPreferencesIdCounter = 1;
+    this.anonymousSessionIdCounter = 1;
   }
 
   // User methods
@@ -494,6 +509,91 @@ export class MemStorage implements IStorage {
     
     this.exportPreferences.set(id, updatedPreferences);
     return updatedPreferences;
+  }
+  
+  // Anonymous session methods
+  async getAnonymousSessionBySessionId(sessionId: string): Promise<AnonymousSession | undefined> {
+    return this.anonymousSessions.get(sessionId);
+  }
+  
+  async createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession> {
+    const id = this.anonymousSessionIdCounter++;
+    const now = new Date();
+    
+    const anonymousSession: AnonymousSession = {
+      ...session,
+      id,
+      created_at: now,
+      last_active_at: now,
+      video_count: 0
+    };
+    
+    this.anonymousSessions.set(session.session_id, anonymousSession);
+    return anonymousSession;
+  }
+  
+  async updateAnonymousSession(sessionId: string, data: Partial<AnonymousSession>): Promise<AnonymousSession | undefined> {
+    const session = this.anonymousSessions.get(sessionId);
+    if (!session) return undefined;
+    
+    const updatedSession: AnonymousSession = {
+      ...session,
+      ...data,
+      last_active_at: new Date()
+    };
+    
+    this.anonymousSessions.set(sessionId, updatedSession);
+    return updatedSession;
+  }
+  
+  async updateAnonymousSessionLastActive(sessionId: string): Promise<void> {
+    const session = this.anonymousSessions.get(sessionId);
+    if (session) {
+      session.last_active_at = new Date();
+      this.anonymousSessions.set(sessionId, session);
+    }
+  }
+  
+  async incrementAnonymousSessionVideoCount(sessionId: string): Promise<number> {
+    const session = this.anonymousSessions.get(sessionId);
+    if (!session) throw new Error(`No anonymous session found with ID: ${sessionId}`);
+    
+    const newCount = (session.video_count || 0) + 1;
+    session.video_count = newCount;
+    session.last_active_at = new Date();
+    
+    this.anonymousSessions.set(sessionId, session);
+    return newCount;
+  }
+  
+  async getVideosByAnonymousSessionId(sessionId: string): Promise<Video[]> {
+    return Array.from(this.videos.values()).filter(
+      video => video.anonymous_session_id === sessionId
+    );
+  }
+  
+  async deleteInactiveAnonymousSessions(olderThanDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    
+    let deletedCount = 0;
+    
+    // Find inactive sessions
+    for (const [sessionId, session] of this.anonymousSessions.entries()) {
+      if (new Date(session.last_active_at) < cutoffDate) {
+        // Delete associated videos
+        const videos = await this.getVideosByAnonymousSessionId(sessionId);
+        for (const video of videos) {
+          await this.deleteVideo(video.id);
+        }
+        
+        // Delete the session itself
+        this.anonymousSessions.delete(sessionId);
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
   }
 }
 
