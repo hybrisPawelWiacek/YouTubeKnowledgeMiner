@@ -27,7 +27,7 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Database Layer:** Neon PostgreSQL (native to Replit) with pgvector extension for semantic search
 - **Authentication:** Supabase Auth for Google OAuth with strategic account prompting
 - **AI Services:** OpenAI integration for transcript analysis and Q&A
-- **Local Storage:** Temporary storage for anonymous users with migration path to persistent storage
+- **Anonymous Sessions:** Server-side session management for anonymous users with database persistence
 
 ## Technology Stack
 
@@ -58,7 +58,7 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Schema Management:** Drizzle Schema with migration support
 - **Data Validation:** Zod schemas with strong typing
 - **Storage Architecture:** Simplified schema design with more integrated tables and fewer junction tables
-- **Anonymous Data:** Local storage for unauthenticated users with migration path to database
+- **Anonymous Data:** Server-side session management with database storage of anonymous user data
 
 ### Authentication & Security
 
@@ -137,9 +137,49 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Q&A Conversations:** Interactive Q&A with AI based on video content
 - **Citation System:** Comprehensive citation tracking with source videos, timestamps, and content references
 - **Strategic Authentication:** Non-intrusive account creation prompts at key moments
-- **Anonymous User Support:** Temporary local storage with migration path to persistent storage
+- **Anonymous User Support:** Server-side session management with unique session IDs and 3-video limit
 - **Hybrid Database Approach:** Leverages Replit's native PostgreSQL while maintaining flexibility
 - **Performance Optimizations:** Batched processing and lazy loading for efficiency
+
+## Anonymous Session Architecture
+
+The application implements a robust session-based approach for anonymous users:
+
+- **Server-Side Sessions:** Unlike traditional client-side anonymous user tracking, all anonymous user state is managed on the server
+- **Database-Backed Storage:** Anonymous sessions are stored in the database with the following key attributes:
+  - Unique session ID (format: `anon_[timestamp]_[random]`)
+  - Creation timestamp
+  - Last active timestamp (updated on every interaction)
+  - Video count (for enforcing the 3-video limit)
+  - Optional metadata (user agent, IP address)
+
+- **Database Integration:**
+  - Anonymous videos are associated with both user_id=1 and a unique anonymous_session_id
+  - User identification is primarily done via anonymous_session_id for unregistered users
+  - Special handling in database queries to filter by session ID rather than user ID
+  - Session cleanup mechanism removes inactive sessions after a configurable time period
+
+- **Frontend-Backend Communication:**
+  - Session ID stored in browser's localStorage
+  - Session ID included in all API requests via custom headers
+  - Backend validates session existence and freshness with every request
+  - Automatic session creation for new users without existing sessions
+
+- **Entitlements Management:**
+  - Strict enforcement of 3-video limit per anonymous session
+  - Video count incremented with each successful video save
+  - Count checked before allowing new video processing
+  - Strategic prompts when limit is reached to encourage account creation
+
+- **Migration Path:**
+  - When an anonymous user creates an account, their videos can be transferred to their new user account
+  - Content migration preserves all metadata and associated data (embeddings, etc.)
+  - Session cleanup after successful migration
+
+- **Type Safety:**
+  - Schema definition for anonymous sessions in shared schema
+  - Strong typing for all session-related operations
+  - Support for nullable user_id in application logic with runtime safety
 
 ## Conclusion
 

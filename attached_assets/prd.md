@@ -208,16 +208,17 @@ The product serves audiences who consume educational, informational, and profess
 - ✅ Visual indicators showing usage limits (3 videos maximum)
 
 #### Anonymous-to-Authenticated Transition (✅ IMPLEMENTED)
-- ✅ Standardized localStorage schema for anonymous users:
-  - ✅ JSON structure with videos, collections, and metadata tracking
-  - ✅ Full video objects with all required fields for database compatibility
-  - ✅ Consistent typing with server-side models
-  - ✅ Automatic limit tracking for enforcing the 3-video maximum
+- ✅ Server-side anonymous session management:
+  - ✅ Database-backed anonymous sessions with unique session IDs
+  - ✅ Automatic creation and tracking of anonymous sessions
+  - ✅ Last-active timestamp updates for session freshness
+  - ✅ Session expiration and cleanup for inactive users
+  - ✅ Strict enforcement of 3-video limit per anonymous session
 - ✅ Comprehensive data migration path:
-  - ✅ getLocalData() and setLocalData() functions for consistent storage access
+  - ✅ getVideosByAnonymousSessionId() for retrieving session-specific content
   - ✅ migrateLocalData() function for seamless transition to authenticated state
   - ✅ Optimized data transfer preserving all user-created content
-  - ✅ Cleanup of localStorage after successful migration
+  - ✅ Proper session cleanup after successful migration
 - ✅ Conflict resolution strategies for duplicate content
 - ✅ Progress indicators during migration process
 - ✅ Error handling with fallback options for failed migrations
@@ -277,18 +278,23 @@ The application uses a hybrid architecture with multi-tier storage approach:
 - Type-safe database operations via Drizzle ORM
 
 **Anonymous User Storage:**
-- Structured localStorage implementation with consistent schema
-- JSON serialization with well-defined object structure:
+- Server-side session management with database persistence
+- Standardized session schema with the following structure:
   ```typescript
   {
-    videos: Video[],
-    collections: Collection[],
-    videoCount: number,
-    // Additional metadata for tracking
+    id: number;                   // Auto-incrementing primary key
+    session_id: string;           // Unique identifier (anon_[timestamp]_[random])
+    created_at: Date;             // Session creation timestamp
+    last_active_at: Date;         // Last activity timestamp (updated on each request)
+    video_count: number;          // Number of videos saved by this anonymous user
+    user_agent: string | null;    // Optional browser/device information
+    ip_address: string | null;    // Optional IP address for security
   }
   ```
-- Maximum limit enforcement (3 videos for anonymous users)
-- Data compatibility with database schema for seamless migration
+- Maximum limit enforcement (3 videos per anonymous session)
+- Client-side caching of session ID in localStorage
+- Backend validation on all API requests
+- Database compatibility via special handling of null user_id values
 
 **Authentication Integration:**
 - Supabase for user authentication and session management
@@ -361,12 +367,12 @@ The application uses a hybrid architecture with multi-tier storage approach:
   - Primary storage in Neon PostgreSQL (native to Replit)
   - pgvector extension for vector operations
   - Supabase primarily for authentication services
-  - Local storage fallback for anonymous users
+  - Database-backed anonymous session management
 
 ### 2. Authentication Strategy
 - Hybrid architecture supporting both anonymous and authenticated users:
   - Anonymous users can use core functionality without creating an account
-  - Local storage persistence for anonymous user data
+  - Server-side session-based management with database persistence
   - Strategic authentication prompts at key engagement points
   - Graceful transition from anonymous to authenticated state
 - Supabase is used specifically for authentication services:
@@ -402,10 +408,27 @@ The application uses a hybrid architecture with multi-tier storage approach:
 
 ## 9. Recent Improvements (UPDATED)
 
+### Server-Side Anonymous Session Management (March 2025)
+- **Enhanced anonymous user architecture:**
+  - Implemented database-backed session management for anonymous users
+  - Created unique session IDs with format `anon_[timestamp]_[random]`
+  - Added session tracking with creation and last-active timestamps
+  - Integrated automatic inactive session cleanup
+- **Security and performance improvements:**
+  - Prevented user_id conflicts by standardizing anonymous user handling
+  - Improved data filtering with session-specific queries
+  - Enhanced security with server-side validation of all requests
+  - Reduced client-side storage requirements and improved reliability
+- **Enhanced entitlements enforcement:**
+  - Server-enforced 3-video limit for anonymous users
+  - Accurate tracking of used quota with database counters
+  - Improved error handling for limit validation
+  - Clean migration path for anonymous user data to registered accounts
+
 ### Hybrid Authentication Architecture (March 2025)
 - **Implemented flexible user authentication system:**
   - Developed dual-mode architecture supporting both anonymous and authenticated users
-  - Created localStorage-based data persistence for anonymous users
+  - Created server-side session management with database persistence for anonymous users
   - Added strategic authentication prompts at key engagement points
   - Built seamless data migration path from anonymous to authenticated state
 - **Anonymous user experience:**
@@ -414,7 +437,7 @@ The application uses a hybrid architecture with multi-tier storage approach:
   - Implemented non-intrusive authentication prompts with clear value propositions
   - Enabled core functionality without requiring immediate sign-up
 - **Data integrity and transition:**
-  - Standardized data structures between localStorage and database
+  - Standardized database schema for anonymous sessions
   - Created mechanisms to prevent data loss during authentication transitions
   - Implemented robust error handling for data migration edge cases
   - Added progress indicators during data migration process
