@@ -873,6 +873,12 @@ export function QASection() {
                         placeholder="Ask a question about this video..."
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey && question.trim()) {
+                            e.preventDefault();
+                            handleSubmitQuestion(e);
+                          }
+                        }}
                         className="min-h-[80px] pr-10 resize-none"
                         disabled={isSubmitting}
                       />
@@ -913,6 +919,12 @@ export function QASection() {
                       placeholder="Ask a question about this video..."
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && question.trim()) {
+                          e.preventDefault();
+                          handleSubmitQuestion(e);
+                        }
+                      }}
                       className="min-h-[120px] pr-10 resize-none"
                       disabled={isSubmitting}
                     />
