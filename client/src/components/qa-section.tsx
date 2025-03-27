@@ -769,12 +769,12 @@ export function QASection() {
                   onClick={() => setShowSidebar(!showSidebar)}
                 >
                   {showSidebar ? (
-                    <PanelLeftClose className="h-4 w-4 mr-2" />
-                  ) : (
                     <PanelLeftOpen className="h-4 w-4 mr-2" />
+                  ) : (
+                    <PanelLeftClose className="h-4 w-4 mr-2" />
                   )}
                   <span className="hidden sm:inline">
-                    {showSidebar ? "Hide Conversations" : "Show Conversations"}
+                    {showSidebar ? "Show Conversations" : "Hide Conversations"}
                   </span>
                 </Button>
               </div>
