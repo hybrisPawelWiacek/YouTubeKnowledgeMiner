@@ -329,9 +329,10 @@ export function QASection() {
         console.log("[QA Section] Using anonymous session ID for delete conversation:", anonymousSessionId);
       }
 
-      const response = await apiRequest('DELETE', `/api/qa/${id}`, undefined, headers);
-      const data = await response.json();
-      return data;
+      // The delete endpoint returns 204 No Content, so we shouldn't try to parse it as JSON
+      await apiRequest('DELETE', `/api/qa/${id}`, undefined, headers);
+      // Return an empty object as the mutation response
+      return {};
     },
     onSuccess: () => {
       // If we're deleting the active conversation, reset the active conversation
