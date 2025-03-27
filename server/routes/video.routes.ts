@@ -361,12 +361,14 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // Validate YouTube URL
     const { url } = youtubeUrlSchema.parse(req.body);
     
-    // Process the YouTube video without saving
-    const videoData = await processYoutubeVideo(url);
+    // Extract video ID from URL
+    const videoId = extractYoutubeId(url);
+    if (!videoId) {
+      return sendError(res, "Invalid YouTube URL format", 400, "VALIDATION_ERROR");
+    }
     
-    // Extract YouTube ID from URL if needed and ensure we're returning just the ID
-    const extractedId = extractYoutubeId(videoData.youtubeId);
-    videoData.youtubeId = extractedId || videoData.youtubeId;
+    // Process the YouTube video without saving
+    const videoData = await processYoutubeVideo(videoId);
     
     // Return the processed video data
     return sendSuccess(res, videoData);
