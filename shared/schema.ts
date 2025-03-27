@@ -265,6 +265,8 @@ export const semanticSearchSchema = z.object({
     category_id: z.number().optional(),
     collection_id: z.number().optional(),
     is_favorite: z.boolean().optional(),
+    // For internal use - this is set by the backend based on headers, not by client
+    anonymous_session_id: z.string().optional(),
   }).optional(),
   limit: z.number().min(1).max(100).default(10),
 });

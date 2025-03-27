@@ -257,6 +257,7 @@ export async function performSemanticSearch(
     categoryId?: number;
     collectionId?: number;
     isFavorite?: boolean;
+    anonymous_session_id?: string; // Add support for anonymous session ID
   } = {},
   limit: number = 10
 ): Promise<{
@@ -277,25 +278,46 @@ export async function performSemanticSearch(
     
     // Execute the initial search - handle both registered and anonymous users
     let conditions: any[] = [];
+    let videoFilter: any = null;
     
     // Handle both registered and anonymous users
-    if (userId !== null) {
-      // For registered users, filter by their user ID
+    if (userId !== null && !filters.anonymous_session_id) {
+      // For registered users, filter by their user ID directly
+      log(`Performing semantic search for registered user ${userId}`, 'embeddings');
       conditions.push(eq(embeddings.user_id, userId));
-    } else {
-      // For anonymous users, use system user ID (1) but apply additional filters
-      // to make sure we're only getting their videos
-      conditions.push(eq(embeddings.user_id, 1));
+    } else if (filters.anonymous_session_id) {
+      // For anonymous users, we need to get their videos by session ID first
+      // then filter embeddings by those video IDs
+      log(`Performing semantic search for anonymous session ${filters.anonymous_session_id}`, 'embeddings');
       
-      // If we have a videoId filter, we can use that to specifically target the user's videos
-      if (!filters.videoId) {
-        // Without a videoId filter, we can't easily identify the anonymous user's content
-        // This will likely return empty results or require additional anonymous session ID logic
-        log(`Warning: Anonymous user semantic search without videoId filter may not work correctly`, 'embeddings');
+      // Get all videos for this anonymous session
+      const anonymousVideos = await db.select({
+        id: videos.id
+      })
+      .from(videos)
+      .where(eq(videos.anonymous_session_id, filters.anonymous_session_id));
+      
+      if (anonymousVideos.length === 0) {
+        log(`No videos found for anonymous session ${filters.anonymous_session_id}`, 'embeddings');
+        return []; // No videos for this session, return empty results
       }
+      
+      const videoIds = anonymousVideos.map(v => v.id);
+      log(`Found ${videoIds.length} videos for anonymous session: ${videoIds.join(', ')}`, 'embeddings');
+      
+      // We'll use these video IDs to filter the embeddings
+      videoFilter = inArray(embeddings.video_id, videoIds);
+    } else {
+      // If we don't have userId or anonymous_session_id, something is wrong
+      log(`Warning: No user ID or anonymous session ID provided for semantic search`, 'embeddings');
+      return [];
     }
     
-    if (filters.videoId) {
+    // Apply video filter from anonymous session if we have one
+    if (videoFilter) {
+      conditions.push(videoFilter);
+    } else if (filters.videoId) {
+      // Otherwise apply specific video ID filter if provided
       conditions.push(eq(embeddings.video_id, filters.videoId));
     }
     
