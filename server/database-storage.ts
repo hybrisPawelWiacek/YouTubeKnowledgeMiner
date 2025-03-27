@@ -563,8 +563,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Anonymous session not found: ${sessionId}`);
     }
     
-    // Increment the count
-    const newCount = (session.video_count || 0) + 1;
+    // Get actual video count from database as a safety check
+    const actualVideos = await this.getVideosByAnonymousSessionId(sessionId);
+    const actualCount = actualVideos.length;
+    
+    // Use the actual count to make sure our counter is accurate
+    // This prevents the counter from getting out of sync with reality
+    console.log(`[DB] Session video count sync: Counter=${session.video_count}, Actual=${actualCount}`);
+    
+    // Use actual count + 1 as the new count to prevent drift
+    const newCount = actualCount + 1;
     
     // Update the session
     await db

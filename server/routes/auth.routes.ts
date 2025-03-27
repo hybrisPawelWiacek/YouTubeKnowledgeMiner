@@ -25,11 +25,21 @@ router.get("/videos/count", async (req: Request, res: Response) => {
       return sendSuccess(res, { count: 0 });
     }
     
+    // Get actual videos for verification
+    const actualVideos = await storage.getVideosByAnonymousSessionId(sessionId);
+    const actualCount = actualVideos.length;
+    
+    // If there's a discrepancy, update the count to match reality
+    if (session.video_count !== actualCount) {
+      console.log(`[Auth] Fixing video count discrepancy for session ${sessionId}: DB=${session.video_count}, Actual=${actualCount}`);
+      await storage.updateAnonymousSession(sessionId, { video_count: actualCount });
+    }
+    
     // Update last active timestamp for the session
     await storage.updateAnonymousSessionLastActive(sessionId);
     
     return sendSuccess(res, { 
-      count: session.video_count,
+      count: actualCount, // Use actual count instead of session.video_count
       session_id: sessionId,
       max_allowed: 3 // Hard-coded limit for now, could move to config
     });
