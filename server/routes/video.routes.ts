@@ -292,6 +292,12 @@ router.get('/', async (req: Request, res: Response) => {
           filteredVideos = filteredVideos.filter(v => v.is_favorite);
         }
         
+        // Apply category filter
+        if (req.query.category_id) {
+          const categoryId = Number(req.query.category_id);
+          filteredVideos = filteredVideos.filter(v => v.category_id === categoryId);
+        }
+        
         // Apply sorting
         const sortBy = req.query.sort_by as string || 'date';
         const sortOrder = req.query.sort_order as string || 'desc';
