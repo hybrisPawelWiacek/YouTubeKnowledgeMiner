@@ -37,7 +37,7 @@ interface SearchResult {
   id: number;
   video_id: number;
   content: string;
-  content_type: 'transcript' | 'summary' | 'note';
+  content_type: 'transcript' | 'summary' | 'note' | 'conversation';
   similarity: number;
   metadata: {
     timestamp?: string;
@@ -59,9 +59,9 @@ interface VideoInfo {
 export default function ExplorerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<{
-    contentTypes: ('transcript' | 'summary' | 'note')[];
+    contentTypes: ('transcript' | 'summary' | 'note' | 'conversation')[];
   }>({
-    contentTypes: ['transcript', 'summary', 'note'],
+    contentTypes: ['transcript', 'summary', 'note', 'conversation'],
   });
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -150,7 +150,7 @@ export default function ExplorerPage() {
     }
   };
   
-  const toggleContentTypeFilter = (type: 'transcript' | 'summary' | 'note') => {
+  const toggleContentTypeFilter = (type: 'transcript' | 'summary' | 'note' | 'conversation') => {
     setActiveFilters(prev => {
       // If the type is already in the array, remove it
       if (prev.contentTypes.includes(type)) {
@@ -179,14 +179,16 @@ export default function ExplorerPage() {
     const contentTypeDisplay = {
       transcript: 'Transcript',
       summary: 'Summary',
-      note: 'Notes'
+      note: 'Notes',
+      conversation: 'Conversation'
     }[result.content_type];
     
     // Get color for content type
     const contentTypeColor = {
       transcript: 'bg-blue-600',
       summary: 'bg-purple-600',
-      note: 'bg-green-600'
+      note: 'bg-green-600',
+      conversation: 'bg-orange-600'
     }[result.content_type];
     
     // YouTube video link
@@ -325,6 +327,15 @@ export default function ExplorerPage() {
             />
             <Label htmlFor="filter-notes">Notes</Label>
           </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="filter-conversation" 
+              checked={activeFilters.contentTypes.includes('conversation')}
+              onCheckedChange={() => toggleContentTypeFilter('conversation')}
+            />
+            <Label htmlFor="filter-conversation">Conversations</Label>
+          </div>
         </div>
       </div>
     </div>
@@ -339,7 +350,7 @@ export default function ExplorerPage() {
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold tracking-tight mb-2">Content Explorer</h1>
             <p className="text-muted-foreground">
-              Search through all your videos' transcripts, summaries, and notes
+              Search through all your videos' transcripts, summaries, notes, and conversations
             </p>
           </div>
           
@@ -407,7 +418,7 @@ export default function ExplorerPage() {
             </div>
             
             {/* Active filters display */}
-            {activeFilters.contentTypes.length < 3 && (
+            {activeFilters.contentTypes.length < 4 && (
               <div className="flex mt-2 gap-2 flex-wrap">
                 <div className="text-sm text-gray-400">Searching in:</div>
                 {activeFilters.contentTypes.map(type => (
@@ -466,7 +477,7 @@ export default function ExplorerPage() {
                   </div>
                   <h3 className="text-xl font-medium mb-2">Enter a search term</h3>
                   <p className="text-gray-400 mb-6 max-w-md mx-auto">
-                    Search across all your video transcripts, summaries, and notes to find specific content.
+                    Search across all your video transcripts, summaries, notes, and conversations to find specific content.
                   </p>
                 </div>
               )}
