@@ -544,7 +544,7 @@ export default function Library() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setIsFilterSidebarOpen(true);
+                  setIsFilterSidebarOpen(!isFilterSidebarOpen);
                   trackEngagement();
                 }}
                 className="flex items-center gap-1"
