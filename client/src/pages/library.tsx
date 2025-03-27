@@ -245,9 +245,15 @@ export default function Library() {
   // Mutations
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      // For anonymous users, we need to add the session header
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // For authenticated users, we need to add the user ID header
+      if (user) {
+        headers = { 'x-user-id': String(user.id) };
+        console.log('Bulk Delete - Adding user ID header for authenticated user:', user.id);
+      }
+      // For anonymous users, we need to add the session header
+      else {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
         console.log('Bulk Delete - Adding anonymous session header:', sessionId);
@@ -277,9 +283,15 @@ export default function Library() {
 
   const bulkToggleFavoriteMutation = useMutation({
     mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
-      // For anonymous users, we need to add the session header
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // For authenticated users, add the user ID header
+      if (user) {
+        headers = { 'x-user-id': String(user.id) };
+        console.log('Bulk Toggle Favorite - Adding user ID header for authenticated user:', user.id);
+      }
+      // For anonymous users, we need to add the session header
+      else {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
         console.log('Bulk Toggle Favorite - Adding anonymous session header:', sessionId);
@@ -309,9 +321,15 @@ export default function Library() {
 
   const addToCollectionMutation = useMutation({
     mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
-      // For anonymous users, we need to add the session header
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // For authenticated users, add the user ID header
+      if (user) {
+        headers = { 'x-user-id': String(user.id) };
+        console.log('Add to Collection - Adding user ID header for authenticated user:', user.id);
+      }
+      // For anonymous users, we need to add the session header
+      else {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
         console.log('Add to Collection - Adding anonymous session header:', sessionId);
