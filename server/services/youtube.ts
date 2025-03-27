@@ -72,13 +72,17 @@ export async function processYoutubeVideo(videoId: string) {
     try {
       console.log("Fetching transcript for video...");
       transcript = await getYoutubeTranscript(videoId);
+      console.log(`Transcript fetch result: ${transcript ? 'SUCCESS' : 'FAILED'}`);
       
       if (transcript && isOpenAIConfigured()) {
-        console.log("Generating summary from transcript...");
+        console.log("OpenAI is configured. Generating summary from transcript...");
         summary = await generateTranscriptSummary(transcript, snippet.title);
+        console.log(`Summary generation result: ${summary ? 'SUCCESS' : 'FAILED'}`);
+      } else {
+        console.log(`Skipping summary generation. Transcript available: ${!!transcript}, OpenAI configured: ${isOpenAIConfigured()}`);
       }
     } catch (transcriptError) {
-      console.warn("Could not fetch transcript:", transcriptError);
+      console.error("Error during transcript/summary generation:", transcriptError);
       // Don't throw an error here, just continue without transcript
     }
     
@@ -386,12 +390,19 @@ async function handleVideoWithoutAPIKey(videoId: string) {
     let summary = null;
     
     try {
+      console.log("Fetching transcript for video in fallback method...");
       transcript = await getYoutubeTranscript(videoId);
+      console.log(`Fallback transcript fetch result: ${transcript ? 'SUCCESS' : 'FAILED'}`);
+      
       if (transcript && isOpenAIConfigured()) {
+        console.log("OpenAI is configured. Generating summary from transcript in fallback method...");
         summary = await generateTranscriptSummary(transcript, title);
+        console.log(`Fallback summary generation result: ${summary ? 'SUCCESS' : 'FAILED'}`);
+      } else {
+        console.log(`Skipping fallback summary. Transcript: ${!!transcript}, OpenAI: ${isOpenAIConfigured()}`);
       }
     } catch (error) {
-      console.warn('Could not fetch transcript:', error);
+      console.error('Error during fallback transcript/summary:', error);
     }
     
     // Return a simplified video object
