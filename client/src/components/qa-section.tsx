@@ -265,12 +265,12 @@ export function QASection() {
   };
 
   const handleNewConversation = () => {
-    // Open the new conversation dialog instead of immediately clearing
-    setShowNewConversationDialog(true);
+    // Skip the dialog and directly start a new conversation
+    startNewConversation();
   };
   
   const startNewConversation = () => {
-    // Close the dialog
+    // Close the dialog (in case it's open from somewhere else)
     setShowNewConversationDialog(false);
     
     // Reset the conversation state
