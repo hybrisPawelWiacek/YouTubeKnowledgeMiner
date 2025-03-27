@@ -296,6 +296,17 @@ export class DatabaseStorage implements IStorage {
         .where(inArray(collection_videos.video_id, ids))
         .returning();
       console.log(`Deleted ${deletedCollectionAssocs.length} collection associations`);
+      
+      // Third, delete related embeddings (this is needed for authenticated users)
+      console.log(`Deleting embeddings for video IDs: ${ids.join(', ')}`);
+      try {
+        // Try to delete from the embeddings table if it exists
+        await db.execute(sql`DELETE FROM embeddings WHERE video_id IN (${sql.join(ids)})`);
+        console.log(`Deleted embeddings for videos`);
+      } catch (embeddingError) {
+        // If the table doesn't exist or there's some other error, log and continue
+        console.warn(`Warning when deleting embeddings:`, embeddingError);
+      }
 
       // Finally delete the videos
       console.log(`Deleting videos with IDs: ${ids.join(', ')}`);
@@ -327,6 +338,13 @@ export class DatabaseStorage implements IStorage {
             await db
               .delete(collection_videos)
               .where(eq(collection_videos.video_id, id));
+            
+            // Delete embeddings for this specific video
+            try {
+              await db.execute(sql`DELETE FROM embeddings WHERE video_id = ${id}`);
+            } catch (embeddingError) {
+              console.warn(`Warning when deleting embeddings for video ID ${id}:`, embeddingError);
+            }
               
             // Delete the video itself
             const deleted = await db
