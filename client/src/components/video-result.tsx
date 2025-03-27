@@ -134,7 +134,7 @@ export function VideoResult({ video }: VideoResultProps) {
   };
 
   // Handle saving the video with all metadata
-  const handleSave = () => {
+  const handleSave = async () => {
     const metadata: VideoMetadata = {
       notes: notes || undefined,
       category_id: categoryId,
@@ -148,29 +148,59 @@ export function VideoResult({ video }: VideoResultProps) {
     incrementEngagement();
     setInteractionCount(prev => prev + 1);
 
-    // Show auth prompt for non-authenticated users
-    if (!user) {
+    // For authenticated users, just proceed normally
+    if (user) {
+      handleActualSave(metadata);
+      return;
+    }
+    
+    // Handle anonymous user flow
+    try {
+      // We need to dynamically import to avoid issues
+      const anonymousModule = await import('@/lib/anonymous-session');
+      
+      // Get the current video count and limit from server in one call
+      const { count: currentCount, maxAllowed } = await anonymousModule.getAnonymousVideoCountInfo();
+      
+      console.log('[VideoResult] Current anonymous video count:', currentCount, 'Max allowed:', maxAllowed);
+      
+      // First check if the user has reached the video limit
+      // Check if this would exceed the limit (count is before this save)
+      if (currentCount >= maxAllowed) {
+        // If user has reached the limit, always show auth prompt
+        console.log('[VideoResult] Anonymous user reached video limit, showing auth prompt');
+        promptAuth('save_video');
+        return; // Stop execution to prevent saving
+      }
+      
       // Determine if this is a high-quality save (has meaningful data)
       const hasQualityMetadata = 
         (notes && notes.length > 20) || // User added significant notes
         (rating > 3) ||                 // User gave high rating
         categoryId !== undefined;       // User categorized the video
-
-      // Higher likelihood of prompting if user has added quality metadata
-      // or has had significant engagement with the result
-      if (hasQualityMetadata || interactionCount >= 3) {
-        // This is a high-value moment to prompt for auth
-        const prompted = promptAuth('save_video');
-        if (!prompted) {
-          // If the prompt wasn't shown (e.g., suppressed), continue with normal flow
+      
+      // Only prompt if we have strategic reasons to do so:
+      // 1. User has 2 videos already (about to reach limit)
+      // 2. User has invested time in adding quality metadata
+      // 3. User has significant interaction with the video
+      if (currentCount >= maxAllowed - 1 || hasQualityMetadata || interactionCount >= 5) {
+        console.log('[VideoResult] Strategic prompt condition met, checking if we should prompt');
+        const prompted = promptAuth('save_video', true); // Use check-only mode first
+        if (prompted) {
+          // If eligible to show a prompt, show it
+          promptAuth('save_video');
+        } else {
+          // If not eligible for a prompt, save normally
           handleActualSave(metadata);
         }
       } else {
-        // Not the best moment to interrupt with auth - just save silently
+        // Not the right moment to interrupt with auth - just save silently
+        console.log('[VideoResult] Not prompting, saving video silently');
         handleActualSave(metadata);
       }
-    } else {
-      // User is authenticated, proceed normally
+    } catch (error) {
+      console.error('[VideoResult] Error in anonymous save logic:', error);
+      // On error, fall back to just saving the video
       handleActualSave(metadata);
     }
   };

@@ -68,7 +68,7 @@ export function AuthPromptDialog({
   const [, setLocation] = useLocation();
   const { signInWithGoogle, hasReachedAnonymousLimit } = useSupabase();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
-  const [maxAllowedVideos] = useState(3);
+  const [maxAllowedVideos, setMaxAllowedVideos] = useState(3);
 
   useEffect(() => {
     // Update video count from server when dialog opens
@@ -77,24 +77,12 @@ export function AuthPromptDialog({
       const fetchVideoCount = async () => {
         try {
           // Import session utilities to avoid circular dependencies
-          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-          const sessionId = getOrCreateAnonymousSessionId();
+          const { getAnonymousVideoCountInfo } = await import('@/lib/anonymous-session');
           
-          // Fetch count from server
-          const response = await fetch('/api/anonymous/videos/count', {
-            method: 'GET',
-            headers: {
-              'x-anonymous-session': sessionId
-            },
-            credentials: 'include'
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data && typeof data.count === 'number') {
-              setAnonymousVideoCount(data.count);
-            }
-          }
+          // Get count info from the server
+          const { count, maxAllowed } = await getAnonymousVideoCountInfo();
+          setAnonymousVideoCount(count);
+          setMaxAllowedVideos(maxAllowed);
         } catch (error) {
           console.error('Error fetching anonymous video count:', error);
           // Set to zero if we couldn't get the count from the server

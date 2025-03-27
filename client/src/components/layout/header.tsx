@@ -23,6 +23,7 @@ export function Header() {
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
+  const [maxAllowedVideos, setMaxAllowedVideos] = useState(MAX_ANONYMOUS_VIDEOS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch anonymous session video count from server when not authenticated
@@ -30,24 +31,15 @@ export function Header() {
     queryKey: ['/api/anonymous/videos/count'],
     queryFn: async () => {
       try {
-        // Get the anonymous session ID
-        const sessionId = getOrCreateAnonymousSessionId();
+        // Import to avoid circular dependencies
+        const { getAnonymousVideoCountInfo } = await import('@/lib/anonymous-session');
         
-        // Make the request with the session ID header
-        const response = await fetch('/api/anonymous/videos/count', {
-          headers: {
-            'x-anonymous-session': sessionId
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch video count');
-        }
-        
-        return response.json();
+        // Get count info using our utility function
+        const countInfo = await getAnonymousVideoCountInfo();
+        return countInfo;
       } catch (error) {
         console.error('Error fetching anonymous video count:', error);
-        return { count: 0 };
+        return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
       }
     },
     enabled: !user, // Only run this query for anonymous users
@@ -64,6 +56,11 @@ export function Header() {
       if (typeof videoCountData.count === 'number') {
         console.log('[Header] Anonymous video count from server:', videoCountData.count);
         setAnonymousVideoCount(videoCountData.count);
+        
+        // Update max allowed videos if available from server
+        if (typeof videoCountData.maxAllowed === 'number') {
+          setMaxAllowedVideos(videoCountData.maxAllowed);
+        }
       }
     } else if (user) {
       // Reset counter for authenticated users
@@ -132,7 +129,7 @@ export function Header() {
                   <span>Library</span>
                   {showVideoCounter && (
                     <Badge variant="secondary" className="ml-2 text-xs">
-                      {anonymousVideoCount}/{MAX_ANONYMOUS_VIDEOS}
+                      {anonymousVideoCount}/{maxAllowedVideos}
                     </Badge>
                   )}
                 </Button>

@@ -78,21 +78,19 @@ export function setLocalAnonymousVideoCount(count: number): void {
 }
 
 /**
- * Check if anonymous user has reached their video limit
- * This makes a server call to check the current count for this anonymous session
+ * Get the current video count and maximum allowed videos from the server
+ * @returns A promise that resolves to an object with the current count and max allowed videos
  */
-export async function hasReachedAnonymousLimit(): Promise<boolean> {
+export async function getAnonymousVideoCountInfo(): Promise<{ count: number; maxAllowed: number }> {
   try {
     if (!hasAnonymousSession()) {
-      return false;
+      return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
     }
     
     const sessionId = getOrCreateAnonymousSessionId();
     const headers = {
       'x-anonymous-session': sessionId
     };
-    
-    console.log('[Anonymous] Checking video limit with session ID:', sessionId);
     
     // Use fetch directly to avoid circular dependencies
     const response = await fetch('/api/anonymous/videos/count', {
@@ -103,22 +101,44 @@ export async function hasReachedAnonymousLimit(): Promise<boolean> {
     
     if (!response.ok) {
       console.warn(`[Anonymous] Error getting video count: ${response.status}`);
-      return false;
+      return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
     }
     
     const data = await response.json();
-    console.log('[Anonymous] Video count result:', data);
     
     if (data && typeof data.count === 'number') {
-      const maxAllowed = data.max_allowed || ANONYMOUS_VIDEO_LIMIT;
-      const hasReached = data.count >= maxAllowed;
-      console.log(`[Anonymous] Video count: ${data.count}/${maxAllowed} - Limit reached: ${hasReached}`);
-      return hasReached;
+      // Get max_allowed from response or use default
+      const maxAllowed = typeof data.max_allowed === 'number' 
+        ? data.max_allowed 
+        : ANONYMOUS_VIDEO_LIMIT;
+      
+      console.log('[Anonymous Session] Video count info from server:', { count: data.count, maxAllowed });
+      return { count: data.count, maxAllowed };
     }
     
-    // If we can't determine the count, assume they haven't reached the limit
-    console.log('[Anonymous] Could not determine video count, assuming limit not reached');
-    return false;
+    return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
+  } catch (error) {
+    console.error('[Anonymous] Error fetching video count info:', error);
+    return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
+  }
+}
+
+/**
+ * Check if anonymous user has reached their video limit
+ * This makes a server call to check the current count for this anonymous session
+ * @returns A promise that resolves to a boolean indicating whether the limit has been reached
+ */
+export async function hasReachedAnonymousLimit(): Promise<boolean> {
+  try {
+    console.log('[Anonymous] Checking if video limit reached');
+    
+    // Use the getAnonymousVideoCountInfo function to avoid duplicating code
+    const { count, maxAllowed } = await getAnonymousVideoCountInfo();
+    
+    const hasReached = count >= maxAllowed;
+    console.log(`[Anonymous] Video count: ${count}/${maxAllowed} - Limit reached: ${hasReached}`);
+    
+    return hasReached;
   } catch (error) {
     console.error('[Anonymous] Error checking anonymous limit:', error);
     
