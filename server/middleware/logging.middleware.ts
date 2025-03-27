@@ -1,8 +1,8 @@
 /**
  * Logging Middleware
  * 
- * This middleware logs incoming requests and outgoing responses
- * with relevant information for debugging and monitoring.
+ * This middleware provides automatic logging of HTTP requests and responses
+ * with timing information and structured data for better analysis.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -11,26 +11,42 @@ import { logger, logApiRequest, logApiResponse } from '../utils/logger';
 /**
  * Middleware to log incoming HTTP requests
  */
-export function requestLogger(req: Request, _res: Response, next: NextFunction) {
-  const requestId = req.requestId || 'unknown';
-  
-  // Log API requests comprehensively, client requests minimally
-  if (req.url.startsWith('/api/')) {
-    logApiRequest(
-      requestId,
-      req.method,
-      req.url,
-      req.headers,
-      req.query,
-      req.params,
-      req.method !== 'GET' ? req.body : undefined
-    );
-  } else {
-    // For non-API routes, just log basic request info in debug level
-    logger.debug(`Request: ${req.method} ${req.url}`, { 
-      method: req.method, 
-      url: req.url, 
-      requestId 
+export function requestLogger(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Don't log requests for static assets
+    if (req.path.startsWith('/assets/') || 
+        req.path.startsWith('/public/') || 
+        req.path.endsWith('.js') || 
+        req.path.endsWith('.css') || 
+        req.path.endsWith('.ico')) {
+      return next();
+    }
+    
+    // Only log API requests in detail
+    if (req.path.startsWith('/api/')) {
+      logApiRequest(
+        req.requestId || 'unknown',
+        req.method,
+        req.originalUrl,
+        req.headers,
+        req.query,
+        req.params,
+        req.method !== 'GET' ? req.body : undefined // Only include body for non-GET requests
+      );
+    } else {
+      // Log other requests more concisely
+      logger.debug(`HTTP ${req.method} ${req.originalUrl}`, {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.originalUrl,
+        userAgent: req.headers['user-agent']
+      });
+    }
+  } catch (error) {
+    // Don't fail the request if logging fails
+    logger.error('Error in request logger middleware', {
+      error,
+      requestId: req.requestId
     });
   }
   
@@ -38,68 +54,87 @@ export function requestLogger(req: Request, _res: Response, next: NextFunction) 
 }
 
 /**
- * Middleware to log outgoing HTTP responses with timing information
+ * Middleware to log HTTP responses with timing information
  */
 export function responseLogger(req: Request, res: Response, next: NextFunction) {
-  // Capture the start time
+  // Record the start time
   const startTime = Date.now();
-  const requestId = req.requestId || 'unknown';
   
-  // Store the original res.end function
+  // Store original end method to intercept it
   const originalEnd = res.end;
   
-  // Override the end function to log response details
-  // @ts-ignore - TypeScript's type system doesn't fully capture the complexity of Node's response.end() signatures
-  res.end = function(chunk: any, encoding?: any, callback?: any): any {
-    // Calculate the response time
-    const responseTime = `${Date.now() - startTime}ms`;
+  // Override end method to capture response data
+  res.end = function(chunk?: any, encoding?: any, callback?: any) {
+    // Calculate response time
+    const responseTime = Date.now() - startTime;
     
-    // Log API responses comprehensively, client responses minimally
-    if (req.url.startsWith('/api/')) {
-      logApiResponse(requestId, res.statusCode, responseTime);
+    // Only log API responses in detail
+    if (req.path.startsWith('/api/')) {
+      try {
+        // Handle different response body formats
+        let responseBody;
+        if (res.locals.responseBody) {
+          // If we've captured the response body in res.locals (e.g., from a controller)
+          responseBody = res.locals.responseBody;
+        } else {
+          // Try to parse the chunk if it's a string
+          if (chunk && typeof chunk === 'string') {
+            try {
+              responseBody = JSON.parse(chunk);
+            } catch (e) {
+              // Not JSON, use as-is
+              responseBody = chunk;
+            }
+          } else {
+            responseBody = chunk;
+          }
+        }
+        
+        // Log the response with timing information
+        logApiResponse(
+          req.requestId || 'unknown',
+          res.statusCode,
+          `${responseTime}ms`,
+          responseBody
+        );
+      } catch (error) {
+        logger.error('Error logging API response', {
+          error,
+          requestId: req.requestId
+        });
+      }
     } else {
-      // For non-API routes, just log basic response info in debug level
-      logger.debug(`Response: ${res.statusCode}`, { 
-        method: req.method, 
-        url: req.url, 
-        statusCode: res.statusCode, 
-        responseTime,
-        requestId
+      // Log other responses more concisely
+      logger.debug(`Response: ${res.statusCode}`, {
+        requestId: req.requestId,
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: res.statusCode,
+        responseTime: `${responseTime}ms`
       });
     }
     
-    // Handle the different method signatures of res.end()
-    if (typeof encoding === 'function') {
-      return originalEnd.call(this, chunk, encoding);
-    } else if (typeof callback === 'function') {
-      return originalEnd.call(this, chunk, encoding, callback);
-    } else {
-      return originalEnd.call(this, chunk, encoding);
-    }
+    // Call the original end method to send the response
+    return originalEnd.call(this, chunk, encoding, callback);
   };
   
   next();
 }
 
 /**
- * Error logging middleware
- * 
- * This should be registered after all route handlers to catch and log errors
+ * Middleware to log errors in the request pipeline
  */
 export function errorLogger(err: any, req: Request, res: Response, next: NextFunction) {
-  const requestId = req.requestId || 'unknown';
-  
-  logger.error(`Request error: ${err.message}`, {
+  logger.error(`Error processing ${req.method} ${req.originalUrl}`, {
+    requestId: req.requestId,
     error: {
       name: err.name,
       message: err.message,
-      stack: err.stack,
-      code: err.code,
-      status: err.status || 500
+      stack: err.stack
     },
-    requestId,
     method: req.method,
-    url: req.url
+    url: req.originalUrl,
+    userAgent: req.headers['user-agent']
   });
   
   next(err);
