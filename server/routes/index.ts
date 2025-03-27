@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/categories', categoryRoutes);
   app.use('/api/anonymous', authRoutes);
   app.use('/api/saved-searches', searchRoutes);
-  app.use('/api/semantic-search', searchRoutes);
+  app.use('/api/search', searchRoutes);
   app.use('/api/export', exportRoutes);
   app.use('/api/qa', qaRoutes);
   
