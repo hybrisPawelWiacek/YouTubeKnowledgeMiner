@@ -335,6 +335,8 @@ export function QASection() {
       }
 
       // Directly make the API call instead of using the mutate wrapper
+      console.log(`Making API request to create conversation: POST /api/videos/${videoId}/qa with title: ${title}`);
+      
       const response = await apiRequest(
         "POST",
         `/api/videos/${videoId}/qa`,
@@ -342,13 +344,21 @@ export function QASection() {
         headers
       );
       
+      console.log("Conversation creation response status:", response.status, response.statusText);
+      
       // Don't try to parse non-OK responses to avoid JSON parse errors
       if (!response.ok) {
         throw new Error(`Failed to create conversation: ${response.status} ${response.statusText}`);
       }
       
+      // Clone the response to log it without affecting the original
+      const clonedResponse = response.clone();
+      const responseText = await clonedResponse.text();
+      console.log("Conversation creation raw response:", responseText);
+      
+      // Parse the response as JSON
       const data = await response.json();
-      console.log("Conversation created API response:", data);
+      console.log("Conversation created API response (parsed):", data);
       
       // After conversation is created successfully, force refetch conversations
       refetchConversations();
@@ -617,7 +627,6 @@ export function QASection() {
                   {conversations.map((conversation) => (
                     <div key={conversation.id} className="group">
                       <div
-                        key={conversation.id}
                         className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${
                           activeConversation === conversation.id
                             ? "bg-muted"
@@ -750,7 +759,7 @@ export function QASection() {
                     <PanelLeftClose className="h-4 w-4 mr-2" />
                   )}
                   <span className="hidden sm:inline">
-                    {showSidebar ? "Show Conversations" : "Hide Conversations"}
+                    {showSidebar ? "Hide Conversations" : "Show Conversations"}
                   </span>
                 </Button>
               </div>
@@ -805,85 +814,27 @@ export function QASection() {
                                     {message.citations.map((citation, idx) => (
                                       <div
                                         key={idx}
-                                        className="text-xs p-2 bg-muted/50 rounded border border-border/60 shadow-sm"
+                                        className="text-xs bg-background/50 p-2 rounded"
                                       >
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                          <span className="font-medium text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded-sm">
-                                            [{idx + 1}]
-                                          </span>
+                                        <div className="font-medium text-primary">
+                                          {citation.content_type === "transcript"
+                                            ? "Transcript"
+                                            : citation.content_type === "summary"
+                                            ? "Summary"
+                                            : citation.content_type === "note"
+                                            ? "Note"
+                                            : citation.content_type}
                                           {citation.timestamp && (
-                                            <button
-                                              className="text-primary hover:underline flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-sm transition-colors hover:bg-primary/10"
-                                              onClick={() => {
-                                                // Create URL with timestamp parameter
-                                                const timestampInSeconds =
-                                                  citation.timestamp
-                                                    ? citation.timestamp
-                                                        .split(":")
-                                                        .reduce(
-                                                          (acc, time) =>
-                                                            60 * acc + +time,
-                                                          0,
-                                                        )
-                                                    : 0;
-                                                window.open(
-                                                  `https://youtube.com/watch?v=${videoIdParam}&t=${timestampInSeconds}s`,
-                                                  "_blank",
-                                                );
-                                              }}
-                                              title="Jump to this timestamp on YouTube"
-                                            >
-                                              <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                className="h-3 w-3"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                              >
-                                                <circle
-                                                  cx="12"
-                                                  cy="12"
-                                                  r="10"
-                                                />
-                                                <polygon points="10 8 16 12 10 16 10 8" />
-                                              </svg>
-                                              {citation.timestamp}
-                                            </button>
+                                            <span className="ml-1 font-normal">
+                                              ({citation.timestamp})
+                                            </span>
                                           )}
-                                          <span className="text-muted-foreground text-xs ml-auto">
-                                            {citation.content_type ===
-                                            "transcript"
-                                              ? "Transcript"
-                                              : citation.content_type ===
-                                                  "summary"
-                                                ? "Summary"
-                                                : citation.content_type ===
-                                                    "note"
-                                                  ? "Note"
-                                                  : "Content"}
-                                          </span>
                                         </div>
-                                        <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">
-                                          {searchTerm ? (
-                                            <div
-                                              dangerouslySetInnerHTML={{
-                                                __html:
-                                                  '"' +
-                                                  highlightText({
-                                                    text: citation.content,
-                                                    searchTerm,
-                                                    showFullTextWithHighlights:
-                                                      true,
-                                                  }) +
-                                                  '"',
-                                              }}
-                                            />
-                                          ) : (
-                                            <>"{citation.content}"</>
-                                          )}
+                                        <div className="mt-0.5 text-muted-foreground">
+                                          {citation.content.length > 150
+                                            ? citation.content.substring(0, 150) +
+                                              "..."
+                                            : citation.content}
                                         </div>
                                       </div>
                                     ))}
@@ -893,69 +844,91 @@ export function QASection() {
                           </div>
                         </div>
                       ))}
-                      {isSubmitting && (
-                        <div className="flex justify-start">
-                          <div className="max-w-[80%] rounded-lg p-4 bg-muted text-muted-foreground">
-                            <div className="flex items-center space-x-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>AI is thinking...</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                       <div ref={messagesEndRef} />
                     </div>
                   </ScrollArea>
+
+                  <form
+                    onSubmit={handleSubmitQuestion}
+                    className="mt-4 flex items-end"
+                  >
+                    <div className="flex-grow relative">
+                      <Textarea
+                        id="new-question-input"
+                        placeholder="Ask a question about this video..."
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        className="min-h-[80px] pr-10 resize-none"
+                        disabled={isSubmitting}
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="absolute right-2 bottom-2"
+                        disabled={!question.trim() || isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </form>
                 </div>
               )
             ) : (
-              <div className="flex items-center justify-center h-48 flex-col">
-                <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg text-muted-foreground">
-                  No active conversation
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Type a question below to start a new conversation
-                </p>
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-center mb-8">
+                  <h3 className="text-xl font-semibold mb-2">
+                    Start a new conversation
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Ask questions about this video content and get detailed
+                    answers.
+                  </p>
+                </div>
+                <form
+                  onSubmit={handleSubmitQuestion}
+                  className="w-full max-w-lg"
+                >
+                  <div className="relative">
+                    <Textarea
+                      id="new-question-input"
+                      placeholder="Ask a question about this video..."
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      className="min-h-[120px] pr-10 resize-none"
+                      disabled={isSubmitting}
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      className="absolute right-2 bottom-2"
+                      disabled={!question.trim() || isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </form>
               </div>
             )}
-          </div>
-
-          <div className="flex items-start space-x-2 p-4 border-t border-border">
-            <Textarea
-              id="new-question-input"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question about this video..."
-              className="flex-grow min-h-[80px]"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmitQuestion(e);
-                }
-              }}
-            />
-            <Button
-              onClick={handleSubmitQuestion}
-              className="flex-shrink-0"
-              disabled={!question.trim() || isSubmitting}
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete confirmation dialog */}
       <Dialog
         open={conversationToDelete !== null}
-        onOpenChange={(open) => !open && setConversationToDelete(null)}
+        onOpenChange={(open) => {
+          if (!open) setConversationToDelete(null);
+        }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Conversation</DialogTitle>
             <DialogDescription>
@@ -963,62 +936,46 @@ export function QASection() {
               cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="sm:justify-end">
+          <DialogFooter>
             <Button
-              type="button"
-              variant="secondary"
+              variant="outline"
               onClick={() => setConversationToDelete(null)}
             >
               Cancel
             </Button>
             <Button
-              type="button"
               variant="destructive"
               onClick={handleDeleteConversation}
-              disabled={deleteConversation.isPending}
+              className="bg-red-500 hover:bg-red-600"
             >
-              {deleteConversation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </>
-              )}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* New Conversation Dialog */}
+
+      {/* New conversation dialog */}
       <Dialog
         open={showNewConversationDialog}
         onOpenChange={setShowNewConversationDialog}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Start a New Conversation</DialogTitle>
             <DialogDescription>
-              You're about to start a new conversation. Any unsaved changes in
-              your current conversation will be lost.
+              Enter a title for your new conversation.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Input
-                id="new-conversation-title"
-                placeholder="Conversation title (optional)"
-                className="col-span-4"
-                value={newConversationTitle}
-                onChange={(e) => setNewConversationTitle(e.target.value)}
-              />
-            </div>
+          <div className="py-2">
+            <Input
+              placeholder="Conversation title (optional)"
+              value={newConversationTitle}
+              onChange={(e) => setNewConversationTitle(e.target.value)}
+            />
           </div>
           <DialogFooter>
             <Button
-              variant="secondary"
+              variant="outline"
               onClick={() => setShowNewConversationDialog(false)}
             >
               Cancel
