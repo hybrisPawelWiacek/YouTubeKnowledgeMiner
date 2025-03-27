@@ -78,16 +78,23 @@ export function VideoResult({ video }: VideoResultProps) {
       console.log('📤 VIDEO DATA BEING SENT TO API:', videoData);
       
       try {
-        // For anonymous users, add session header manually
+        // Add appropriate headers based on authentication status
         let headers: HeadersInit = {};
+        
         if (!user) {
+          // For anonymous users, add session header manually
           const sessionId = getOrCreateAnonymousSessionId();
           headers = { 'x-anonymous-session': sessionId };
           console.log('📡 Anonymous user - adding session header:', sessionId);
+        } else {
+          // For authenticated users, add the user ID header explicitly
+          // This is critical for demo users who don't use the standard auth flow
+          headers = { 'x-user-id': String(user.id) };
+          console.log('📡 Authenticated user - adding user ID header:', user.id);
         }
         
         // Making the API request
-        console.log('📡 Making POST request to /api/videos');
+        console.log('📡 Making POST request to /api/videos with headers:', headers);
         const response = await apiRequest("POST", "/api/videos", videoData, headers);
         const result = await response.json();
         console.log('✅ SAVE VIDEO RESPONSE:', result);
