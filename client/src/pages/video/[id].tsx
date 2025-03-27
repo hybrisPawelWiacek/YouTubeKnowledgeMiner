@@ -483,7 +483,38 @@ export default function VideoDetailPage() {
             <Tabs defaultValue="summary" className="w-full">
               <TabsList className="w-full grid grid-cols-3 mb-6">
                 <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="qa">Q&A</TabsTrigger>
+                <TabsTrigger 
+                  value="qa"
+                  onClick={() => {
+                    // Fetch conversations to see if any exist
+                    fetch(`/api/videos/${videoId}/qa`, {
+                      headers: {
+                        'x-anonymous-session': localStorage.getItem('anonymousSessionId') || ''
+                      }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                      if (Array.isArray(data) && data.length > 0) {
+                        // Set active conversation to the most recent one (assuming sorted by id/date)
+                        const latestConversation = data[data.length - 1];
+                        // Find QASection and set active conversation
+                        const qaEvent = new CustomEvent('setActiveConversation', { 
+                          detail: { conversationId: latestConversation.id }
+                        });
+                        window.dispatchEvent(qaEvent);
+                      } else {
+                        // Trigger "Start new conversation" mode
+                        const newConvoEvent = new CustomEvent('startNewConversation');
+                        window.dispatchEvent(newConvoEvent);
+                      }
+                    })
+                    .catch(err => {
+                      console.error('Error fetching conversations:', err);
+                    });
+                  }}
+                >
+                  Q&A
+                </TabsTrigger>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>
               </TabsList>
               

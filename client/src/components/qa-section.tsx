@@ -91,6 +91,27 @@ export function QASection() {
   const sidebarClasses = showSidebar
     ? "w-1/4 min-w-[250px] border-r border-border h-[calc(100vh-12rem)] overflow-y-auto"
     : "hidden";
+    
+  // Add event listeners for external control
+  useEffect(() => {
+    const handleSetActiveConversation = (event: any) => {
+      if (event.detail && event.detail.conversationId) {
+        setActiveConversation(event.detail.conversationId);
+      }
+    };
+    
+    const handleStartNewConversation = () => {
+      setShowNewConversationDialog(true);
+    };
+    
+    window.addEventListener('setActiveConversation', handleSetActiveConversation);
+    window.addEventListener('startNewConversation', handleStartNewConversation);
+    
+    return () => {
+      window.removeEventListener('setActiveConversation', handleSetActiveConversation);
+      window.removeEventListener('startNewConversation', handleStartNewConversation);
+    };
+  }, []);
 
   // Fetch conversations for this video
   const {
