@@ -11,6 +11,8 @@ import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose, Tras
 import { ExportButton } from "@/components/export/export-button";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { highlightText } from "@/lib/highlight-utils";
+import { apiRequest } from "@/lib/api";
+import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import {
   Dialog,
   DialogContent,
@@ -69,8 +71,18 @@ export function QASection() {
     useQuery({
       queryKey: ['/api/videos', videoId, 'qa'],
       queryFn: async () => {
-        const response = await axios.get(`/api/videos/${videoId}/qa`);
-        return response.data as QASession[];
+        // Use apiRequest instead of axios to include anonymous session headers
+        const anonymousSessionId = getOrCreateAnonymousSessionId();
+        const headers: Record<string, string> = {};
+        
+        if (anonymousSessionId) {
+          headers['x-anonymous-session'] = anonymousSessionId;
+          console.log("[QA Section] Using anonymous session ID for GET conversations:", anonymousSessionId);
+        }
+        
+        const response = await apiRequest('GET', `/api/videos/${videoId}/qa`, undefined, headers);
+        const data = await response.json();
+        return data as QASession[];
       },
       enabled: videoId > 0,
     });
@@ -81,8 +93,19 @@ export function QASection() {
       queryKey: ['/api/qa', activeConversation],
       queryFn: async () => {
         if (!activeConversation) return null;
-        const response = await axios.get(`/api/qa/${activeConversation}`);
-        return response.data;
+        
+        // Use apiRequest instead of axios to include anonymous session headers
+        const anonymousSessionId = getOrCreateAnonymousSessionId();
+        const headers: Record<string, string> = {};
+        
+        if (anonymousSessionId) {
+          headers['x-anonymous-session'] = anonymousSessionId;
+          console.log("[QA Section] Using anonymous session ID for GET conversation:", anonymousSessionId);
+        }
+        
+        const response = await apiRequest('GET', `/api/qa/${activeConversation}`, undefined, headers);
+        const data = await response.json();
+        return data;
       },
       enabled: activeConversation !== null,
     });
@@ -90,10 +113,21 @@ export function QASection() {
   // Create a new conversation
   const createConversation = useMutation({
     mutationFn: async (title: string) => {
-      const response = await axios.post(`/api/videos/${videoId}/qa`, {
+      // Use apiRequest instead of axios to include anonymous session headers
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
+      
+      if (anonymousSessionId) {
+        headers['x-anonymous-session'] = anonymousSessionId;
+        console.log("[QA Section] Using anonymous session ID:", anonymousSessionId);
+      }
+      
+      const response = await apiRequest('POST', `/api/videos/${videoId}/qa`, {
         title
-      });
-      return response.data;
+      }, headers);
+      
+      const data = await response.json();
+      return data;
     },
     onSuccess: (data) => {
       console.log("Conversation created:", data);
@@ -108,17 +142,31 @@ export function QASection() {
         // Clear messages array to start fresh
         setMessages([]);
       }
+    },
+    onError: (error) => {
+      console.error("Failed to create conversation:", error);
     }
   });
 
   // Mutation for adding a new message to a conversation
   const addMessage = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
-      const response = await axios.post(`/api/qa/${conversationId}/ask`, {
+      // Use apiRequest instead of axios to include anonymous session headers
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
+      
+      if (anonymousSessionId) {
+        headers['x-anonymous-session'] = anonymousSessionId;
+        console.log("[QA Section] Using anonymous session ID for adding message:", anonymousSessionId);
+      }
+      
+      const response = await apiRequest('POST', `/api/qa/${conversationId}/ask`, {
         question: content,
         video_id: videoId
-      });
-      return response.data;
+      }, headers);
+      
+      const data = await response.json();
+      return data;
     },
     onSuccess: (data) => {
       console.log("Message added, response:", data);
@@ -217,8 +265,18 @@ export function QASection() {
   // Delete conversation function
   const deleteConversation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await axios.delete(`/api/qa/${id}`);
-      return response.data;
+      // Use apiRequest instead of axios to include anonymous session headers
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
+      
+      if (anonymousSessionId) {
+        headers['x-anonymous-session'] = anonymousSessionId;
+        console.log("[QA Section] Using anonymous session ID for delete conversation:", anonymousSessionId);
+      }
+      
+      const response = await apiRequest('DELETE', `/api/qa/${id}`, undefined, headers);
+      const data = await response.json();
+      return data;
     },
     onSuccess: () => {
       // If we're deleting the active conversation, reset the active conversation

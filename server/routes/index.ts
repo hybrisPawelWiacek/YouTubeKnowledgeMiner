@@ -8,10 +8,9 @@ import collectionRoutes from './collection.routes';
 import categoryRoutes from './category.routes';
 import authRoutes from './auth.routes';
 import debugRoutes from './debug-api';
-// The following routers will be created in later steps
-// import searchRoutes from './search.routes';
-// import exportRoutes from './export.routes';
-// import qaRoutes from './qa.routes';
+import searchRoutes from './search.routes';
+import exportRoutes from './export.routes';
+import qaRoutes from './qa.routes';
 
 // Import OpenAI service to initialize before handling requests
 import { isOpenAIConfigured } from '../services/openai';
@@ -57,11 +56,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/collections', collectionRoutes);
   app.use('/api/categories', categoryRoutes);
   app.use('/api/anonymous', authRoutes);
+  app.use('/api/saved-searches', searchRoutes);
+  app.use('/api/semantic-search', searchRoutes);
+  app.use('/api/export', exportRoutes);
+  app.use('/api/qa', qaRoutes);
   
-  // These routes will be added as we refactor them
-  // app.use('/api/search', searchRoutes);
-  // app.use('/api/export', exportRoutes);
-  // app.use('/api/qa', qaRoutes);
+  // Also register the qa routes under the videos path for backward compatibility
+  app.use('/api/videos', qaRoutes);
   
   // 404 handler for API routes
   app.use('/api/*', (req, res) => {

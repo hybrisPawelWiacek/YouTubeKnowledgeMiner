@@ -18,17 +18,23 @@ export function sendSuccess(res: Response, data: any, status: number = 200) {
  * @param message Error message
  * @param status HTTP status code (default: 500)
  * @param code Optional error code for client handling
+ * @param details Optional error details for debugging
  */
 export function sendError(
   res: Response, 
   message: string, 
   status: number = 500, 
-  code?: string
+  code?: string,
+  details?: string
 ) {
-  const response: { message: string; code?: string } = { message };
+  const response: { message: string; code?: string; details?: string } = { message };
   
   if (code) {
     response.code = code;
+  }
+  
+  if (details) {
+    response.details = details;
   }
   
   return res.status(status).json(response);
