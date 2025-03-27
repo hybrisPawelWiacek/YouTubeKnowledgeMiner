@@ -390,13 +390,19 @@ export default function Library() {
     }
   };
 
+  // State for delete confirmation dialog
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
+  
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
-
-    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
-      bulkDeleteMutation.mutate(selectedVideos);
-    }
+    setShowDeleteConfirmation(true);
+  };
+  
+  // Handle confirmed deletion
+  const confirmDelete = () => {
+    bulkDeleteMutation.mutate(selectedVideos);
+    setShowDeleteConfirmation(false);
   };
 
   const handleToggleFavorite = (isFavorite: boolean) => {
@@ -924,6 +930,34 @@ export default function Library() {
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Videos</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedVideos.length} {selectedVideos.length === 1 ? 'video' : 'videos'}? 
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirmation(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
