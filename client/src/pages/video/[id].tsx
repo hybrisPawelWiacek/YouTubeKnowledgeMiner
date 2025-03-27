@@ -27,6 +27,7 @@ import { QASection } from "@/components/qa-section";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Video, Category } from "@/types";
+import { useSupabase } from "@/hooks/use-supabase";
 import {
   ArrowLeft,
   Heart,
@@ -59,25 +60,58 @@ export default function VideoDetailPage() {
   // Hooks
   const { toast } = useToast();
   
+  // Get user from Supabase
+  const { user } = useSupabase();
+  
   // Queries
   const videoQuery = useQuery({
     queryKey: ["/api/videos", videoId],
     queryFn: async () => {
-      // Add anonymous session headers if needed
+      // Initialize headers
       const headers: HeadersInit = {};
-      try {
-        // Import here to avoid circular dependencies
-        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+      
+      // If user is authenticated, add user ID to headers
+      if (user?.id) {
+        let userIdValue;
         
-        // Add session ID to headers if we have one
-        if (sessionId) {
-          console.log("[VideoDetailPage] Using anonymous session:", sessionId);
-          headers['x-anonymous-session'] = sessionId;
+        // Ensure userId is sent as a clean number in string format
+        if (typeof user.id === 'number') {
+          userIdValue = String(user.id);
+        } else {
+          // For strings or other types, extract numeric portion if possible
+          const match = String(user.id).match(/\d+/);
+          const extractedId = match ? parseInt(match[0], 10) : NaN;
+          console.log('[VideoDetailPage] Extracted numeric user ID from string:', extractedId);
+          
+          if (!isNaN(extractedId)) {
+            userIdValue = String(extractedId);
+          } else {
+            console.warn('[VideoDetailPage] Failed to extract valid user ID from:', user.id);
+          }
         }
-      } catch (error) {
-        console.error("[VideoDetailPage] Error getting anonymous session:", error);
+        
+        if (userIdValue) {
+          headers['x-user-id'] = userIdValue;
+          console.log('[VideoDetailPage] Setting x-user-id header to:', userIdValue);
+        }
+      } else {
+        // If not authenticated, add anonymous session ID
+        try {
+          // Import here to avoid circular dependencies
+          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+          const sessionId = getOrCreateAnonymousSessionId();
+          
+          // Add session ID to headers if we have one
+          if (sessionId) {
+            console.log("[VideoDetailPage] Using anonymous session:", sessionId);
+            headers['x-anonymous-session'] = sessionId;
+          }
+        } catch (error) {
+          console.error("[VideoDetailPage] Error getting anonymous session:", error);
+        }
       }
+      
+      console.log("[VideoDetailPage] Request headers:", headers);
       
       const response = await fetch(`/api/videos/${videoId}`, { 
         headers, 
@@ -97,21 +131,51 @@ export default function VideoDetailPage() {
   const categoriesQuery = useQuery({
     queryKey: ["/api/categories"],
     queryFn: async () => {
-      // Add anonymous session headers if needed
+      // Initialize headers
       const headers: HeadersInit = {};
-      try {
-        // Import here to avoid circular dependencies
-        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+      
+      // If user is authenticated, add user ID to headers
+      if (user?.id) {
+        let userIdValue;
         
-        // Add session ID to headers if we have one
-        if (sessionId) {
-          console.log("[VideoDetailPage] Using anonymous session for categories:", sessionId);
-          headers['x-anonymous-session'] = sessionId;
+        // Ensure userId is sent as a clean number in string format
+        if (typeof user.id === 'number') {
+          userIdValue = String(user.id);
+        } else {
+          // For strings or other types, extract numeric portion if possible
+          const match = String(user.id).match(/\d+/);
+          const extractedId = match ? parseInt(match[0], 10) : NaN;
+          console.log('[VideoDetailPage] Extracted numeric user ID for categories:', extractedId);
+          
+          if (!isNaN(extractedId)) {
+            userIdValue = String(extractedId);
+          } else {
+            console.warn('[VideoDetailPage] Failed to extract valid user ID for categories:', user.id);
+          }
         }
-      } catch (error) {
-        console.error("[VideoDetailPage] Error getting anonymous session for categories:", error);
+        
+        if (userIdValue) {
+          headers['x-user-id'] = userIdValue;
+          console.log('[VideoDetailPage] Setting x-user-id header for categories to:', userIdValue);
+        }
+      } else {
+        // If not authenticated, add anonymous session ID
+        try {
+          // Import here to avoid circular dependencies
+          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+          const sessionId = getOrCreateAnonymousSessionId();
+          
+          // Add session ID to headers if we have one
+          if (sessionId) {
+            console.log("[VideoDetailPage] Using anonymous session for categories:", sessionId);
+            headers['x-anonymous-session'] = sessionId;
+          }
+        } catch (error) {
+          console.error("[VideoDetailPage] Error getting anonymous session for categories:", error);
+        }
       }
+      
+      console.log("[VideoDetailPage] Categories request headers:", headers);
       
       const response = await fetch(`/api/categories`, { 
         headers, 
@@ -130,21 +194,51 @@ export default function VideoDetailPage() {
   // Update video metadata mutation
   const updateVideoMutation = useMutation({
     mutationFn: async (data: Partial<Video>) => {
-      // Add anonymous session headers if needed
+      // Initialize headers
       let headers: HeadersInit = {};
-      try {
-        // Import here to avoid circular dependencies
-        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+      
+      // If user is authenticated, add user ID to headers
+      if (user?.id) {
+        let userIdValue;
         
-        // Add session ID to headers if we have one
-        if (sessionId) {
-          console.log("[VideoDetailPage] Using anonymous session for update:", sessionId);
-          headers = { 'x-anonymous-session': sessionId };
+        // Ensure userId is sent as a clean number in string format
+        if (typeof user.id === 'number') {
+          userIdValue = String(user.id);
+        } else {
+          // For strings or other types, extract numeric portion if possible
+          const match = String(user.id).match(/\d+/);
+          const extractedId = match ? parseInt(match[0], 10) : NaN;
+          console.log('[VideoDetailPage] Extracted numeric user ID for update:', extractedId);
+          
+          if (!isNaN(extractedId)) {
+            userIdValue = String(extractedId);
+          } else {
+            console.warn('[VideoDetailPage] Failed to extract valid user ID for update:', user.id);
+          }
         }
-      } catch (error) {
-        console.error("[VideoDetailPage] Error getting anonymous session for update:", error);
+        
+        if (userIdValue) {
+          headers['x-user-id'] = userIdValue;
+          console.log('[VideoDetailPage] Setting x-user-id header for update to:', userIdValue);
+        }
+      } else {
+        // If not authenticated, add anonymous session ID
+        try {
+          // Import here to avoid circular dependencies
+          const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+          const sessionId = getOrCreateAnonymousSessionId();
+          
+          // Add session ID to headers if we have one
+          if (sessionId) {
+            console.log("[VideoDetailPage] Using anonymous session for update:", sessionId);
+            headers['x-anonymous-session'] = sessionId;
+          }
+        } catch (error) {
+          console.error("[VideoDetailPage] Error getting anonymous session for update:", error);
+        }
       }
+      
+      console.log("[VideoDetailPage] Update request headers:", headers);
       
       const response = await apiRequest("PATCH", `/api/videos/${videoId}`, data, headers);
       return response.json();
