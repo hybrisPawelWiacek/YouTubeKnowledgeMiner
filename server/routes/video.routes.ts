@@ -570,7 +570,7 @@ router.patch('/', async (req: Request, res: Response) => {
 /**
  * Bulk delete videos
  */
-router.delete('/bulk', async (req: Request, res: Response) => {
+router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
   try {
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
