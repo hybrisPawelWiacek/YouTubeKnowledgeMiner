@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useToast } from "@/hooks/use-toast";
 import { OAuthSetupGuide } from "@/components/auth/oauth-setup-guide";
+import { DemoLogin } from "@/components/auth/demo-login";
 
 // Login schema
 const loginSchema = z.object({
@@ -169,7 +170,7 @@ export default function Auth() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
       
-      <main className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md bg-zinc-900">
           <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
@@ -430,6 +431,9 @@ export default function Auth() {
             </TabsContent>
           </Tabs>
         </Card>
+        
+        {/* Demo login section */}
+        <DemoLogin />
       </main>
       
       <Footer />

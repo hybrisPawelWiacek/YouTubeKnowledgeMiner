@@ -24,6 +24,9 @@ type SupabaseContextType = {
   setLocalData: (data: any) => void;
   migrateLocalData: () => Promise<void>;
   hasReachedAnonymousLimit: () => Promise<boolean>;
+  // Add setters for demo auth integration
+  setUser: (user: User) => void;
+  setSession: (session: Session) => void;
 };
 
 const SupabaseContext = createContext<SupabaseContextType>({
@@ -41,6 +44,9 @@ const SupabaseContext = createContext<SupabaseContextType>({
   setLocalData: () => {},
   migrateLocalData: async () => {},
   hasReachedAnonymousLimit: async () => false,
+  // Add setters for demo auth integration
+  setUser: () => {},
+  setSession: () => {},
 });
 
 export function SupabaseProvider({ children }: { children: ReactNode }) {
@@ -674,6 +680,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         setLocalData,
         migrateLocalData,
         hasReachedAnonymousLimit,
+        // Export the user state setters for demo auth
+        setUser,
+        setSession,
       }}
     >
       {children}

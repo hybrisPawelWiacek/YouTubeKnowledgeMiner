@@ -8,6 +8,7 @@ import collectionRoutes from './collection.routes';
 import categoryRoutes from './category.routes';
 import authRoutes from './auth.routes';
 import supabaseAuthRoutes from './supabase-auth.routes';
+import demoAuthRoutes from './demo-auth.routes';
 import debugRoutes from './debug-api';
 import searchRoutes from './search.routes';
 import semanticSearchRoutes from './semantic-search.routes';
@@ -60,6 +61,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/categories', categoryRoutes);
   app.use('/api/anonymous', authRoutes);
   app.use('/api/supabase-auth', supabaseAuthRoutes);
+  app.use('/api/demo-auth', demoAuthRoutes); 
   app.use('/api/saved-searches', searchRoutes);
   app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);
