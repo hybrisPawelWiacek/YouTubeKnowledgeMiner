@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { FcGoogle } from "react-icons/fc";
-import { ArrowLeft, Loader2, InfoIcon } from "lucide-react";
+import { ArrowLeft, Loader2, InfoIcon, Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
@@ -41,16 +41,23 @@ const forgotPasswordSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
 });
 
+// Magic Link schema
+const magicLinkSchema = z.object({
+  email: z.string().email({ message: "Please enter a valid email address" }),
+});
+
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
+type MagicLinkFormValues = z.infer<typeof magicLinkSchema>;
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
   const [_, setLocation] = useLocation();
-  const { signIn, signUp, signInWithGoogle, resetPassword } = useSupabase();
+  const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword } = useSupabase();
   const { toast } = useToast();
 
   // Login form
@@ -133,6 +140,30 @@ export default function Auth() {
       setIsLoading(false);
     }
   };
+  
+  // Magic Link form
+  const magicLinkForm = useForm<MagicLinkFormValues>({
+    resolver: zodResolver(magicLinkSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+  
+  // Handle magic link form submission
+  const onMagicLinkSubmit = async (values: MagicLinkFormValues) => {
+    setIsMagicLinkLoading(true);
+    try {
+      await signInWithMagicLink(values.email);
+      toast({
+        title: "Magic Link Sent",
+        description: "Check your email for a sign-in link",
+      });
+    } catch (error) {
+      console.error('Magic link error:', error);
+    } finally {
+      setIsMagicLinkLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -159,6 +190,7 @@ export default function Auth() {
                   <div className="flex justify-center mb-4">
                     <TabsList className="bg-zinc-800">
                       <TabsTrigger value="login">Login</TabsTrigger>
+                      <TabsTrigger value="magic-link">Magic Link</TabsTrigger>
                       <TabsTrigger value="register">Register</TabsTrigger>
                     </TabsList>
                   </div>
@@ -313,6 +345,50 @@ export default function Auth() {
                       disabled={isLoading}
                     >
                       {isLoading ? "Creating account..." : "Create Account"}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </Form>
+            </TabsContent>
+            
+            <TabsContent value="magic-link">
+              <Form {...magicLinkForm}>
+                <form onSubmit={magicLinkForm.handleSubmit(onMagicLinkSubmit)}>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-400 mb-4">
+                      Enter your email address and we'll send you a passwordless login link.
+                    </p>
+                    <FormField
+                      control={magicLinkForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input placeholder="your.email@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isMagicLinkLoading}
+                    >
+                      {isMagicLinkLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="mr-2 h-4 w-4" />
+                          Send Magic Link
+                        </>
+                      )}
                     </Button>
                   </CardFooter>
                 </form>

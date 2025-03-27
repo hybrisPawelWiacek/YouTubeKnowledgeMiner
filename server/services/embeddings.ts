@@ -1,9 +1,39 @@
 import { db } from '../db';
 import { log } from '../vite';
 import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history, videos, collection_videos } from '@shared/schema';
-import { calculateCosineSimilarity } from './supabase';
 import { chunkText, generateEmbeddingsBatch } from './openai';
 import { eq, and, sql, inArray } from 'drizzle-orm';
+
+/**
+ * Calculate cosine similarity between two embedding vectors
+ * @param a First embedding vector
+ * @param b Second embedding vector
+ * @returns Similarity score between 0 and 1
+ */
+export function calculateCosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length !== b.length) {
+    return 0;
+  }
+  
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  
+  normA = Math.sqrt(normA);
+  normB = Math.sqrt(normB);
+  
+  if (normA === 0 || normB === 0) {
+    return 0;
+  }
+  
+  return dotProduct / (normA * normB);
+}
 
 // Format timestamp function (copied from youtube.ts to avoid circular dependency)
 function formatTimestamp(seconds: number): string {

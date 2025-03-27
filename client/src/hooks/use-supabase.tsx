@@ -6,6 +6,9 @@ import { updateCurrentSession } from '@/lib/api';
 // Key for storing temporary data for anonymous users
 const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
 
+// Key for storing the last used Supabase session for persistence
+const SUPABASE_SESSION_KEY = 'youtube-miner-supabase-session';
+
 type SupabaseContextType = {
   supabase: SupabaseClient | null;
   user: User | null;
@@ -13,6 +16,7 @@ type SupabaseContextType = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -29,6 +33,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   loading: true,
   signIn: async () => {},
   signInWithGoogle: async () => {},
+  signInWithMagicLink: async () => {},
   signUp: async () => {},
   signOut: async () => {},
   resetPassword: async () => {},
@@ -48,24 +53,69 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchSupabaseConfig = async () => {
       try {
-        const response = await fetch('/api/supabase-config');
-        const config = await response.json();
+        // Get Supabase configuration from our API
+        const response = await fetch('/api/supabase-auth/config');
+        const { data, success } = await response.json();
 
-        if (config.initialized) {
+        if (success && data.initialized) {
+          console.log('Initializing Supabase with URL:', data.url?.substring(0, 20) + '...');
+          
+          // Create the Supabase client with configuration from the server
           const client = createClient(
-            config.url || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xyzcompany.supabase.co',
-            config.anonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9'
+            data.url,
+            data.anonKey
           );
           setSupabase(client);
 
+          // Try to get existing session
           const { data: { session } } = await client.auth.getSession();
+          
+          // Check for a stored session in localStorage
+          const storedSessionStr = localStorage.getItem(SUPABASE_SESSION_KEY);
+          let storedSession = null;
+          
+          try {
+            if (storedSessionStr) {
+              storedSession = JSON.parse(storedSessionStr);
+              console.log('Found stored session, checking if still valid');
+            }
+          } catch (e) {
+            console.error('Error parsing stored session:', e);
+            localStorage.removeItem(SUPABASE_SESSION_KEY);
+          }
+          
+          // Use the active session from Supabase or try to restore from stored session
           if (session) {
+            console.log('Active Supabase session found');
             setSession(session);
             setUser(session.user);
-            // Update the session in the API module for authenticated requests
             updateCurrentSession(session);
+            
+            // Update the stored session
+            localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+          } else if (storedSession && storedSession.expires_at > Date.now()) {
+            console.log('Restoring session from storage');
+            // Try to restore the session in Supabase
+            const { data, error } = await client.auth.setSession({
+              access_token: storedSession.access_token,
+              refresh_token: storedSession.refresh_token
+            });
+            
+            if (error) {
+              console.error('Error restoring session:', error);
+              localStorage.removeItem(SUPABASE_SESSION_KEY);
+            } else if (data.session) {
+              setSession(data.session);
+              setUser(data.session.user);
+              updateCurrentSession(data.session);
+            }
+          } else if (storedSession) {
+            // Session expired, remove it
+            console.log('Stored session expired, removing');
+            localStorage.removeItem(SUPABASE_SESSION_KEY);
           }
 
+          // Set up auth state change listener
           const { data: { subscription } } = client.auth.onAuthStateChange(
             (event, currentSession) => {
               console.log('Auth state changed:', event);
@@ -75,6 +125,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               // Keep our API module's session state in sync
               updateCurrentSession(currentSession);
 
+              // Store or remove session based on event
+              if (currentSession) {
+                localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(currentSession));
+              } else if (event === 'SIGNED_OUT') {
+                localStorage.removeItem(SUPABASE_SESSION_KEY);
+              }
+
+              // Handle specific auth events
               if (event === 'SIGNED_IN') {
                 toast({
                   title: "Signed in",
@@ -89,12 +147,19 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
                   title: "Signed out",
                   description: "You've been successfully signed out",
                 });
+              } else if (event === 'TOKEN_REFRESHED') {
+                console.log('Token refreshed successfully');
+              } else if (event === 'USER_UPDATED') {
+                toast({
+                  title: "Profile updated",
+                  description: "Your user profile has been updated",
+                });
               }
             }
           );
 
           setLoading(false);
-          console.log('Supabase configuration loaded from backend');
+          console.log('Supabase configuration and auth state initialized');
 
           return () => {
             subscription.unsubscribe();
@@ -276,6 +341,52 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       toast({
         title: "Google Authentication Failed",
         description: error.message || "Failed to sign in with Google",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const signInWithMagicLink = async (email: string) => {
+    if (!supabase) {
+      toast({
+        title: "Error",
+        description: "Supabase client not initialized",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!email || !email.includes('@')) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Use our server-side endpoint to send the magic link
+      const response = await fetch('/api/supabase-auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to send magic link');
+      }
+      
+      toast({
+        title: "Magic Link Sent",
+        description: "Check your email for a login link",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Magic Link Failed",
+        description: error.message || "Failed to send magic link email",
         variant: "destructive",
       });
     }
@@ -555,6 +666,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         loading,
         signIn,
         signInWithGoogle,
+        signInWithMagicLink,
         signUp,
         signOut,
         resetPassword,
