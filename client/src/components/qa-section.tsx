@@ -56,10 +56,13 @@ export function QASection() {
   const [activeConversation, setActiveConversation] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
+  const [currentQuestion, setCurrentQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [newConversationTitle, setNewConversationTitle] = useState("");
+  const [showNewConversationDialog, setShowNewConversationDialog] = useState(false);
 
   // CSS classes for the sidebar based on visibility
   const sidebarClasses = showSidebar
@@ -200,13 +203,18 @@ export function QASection() {
   }, [messages]);
 
   const handleCreateNewConversation = () => {
-    // Create new conversation with a placeholder title based on question
-    const title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
+    // If user has entered a title in the dialog, use it; otherwise create one from the question
+    let title = newConversationTitle.trim();
+    if (!title) {
+      title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
+    }
+    
     // Store the current question to use after conversation is created
     const initialQuestion = question;
     
-    // Clear the question input field immediately
+    // Clear the question input field and conversation title immediately
     setQuestion("");
+    setNewConversationTitle("");
     
     createConversation.mutate(title, {
       onSuccess: (data) => {
@@ -257,9 +265,30 @@ export function QASection() {
   };
 
   const handleNewConversation = () => {
+    // Open the new conversation dialog instead of immediately clearing
+    setShowNewConversationDialog(true);
+  };
+  
+  const startNewConversation = () => {
+    // Close the dialog
+    setShowNewConversationDialog(false);
+    
+    // Reset the conversation state
     setActiveConversation(null);
     setMessages([]);
-    setShowSidebar(false);
+    
+    // On mobile, hide the sidebar
+    if (window.innerWidth < 768) {
+      setShowSidebar(false);
+    }
+    
+    // Focus the question input
+    setTimeout(() => {
+      const questionInput = document.getElementById('new-question-input');
+      if (questionInput) {
+        questionInput.focus();
+      }
+    }, 100);
   };
 
   // Delete conversation function
@@ -343,11 +372,7 @@ export function QASection() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setActiveConversation(null);
-                    setMessages([]); //added to clear the messages when creating a new conversation
-                    if (window.innerWidth < 768) setShowSidebar(false);
-                  }}
+                  onClick={handleNewConversation}
                   className="h-7 px-2 text-xs"
                 >
                   <Plus className="h-3 w-3 mr-1" />
@@ -457,6 +482,15 @@ export function QASection() {
                     />
                   </>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewConversation}
+                  className="mr-2"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">New Conversation</span>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -583,6 +617,7 @@ export function QASection() {
 
           <div className="flex items-start space-x-2 p-4 border-t border-border">
             <Textarea
+              id="new-question-input"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask a question about this video..."
@@ -643,6 +678,38 @@ export function QASection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* New Conversation Dialog */}
+      <Dialog open={showNewConversationDialog} onOpenChange={setShowNewConversationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Start a New Conversation</DialogTitle>
+            <DialogDescription>
+              You're about to start a new conversation. Any unsaved changes in your current conversation will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Input
+                id="new-conversation-title"
+                placeholder="Conversation title (optional)"
+                className="col-span-4"
+                value={newConversationTitle}
+                onChange={(e) => setNewConversationTitle(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setShowNewConversationDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={startNewConversation}>
+              Start New
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
     </div>
   );
 }
