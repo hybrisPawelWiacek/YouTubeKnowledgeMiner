@@ -437,7 +437,7 @@ export function QASection() {
                             {conversation.title}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
-                            {conversation.createdAt ? new Date(conversation.createdAt).toLocaleString('en-US', {
+                            {conversation.created_at ? new Date(conversation.created_at).toLocaleString('en-US', {
                               year: 'numeric', 
                               month: 'short', 
                               day: 'numeric',
