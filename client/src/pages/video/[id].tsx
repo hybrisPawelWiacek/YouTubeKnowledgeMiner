@@ -63,8 +63,32 @@ export default function VideoDetailPage() {
   const videoQuery = useQuery({
     queryKey: ["/api/videos", videoId],
     queryFn: async () => {
-      const response = await fetch(`/api/videos/${videoId}`);
-      if (!response.ok) throw new Error("Failed to fetch video");
+      // Add anonymous session headers if needed
+      const headers: HeadersInit = {};
+      try {
+        // Import here to avoid circular dependencies
+        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Add session ID to headers if we have one
+        if (sessionId) {
+          console.log("[VideoDetailPage] Using anonymous session:", sessionId);
+          headers['x-anonymous-session'] = sessionId;
+        }
+      } catch (error) {
+        console.error("[VideoDetailPage] Error getting anonymous session:", error);
+      }
+      
+      const response = await fetch(`/api/videos/${videoId}`, { 
+        headers, 
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch video");
+      }
+      
       return response.json();
     },
     enabled: !!videoId,
@@ -72,12 +96,57 @@ export default function VideoDetailPage() {
   
   const categoriesQuery = useQuery({
     queryKey: ["/api/categories"],
+    queryFn: async () => {
+      // Add anonymous session headers if needed
+      const headers: HeadersInit = {};
+      try {
+        // Import here to avoid circular dependencies
+        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Add session ID to headers if we have one
+        if (sessionId) {
+          console.log("[VideoDetailPage] Using anonymous session for categories:", sessionId);
+          headers['x-anonymous-session'] = sessionId;
+        }
+      } catch (error) {
+        console.error("[VideoDetailPage] Error getting anonymous session for categories:", error);
+      }
+      
+      const response = await fetch(`/api/categories`, { 
+        headers, 
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch categories");
+      }
+      
+      return response.json();
+    },
   });
   
   // Update video metadata mutation
   const updateVideoMutation = useMutation({
     mutationFn: async (data: Partial<Video>) => {
-      const response = await apiRequest("PATCH", `/api/videos/${videoId}`, data);
+      // Add anonymous session headers if needed
+      let headers: HeadersInit = {};
+      try {
+        // Import here to avoid circular dependencies
+        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Add session ID to headers if we have one
+        if (sessionId) {
+          console.log("[VideoDetailPage] Using anonymous session for update:", sessionId);
+          headers = { 'x-anonymous-session': sessionId };
+        }
+      } catch (error) {
+        console.error("[VideoDetailPage] Error getting anonymous session for update:", error);
+      }
+      
+      const response = await apiRequest("PATCH", `/api/videos/${videoId}`, data, headers);
       return response.json();
     },
     onSuccess: () => {
@@ -88,10 +157,11 @@ export default function VideoDetailPage() {
       setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: ["/api/videos", videoId] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error("[VideoDetailPage] Error updating video:", error);
       toast({
         title: "Error",
-        description: "Failed to update video. Please try again.",
+        description: error?.message || "Failed to update video. Please try again.",
         variant: "destructive",
       });
     },
