@@ -309,9 +309,14 @@ export function QASection() {
     // Clear the question input field and conversation title immediately
     setQuestion("");
     setNewConversationTitle("");
+    
+    // Set submitting state to provide visual feedback
+    setIsSubmitting(true);
 
     createConversation.mutate(title, {
       onSuccess: (data) => {
+        console.log("Conversation created successfully:", data);
+        
         // After conversation is created successfully, send the initial question
         if (
           data &&
@@ -319,12 +324,28 @@ export function QASection() {
           "id" in data &&
           typeof data.id === "number"
         ) {
-          // Send the initial question to get an answer
-          addMessage.mutate({
-            conversationId: data.id,
-            content: initialQuestion,
-          });
+          // Make sure activeConversation is set
+          setActiveConversation(data.id);
+          
+          // Only send the initial question if there's actual content
+          if (initialQuestion.trim()) {
+            // Send the initial question to get an answer
+            addMessage.mutate({
+              conversationId: data.id,
+              content: initialQuestion,
+            });
+          } else {
+            // If no initial question, just end the submitting state
+            setIsSubmitting(false);
+          }
+        } else {
+          console.error("Invalid conversation data received:", data);
+          setIsSubmitting(false);
         }
+      },
+      onError: (error) => {
+        console.error("Failed to create conversation:", error);
+        setIsSubmitting(false);
       },
     });
   };
@@ -529,9 +550,9 @@ export function QASection() {
                           >
                             <div className="truncate">{conversation.title}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {conversation.created_at
+                              {conversation.createdAt
                                 ? new Date(
-                                    conversation.created_at,
+                                    conversation.createdAt,
                                   ).toLocaleString("en-US", {
                                     year: "numeric",
                                     month: "short",
