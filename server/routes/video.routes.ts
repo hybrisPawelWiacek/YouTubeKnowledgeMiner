@@ -575,6 +575,18 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
     
+    // Debug headers for bulk delete
+    console.log("[video routes] BULK DELETE - Request headers:", {
+      'x-user-id': req.headers['x-user-id'],
+      'x-anonymous-session': req.headers['x-anonymous-session'],
+      'content-type': req.headers['content-type']
+    });
+    console.log("[video routes] BULK DELETE - User info:", {
+      user_id: userInfo.user_id,
+      is_anonymous: userInfo.is_anonymous,
+      anonymous_session_id: userInfo.anonymous_session_id
+    });
+    
     // Validate required fields
     const { ids } = req.body;
     
