@@ -64,6 +64,22 @@ router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), asy
         user_id: validatedData.user_id
       });
 
+      // If there are initial messages, process them for embeddings
+      if (Array.isArray(validatedData.messages) && validatedData.messages.length > 0) {
+        try {
+          const { processConversationEmbeddings } = await import('../services/embeddings');
+          await processConversationEmbeddings(
+            videoId,
+            validatedData.user_id,
+            validatedData.messages as any[]
+          );
+          console.log(`Generated embeddings for new conversation ${conversation.id}`);
+        } catch (embeddingError) {
+          // Non-critical operation, log the error but don't fail the request
+          console.error(`Failed to generate embeddings for new conversation: ${embeddingError}`);
+        }
+      }
+
       return sendSuccess(res, conversation, 201);
     } catch (validationError) {
       console.error("Validation error details:", validationError);
@@ -155,6 +171,22 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
         user_id: validatedData.user_id
       });
 
+      // If there are initial messages, process them for embeddings
+      if (Array.isArray(validatedData.messages) && validatedData.messages.length > 0) {
+        try {
+          const { processConversationEmbeddings } = await import('../services/embeddings');
+          await processConversationEmbeddings(
+            videoId,
+            validatedData.user_id,
+            validatedData.messages as any[]
+          );
+          console.log(`Generated embeddings for new conversation ${conversation.id}`);
+        } catch (embeddingError) {
+          // Non-critical operation, log the error but don't fail the request
+          console.error(`Failed to generate embeddings for new conversation: ${embeddingError}`);
+        }
+      }
+
       return sendSuccess(res, conversation, 201);
     } catch (validationError) {
       console.error("Validation error details:", validationError);
@@ -240,6 +272,20 @@ router.post('/:id/ask', validateNumericParam('id'), async (req: Request, res: Re
       conversationId,
       updatedMessages
     );
+
+    // Process the conversation for embeddings after updating
+    try {
+      const { processConversationEmbeddings } = await import('../services/embeddings');
+      await processConversationEmbeddings(
+        conversation.video_id, 
+        conversation.user_id, 
+        updatedMessages as any[]
+      );
+      console.log(`Generated embeddings for conversation ${conversationId}`);
+    } catch (embeddingError) {
+      // Non-critical operation, log the error but don't fail the request
+      console.error(`Failed to generate embeddings for conversation: ${embeddingError}`);
+    }
 
     return sendSuccess(res, {
       conversation: updatedConversation,

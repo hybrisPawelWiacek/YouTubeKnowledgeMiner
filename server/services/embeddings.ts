@@ -111,6 +111,39 @@ export async function processNotesEmbeddings(
 }
 
 /**
+ * Process a QA conversation, create text chunks from messages, generate embeddings, and store them in the database
+ * @param videoId The ID of the video the conversation is related to
+ * @param userId The ID of the user who owns the conversation
+ * @param messages Array of conversation messages (questions and answers)
+ * @returns An array of the created embedding IDs
+ */
+export async function processConversationEmbeddings(
+  videoId: number,
+  userId: number | null,
+  messages: any[]
+): Promise<number[]> {
+  if (!messages || messages.length === 0) {
+    log('No messages provided for conversation embedding generation', 'embeddings');
+    return [];
+  }
+
+  // For embedding storage purposes, we need a valid user ID
+  // If user is anonymous, we use a special system user ID (1 is commonly used for system)
+  const embeddingUserId = userId !== null ? userId : 1;
+  
+  // Process each message into a text chunk for embedding
+  const chunks = messages.map((message, index) => {
+    const role = message.role === 'user' ? 'Question' : 'Answer';
+    return `${role}: ${message.content}`;
+  });
+
+  log(`Created ${chunks.length} chunks from conversation messages for embedding`, 'embeddings');
+  
+  // Use the standard content embedding process with the 'conversation' content type
+  return processContentEmbeddings(videoId, embeddingUserId, chunks, 'conversation');
+}
+
+/**
  * Helper function to process transcript chunks with timestamp metadata
  */
 async function processTranscriptChunksWithTimestamps(

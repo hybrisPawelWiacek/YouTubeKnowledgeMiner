@@ -4,7 +4,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 
 // Using pgvector for native vector operations in PostgreSQL
-export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note']);
+export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note', 'conversation']);
 export const exportFormatEnum = pgEnum('export_format', ['txt', 'csv', 'json']);
 export const userTypeEnum = pgEnum('user_type', ['registered', 'anonymous']);
 
@@ -218,7 +218,7 @@ export const searchParamsSchema = z.object({
 
 // Export request schema
 export const exportRequestSchema = z.object({
-  content_type: z.enum(['transcript', 'summary', 'qa']),
+  content_type: z.enum(['transcript', 'summary', 'qa', 'conversation']),
   format: z.enum(['txt', 'csv', 'json']),
   video_ids: z.array(z.number()),
   qa_conversation_id: z.number().optional(),
@@ -236,7 +236,7 @@ export const citationSchema = z.object({
   video_id: z.number(),
   video_title: z.string(),
   content: z.string(),
-  content_type: z.enum(['transcript', 'summary', 'note']),
+  content_type: z.enum(['transcript', 'summary', 'note', 'conversation']),
   timestamp: z.string().optional(),
   chunk_index: z.number().optional(),
 });
@@ -260,7 +260,7 @@ export const qaQuestionSchema = z.object({
 export const semanticSearchSchema = z.object({
   query: z.string().min(3),
   filter: z.object({
-    content_types: z.array(z.enum(['transcript', 'summary', 'note'])).optional(),
+    content_types: z.array(z.enum(['transcript', 'summary', 'note', 'conversation'])).optional(),
     video_id: z.number().optional(),
     category_id: z.number().optional(),
     collection_id: z.number().optional(),
