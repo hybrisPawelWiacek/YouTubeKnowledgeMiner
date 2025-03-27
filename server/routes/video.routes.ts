@@ -251,71 +251,106 @@ router.get('/', async (req: Request, res: Response) => {
     
     // Check if the request is for the count only
     if (req.query._countOnly === 'true') {
-      try {
-        // Use a unified approach to get the video count
-        if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-          // For anonymous users with session, return count of their videos
-          const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
-          return sendSuccess(res, { count: videos.length });
-        } else if (userInfo.user_id !== null) {
-          // For authenticated users, get count of their videos
-          const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-          return sendSuccess(res, { count: videos.length });
-        } else {
-          // No user ID and no anonymous session
-          return sendSuccess(res, { count: 0 });
-        }
-      } catch (error) {
-        console.error("[video routes] Error getting video count:", error);
-        return sendError(res, "Failed to get video count", 500);
+      // If we're looking for the count of all videos, we can optimize this
+      if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+        // For anonymous users with session, return count of their videos
+        const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+        return sendSuccess(res, { count: videos.length });
+      } else if (userInfo.user_id !== null) {
+        // For authenticated users, get count of their videos
+        const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
+        return sendSuccess(res, { count: videos.length });
+      } else {
+        // No user ID and no anonymous session
+        return sendSuccess(res, { count: 0 });
       }
     }
     
-    // Create unified userIdentifier object
-    const userIdentifier = {
-      userId: userInfo.is_anonymous ? undefined : userInfo.user_id,
-      anonymousSessionId: userInfo.is_anonymous ? userInfo.anonymous_session_id : undefined
-    };
-    
-    // Log what's happening
+    // Handle anonymous users with session
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-      console.log("[video routes] Retrieving videos for anonymous session:", userInfo.anonymous_session_id);
-    } else if (userInfo.user_id !== null) {
-      console.log("[video routes] Retrieving videos for authenticated user:", userInfo.user_id);
-    }
-
-    // Use unified approach with searchVideos for both user types
-    if (Object.keys(req.query).length > 0) {
-      // If search parameters are present, use searchVideos with the filters
-      const result = await dbStorage.searchVideos(userIdentifier, searchParams);
-      console.log("[video routes] Returning", result.videos.length, "filtered videos");
-      return sendSuccess(res, result);
-    } else {
-      // For simple no-filter requests, handle differently based on user type
-      if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-        // For anonymous users, get all their videos
+      try {
+        console.log("[video routes] Retrieving videos for anonymous session:", userInfo.anonymous_session_id);
+        // For anonymous users with session, search their videos
         const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+        console.log("[video routes] Found", videos.length, "videos for anonymous session");
+        
+        // For anonymous users, skip Zod validation and manually handle search parameters
+        // to avoid type conversion issues
+        let filteredVideos = videos;
+        
+        // Apply simple filters manually instead of using searchParams
+        if (req.query.query) {
+          const searchTerm = String(req.query.query).toLowerCase();
+          filteredVideos = filteredVideos.filter(v => 
+            v.title.toLowerCase().includes(searchTerm) || 
+            v.channel.toLowerCase().includes(searchTerm) ||
+            (v.transcript && v.transcript.toLowerCase().includes(searchTerm))
+          );
+        }
+        
+        if (req.query.is_favorite === 'true') {
+          filteredVideos = filteredVideos.filter(v => v.is_favorite);
+        }
+        
+        // Apply category filter
+        if (req.query.category_id) {
+          const categoryId = Number(req.query.category_id);
+          filteredVideos = filteredVideos.filter(v => v.category_id === categoryId);
+        }
+        
+        // Apply sorting
+        const sortBy = req.query.sort_by as string || 'date';
+        const sortOrder = req.query.sort_order as string || 'desc';
+        
+        filteredVideos.sort((a, b) => {
+          if (sortBy === 'title') {
+            return sortOrder === 'asc' 
+              ? a.title.localeCompare(b.title)
+              : b.title.localeCompare(a.title);
+          } else if (sortBy === 'rating') {
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            return sortOrder === 'asc' ? ratingA - ratingB : ratingB - ratingA;
+          } else {
+            // Default: sort by date
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+          }
+        });
+        
+        console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
         return sendSuccess(res, {
-          videos,
-          totalCount: videos.length,
+          videos: filteredVideos,
+          totalCount: filteredVideos.length,
           hasMore: false
         });
-      } else if (userInfo.user_id !== null) {
-        // For authenticated users, get all their videos
+      } catch (error) {
+        console.error("[video routes] Error processing anonymous videos:", error);
+        return sendError(res, "Failed to process videos for anonymous user", 500);
+      }
+    } 
+    // Handle authenticated users
+    else if (userInfo.user_id !== null) {
+      if (Object.keys(req.query).length > 0) {
+        const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
+        return sendSuccess(res, result);
+      } else {
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
         return sendSuccess(res, {
           videos,
           totalCount: videos.length,
           hasMore: false
         });
-      } else {
-        // No user ID and no anonymous session
-        return sendSuccess(res, {
-          videos: [],
-          totalCount: 0,
-          hasMore: false
-        });
       }
+    } 
+    // No user ID and no anonymous session
+    else {
+      return sendSuccess(res, {
+        videos: [],
+        totalCount: 0,
+        hasMore: false
+      });
     }
   } catch (error) {
     if (error instanceof ZodError) {
