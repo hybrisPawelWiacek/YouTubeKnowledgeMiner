@@ -7,26 +7,31 @@ import {
   saveSearchHistory 
 } from '../services/embeddings';
 import { initializeVectorFunctions } from '../services/supabase';
-import { getUserIdFromRequest } from '../middleware/auth.middleware';
-import { requireAuth } from '../middleware/auth.middleware';
+import { getUserIdFromRequest, getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { log } from '../vite';
 
 const router = Router();
 
+// Apply user info middleware to all routes
+router.use(getUserInfo);
+
 /**
  * Get all saved searches for a user
+ * Anonymous users with valid sessions can access this endpoint but will receive an empty array
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    // Get user info from middleware
+    const userInfo = res.locals.userInfo;
+    const userId = userInfo.user_id;
     
     console.log("SAVED SEARCHES: Using user ID from request:", userId);
+    console.log("SAVED SEARCHES: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
     
-    // Anonymous users don't have saved searches
-    const savedSearches = userId ? await storage.getSavedSearchesByUserId(userId) : [];
+    // Anonymous users don't have saved searches - return empty array for consistent API response
+    const savedSearches = !userInfo.is_anonymous && userId ? await storage.getSavedSearchesByUserId(userId) : [];
     return sendSuccess(res, savedSearches);
   } catch (error) {
     console.error("Error fetching saved searches:", error);
@@ -64,15 +69,30 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 
 /**
  * Delete a saved search
- * Requires numeric param validation
+ * Requires authentication (not anonymous)
  */
-router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const searchId = parseInt(req.params.id);
+    
+    // Get user info from middleware
+    const userInfo = res.locals.userInfo;
+    console.log("DELETE SAVED SEARCH: Using user ID from request:", userInfo.user_id);
+    
+    // Get the saved search to check ownership
+    const savedSearch = await storage.getSavedSearch(searchId);
+    if (!savedSearch) {
+      return sendError(res, "Saved search not found", 404);
+    }
+    
+    // Check if user owns this saved search
+    if (userInfo.user_id !== savedSearch.user_id) {
+      return sendError(res, "You don't have permission to delete this saved search", 403);
+    }
 
     const deleted = await storage.deleteSavedSearch(searchId);
     if (!deleted) {
-      return sendError(res, "Saved search not found", 404);
+      return sendError(res, "Failed to delete saved search", 500);
     }
 
     return res.status(204).end();
@@ -84,20 +104,23 @@ router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Resp
 
 /**
  * Semantic Search API endpoint
+ * Supports both authenticated users and anonymous users with sessions
  */
-router.post('/semantic', async (req: Request, res: Response) => {
+router.post('/semantic', requireSession, async (req: Request, res: Response) => {
   try {
     const { query, filter, limit } = semanticSearchSchema.parse(req.body);
 
     // Initialize Supabase vector functions if not already done
     await initializeVectorFunctions();
 
-    // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    // Get user info from middleware
+    const userInfo = res.locals.userInfo;
+    const userId = userInfo.user_id;
     
     console.log("SEMANTIC SEARCH: Using user ID from request:", userId);
+    console.log("SEMANTIC SEARCH: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
 
-    // Execute semantic search
+    // Execute semantic search - works for both anonymous and authenticated users
     const results = await performSemanticSearch(
       userId,
       query,
@@ -111,8 +134,8 @@ router.post('/semantic', async (req: Request, res: Response) => {
       limit
     );
 
-    // Save search to history only for authenticated users
-    if (userId !== null) {
+    // Save search to history only for authenticated users (not anonymous)
+    if (!userInfo.is_anonymous && userId) {
       try {
         await saveSearchHistory(userId, query, filter, results.length);
       } catch (error) {

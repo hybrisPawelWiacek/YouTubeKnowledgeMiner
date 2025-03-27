@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { dbStorage } from '../database-storage';
-import { getUserInfo, requireAuth } from '../middleware/auth.middleware';
+import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { validateNumericParam, validateRequest } from '../middleware/validation.middleware';
 import { insertCollectionSchema } from '../../shared/schema';
 import { sendSuccess, sendError } from '../utils/response.utils';
@@ -14,6 +14,7 @@ router.use(getUserInfo);
 
 /**
  * Get all collections for the authenticated user
+ * Anonymous users with valid sessions can access this endpoint but will receive an empty array
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -22,9 +23,11 @@ router.get('/', async (req: Request, res: Response) => {
     const userId = userInfo.user_id;
     
     console.log("COLLECTIONS: Using user ID from request:", userId);
+    console.log("COLLECTIONS: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
     
-    // Anonymous users (userId is null) don't have collections
-    const collections = userId ? await dbStorage.getCollectionsByUserId(userId) : [];
+    // Anonymous users don't have collections in the current implementation
+    // But we still respond with an empty array for valid anonymous users with sessions
+    const collections = userId && !userInfo.is_anonymous ? await dbStorage.getCollectionsByUserId(userId) : [];
     return sendSuccess(res, collections);
   } catch (error) {
     console.error("Error fetching collections:", error);

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { dbStorage } from '../database-storage';
-import { getUserInfo, requireAuth } from '../middleware/auth.middleware';
+import { getUserInfo, requireAuth, getUserIdFromRequest } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { insertCategorySchema } from '../../shared/schema';
 import { sendSuccess, sendError } from '../utils/response.utils';
@@ -14,6 +14,7 @@ router.use(getUserInfo);
 
 /**
  * Get all categories (both global and user-specific)
+ * Supports anonymous users with sessions
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -22,8 +23,9 @@ router.get('/', async (req: Request, res: Response) => {
     const userId = userInfo.user_id;
     
     console.log("CATEGORIES: Using user ID from request:", userId);
+    console.log("CATEGORIES: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
 
-    // Get categories (both global and user-specific if authenticated)
+    // Get categories (global for all users, plus user-specific for authenticated users)
     const categories = await dbStorage.getCategories(userId);
     return sendSuccess(res, categories);
   } catch (error) {
