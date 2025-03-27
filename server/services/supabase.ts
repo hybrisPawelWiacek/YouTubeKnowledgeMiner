@@ -28,26 +28,6 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Initialize Supabase vector functions
- * This sets up any necessary vector search functions in Supabase
- */
-export async function initializeVectorFunctions(): Promise<void> {
-  try {
-    if (!isSupabaseConfigured()) {
-      throw new Error("Supabase not configured - cannot initialize vector functions");
-    }
-    
-    // This function would typically set up any custom vector-related
-    // SQL functions or extensions in Supabase if needed
-    console.log("Vector search functions initialized");
-    return;
-  } catch (error) {
-    console.error("Failed to initialize Supabase vector functions:", error);
-    throw error;
-  }
-}
-
-/**
  * Get the Supabase client instance
  * @returns The Supabase client instance
  * @throws Error if Supabase is not configured
@@ -158,6 +138,9 @@ export async function sendMagicLink(email: string, redirectTo?: string) {
     throw error;
   }
 }
+
+// For backward compatibility, re-export vector functions from the new module
+export { initializeVectorFunctions } from './vector-search';
 
 export default {
   isSupabaseConfigured,

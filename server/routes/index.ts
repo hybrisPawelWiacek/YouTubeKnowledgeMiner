@@ -14,9 +14,10 @@ import semanticSearchRoutes from './semantic-search.routes';
 import exportRoutes from './export.routes';
 import qaRoutes from './qa.routes';
 
-// Import OpenAI service to initialize before handling requests
+// Import services to initialize before handling requests
 import { isOpenAIConfigured } from '../services/openai';
-import { isSupabaseConfigured, initializeVectorFunctions } from '../services/supabase';
+import { isSupabaseConfigured } from '../services/supabase';
+import { initializeVectorFunctions } from '../services/vector-search';
 import { addGlobalCategories } from '../../scripts/add-global-categories';
 
 /**

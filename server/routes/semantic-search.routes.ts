@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { semanticSearchSchema } from '@shared/schema';
 import { performSemanticSearch, saveSearchHistory } from '../services/embeddings';
-import { initializeVectorFunctions } from '../services/supabase';
+import { initializeVectorFunctions } from '../services/vector-search';
 import { getUserInfo, requireSession } from '../middleware/auth.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { log } from '../vite';

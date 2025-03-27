@@ -4,7 +4,7 @@ import { videos } from '../shared/schema';
 import { sql } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import { performSemanticSearch } from '../server/services/embeddings'; 
-import { initializeVectorFunctions } from '../server/services/supabase';
+import { initializeVectorFunctions } from '../server/services/vector-search';
 
 dotenv.config();
 
@@ -81,7 +81,7 @@ async function testSemanticSearchConversation() {
     searchResults.forEach((result, index) => {
       console.log(`\nResult ${index + 1}:`);
       console.log(`Content: ${result.content.substring(0, 100)}${result.content.length > 100 ? '...' : ''}`);
-      console.log(`Score: ${result.score}`);
+      console.log(`Score: ${result.similarity}`);
       console.log(`Content Type: ${result.content_type}`);
     });
     
