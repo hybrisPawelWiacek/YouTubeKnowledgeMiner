@@ -14,6 +14,7 @@ import { YoutubeVideo, VideoMetadata, Category } from "@/types";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
+import { useLocation } from "wouter";
 import { 
   User, Calendar, Link, ThumbsUp, Eye, Clock, 
   Tag as TagIcon, Info, PlusCircle 
@@ -38,6 +39,7 @@ export function VideoResult({ video }: VideoResultProps) {
   const [interactionCount, setInteractionCount] = useState(0);
   const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [, setLocation] = useLocation(); // Add navigation hook
 
   // Fetch categories
   const { data: categories = [] } = useQuery<Category[]>({
@@ -107,6 +109,12 @@ export function VideoResult({ video }: VideoResultProps) {
       
       // Also invalidate the anonymous video count to update the header counter
       queryClient.invalidateQueries({ queryKey: ["/api/anonymous/videos/count"] });
+      
+      // Navigate to the library page after successful save
+      setTimeout(() => {
+        setLocation('/library');
+        console.log('[VideoResult] Navigating to library page after saving video');
+      }, 500); // Short delay to allow toast to show
     },
     onError: (error: any) => {
       console.error('Error in saveVideo mutation:', error);
@@ -135,6 +143,8 @@ export function VideoResult({ video }: VideoResultProps) {
     if (pendingMetadata) {
       handleActualSave(pendingMetadata);
       setPendingMetadata(null);
+      
+      // Navigation will happen in the onSuccess callback of saveVideo mutation
     }
   };
 
