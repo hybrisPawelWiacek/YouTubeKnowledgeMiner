@@ -99,15 +99,15 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
  * @returns User information including ID, session details, and authentication status
  */
 export async function getUserInfoFromRequest(req: Request): Promise<{ 
-  user_id: number | null; 
+  user_id: number; 
   anonymous_session_id?: string;
   is_anonymous: boolean;
 }> {
   console.log("[Auth Helper] Extracting user info from request headers");
   
   // 1. Try to get the user ID from the x-user-id header (for authenticated users)
-  // Default to null for anonymous users (not 1)
-  let userId: number | null = null;
+  // Default to 7 for anonymous users (our dedicated anonymous user ID)
+  let userId: number = 7; // Default to our anonymous user ID
   let isAnonymous = true;
   let anonymousSessionId: string | undefined = undefined;
   
@@ -131,14 +131,15 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
       const parsedId = parseInt(cleanValue, 10);
       
       // Validate the parsed ID - specifically don't treat 1 as authenticated
-      // since that's our anonymous user ID
+      // since that's our old anonymous user ID
       if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
         userId = parsedId;
         isAnonymous = false;
         console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
       } else if (!isNaN(parsedId) && parsedId === 1) {
         // This is an anonymous user, so check for a session header
-        console.log("[Auth Helper] Found user ID 1 (anonymous), checking for session");
+        console.log("[Auth Helper] Found user ID 1 (old anonymous), using new anonymous user ID 7");
+        userId = 7; // Use our dedicated anonymous user
       } else {
         console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
       }
@@ -146,10 +147,10 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
       console.error("[Auth Helper] Error parsing user ID from header:", error)
     }
   } else {
-    console.log("[Auth Helper] No x-user-id header found, checking for anonymous session");
+    console.log("[Auth Helper] No x-user-id header found, using anonymous user ID 7");
   }
   
-  // 2. If this is an anonymous user (userId is null), look for session tracking
+  // 2. If this is an anonymous user, look for session tracking
   if (isAnonymous) {
     // Check for anonymous session header
     const sessionHeader = req.headers['x-anonymous-session'];
@@ -183,7 +184,7 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
       // Set the anonymous session ID for return
       anonymousSessionId = sessionId;
     } else {
-      console.log("[Auth Helper] No anonymous session header found, using default anonymous user");
+      console.log("[Auth Helper] No anonymous session header found, using default anonymous user ID 7");
     }
   }
   
