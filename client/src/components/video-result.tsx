@@ -101,7 +101,12 @@ export function VideoResult({ video }: VideoResultProps) {
         title: "Success",
         description: "Video saved to your library",
       });
+      
+      // Invalidate video listing queries
       queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+      
+      // Also invalidate the anonymous video count to update the header counter
+      queryClient.invalidateQueries({ queryKey: ["/api/anonymous/videos/count"] });
     },
     onError: (error: any) => {
       console.error('Error in saveVideo mutation:', error);
