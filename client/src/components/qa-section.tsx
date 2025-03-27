@@ -84,12 +84,12 @@ export function QASection() {
         // Use apiRequest instead of axios to include anonymous session headers
         const anonymousSessionId = getOrCreateAnonymousSessionId();
         const headers: Record<string, string> = {};
-        
+
         if (anonymousSessionId) {
           headers['x-anonymous-session'] = anonymousSessionId;
           console.log("[QA Section] Using anonymous session ID for GET conversations:", anonymousSessionId);
         }
-        
+
         const response = await apiRequest('GET', `/api/videos/${videoId}/qa`, undefined, headers);
         const data = await response.json();
         return data as QASession[];
@@ -103,16 +103,16 @@ export function QASection() {
       queryKey: ['/api/qa', activeConversation],
       queryFn: async () => {
         if (!activeConversation) return null;
-        
+
         // Use apiRequest instead of axios to include anonymous session headers
         const anonymousSessionId = getOrCreateAnonymousSessionId();
         const headers: Record<string, string> = {};
-        
+
         if (anonymousSessionId) {
           headers['x-anonymous-session'] = anonymousSessionId;
           console.log("[QA Section] Using anonymous session ID for GET conversation:", anonymousSessionId);
         }
-        
+
         const response = await apiRequest('GET', `/api/qa/${activeConversation}`, undefined, headers);
         const data = await response.json();
         return data;
@@ -126,16 +126,16 @@ export function QASection() {
       // Use apiRequest instead of axios to include anonymous session headers
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
-      
+
       if (anonymousSessionId) {
         headers['x-anonymous-session'] = anonymousSessionId;
         console.log("[QA Section] Using anonymous session ID:", anonymousSessionId);
       }
-      
+
       const response = await apiRequest('POST', `/api/videos/${videoId}/qa`, {
         title
       }, headers);
-      
+
       const data = await response.json();
       return data;
     },
@@ -164,17 +164,17 @@ export function QASection() {
       // Use apiRequest instead of axios to include anonymous session headers
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
-      
+
       if (anonymousSessionId) {
         headers['x-anonymous-session'] = anonymousSessionId;
         console.log("[QA Section] Using anonymous session ID for adding message:", anonymousSessionId);
       }
-      
+
       const response = await apiRequest('POST', `/api/qa/${conversationId}/ask`, {
         question: content,
         video_id: videoId
       }, headers);
-      
+
       const data = await response.json();
       return data;
     },
@@ -218,10 +218,10 @@ export function QASection() {
     };
 
     window.addEventListener('resize', handleResize);
-    
+
     // Initial check
     handleResize();
-    
+
     // Cleanup listener on component unmount
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -234,14 +234,14 @@ export function QASection() {
     if (!title) {
       title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
     }
-    
+
     // Store the current question to use after conversation is created
     const initialQuestion = question;
-    
+
     // Clear the question input field and conversation title immediately
     setQuestion("");
     setNewConversationTitle("");
-    
+
     createConversation.mutate(title, {
       onSuccess: (data) => {
         // After conversation is created successfully, send the initial question
@@ -272,7 +272,7 @@ export function QASection() {
 
     // Store question content before clearing
     const currentQuestion = question;
-    
+
     // Add user message immediately to UI for better UX
     const userMessage: Message = { role: 'user', content: currentQuestion };
     setMessages([...messages, userMessage]);
@@ -294,20 +294,20 @@ export function QASection() {
     // Skip the dialog and directly start a new conversation
     startNewConversation();
   };
-  
+
   const startNewConversation = () => {
     // Close the dialog (in case it's open from somewhere else)
     setShowNewConversationDialog(false);
-    
+
     // Reset the conversation state
     setActiveConversation(null);
     setMessages([]);
-    
+
     // On mobile, hide the sidebar
     if (window.innerWidth < 768) {
       setShowSidebar(false);
     }
-    
+
     // Focus the question input
     setTimeout(() => {
       const questionInput = document.getElementById('new-question-input');
@@ -323,12 +323,12 @@ export function QASection() {
       // Use apiRequest instead of axios to include anonymous session headers
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
-      
+
       if (anonymousSessionId) {
         headers['x-anonymous-session'] = anonymousSessionId;
         console.log("[QA Section] Using anonymous session ID for delete conversation:", anonymousSessionId);
       }
-      
+
       const response = await apiRequest('DELETE', `/api/qa/${id}`, undefined, headers);
       const data = await response.json();
       return data;
@@ -339,10 +339,10 @@ export function QASection() {
         setActiveConversation(null);
         setMessages([]);
       }
-      
+
       // Force refetching conversations
       refetchConversations();
-      
+
       // Reset the conversation to delete
       setConversationToDelete(null);
     },
@@ -562,7 +562,7 @@ export function QASection() {
                           ) : (
                             <div className="whitespace-pre-wrap">{message.content}</div>
                           )}
-                          
+
                           {/* Citation section */}
                           {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
                             <div className="mt-3 pt-2 border-t border-border">
