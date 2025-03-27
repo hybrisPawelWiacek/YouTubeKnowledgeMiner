@@ -52,12 +52,26 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   // Error handling middleware
+  // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+    console.error('Global error handler caught:', err);
+    
+    // Import these dynamically to avoid circular dependencies
+    const { handleApiError } = require('./utils/response.utils');
+    const { ZodError } = require('zod');
+    const { ValidationError } = require('./utils/error.utils');
+    
+    // Special handling for Zod validation errors
+    if (err instanceof ZodError) {
+      const validationError = new ValidationError(
+        err.errors[0].message || 'Validation error',
+        err.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+      );
+      return handleApiError(res, validationError);
+    }
+    
+    // Use our handleApiError utility for consistent error formatting
+    return handleApiError(res, err);
   });
 
   // Special route to check the API status - for debugging

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { dbStorage } from '../database-storage';
 import { ZodError } from 'zod';
+import { AuthenticationError, SessionError, ErrorCode } from '../utils/error.utils';
+import { handleApiError } from '../utils/response.utils';
 
 /**
  * Middleware to extract and validate user from request
@@ -13,7 +15,7 @@ export async function getUserInfo(req: Request, res: Response, next: NextFunctio
     next();
   } catch (error) {
     console.error("[Auth Middleware] Error getting user info:", error);
-    next(error);
+    handleApiError(res, error);
   }
 }
 
@@ -24,10 +26,11 @@ export async function getUserInfo(req: Request, res: Response, next: NextFunctio
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userInfo = res.locals.userInfo;
   if (!userInfo || userInfo.is_anonymous) {
-    return res.status(401).json({ 
-      message: "Authentication required",
-      code: "AUTH_REQUIRED" 
-    });
+    const error = new AuthenticationError(
+      "Authentication required to access this resource", 
+      ErrorCode.AUTH_REQUIRED
+    );
+    return handleApiError(res, error);
   }
   next();
 }
@@ -51,27 +54,33 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
         
         // Now check if session is valid
         if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
-          return res.status(401).json({ 
-            message: "Valid session required",
-            code: "SESSION_REQUIRED" 
-          });
+          const error = new SessionError(
+            "Valid session required", 
+            ErrorCode.SESSION_REQUIRED,
+            "Anonymous users must have a valid session ID"
+          );
+          return handleApiError(res, error);
         }
         next();
       }).catch(error => {
         console.error("[Auth Middleware] Error extracting user info:", error);
-        return res.status(401).json({ 
-          message: "Valid session required",
-          code: "SESSION_REQUIRED" 
-        });
+        const sessionError = new SessionError(
+          "Valid session required", 
+          ErrorCode.SESSION_REQUIRED,
+          "Failed to extract user information"
+        );
+        return handleApiError(res, sessionError);
       });
       
       return; // Don't call next() here as it will be called by the promise
     } catch (error) {
       console.error("[Auth Middleware] Synchronous error in requireSession:", error);
-      return res.status(401).json({ 
-        message: "Valid session required",
-        code: "SESSION_REQUIRED" 
-      });
+      const sessionError = new SessionError(
+        "Valid session required", 
+        ErrorCode.SESSION_REQUIRED,
+        "Unexpected error processing session"
+      );
+      return handleApiError(res, sessionError);
     }
   } else {
     // We already have user info from previous middleware
@@ -80,10 +89,12 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
     // For anonymous users, we need a valid session ID
     if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
       console.log("[Auth Middleware] Anonymous user without valid session ID");
-      return res.status(401).json({ 
-        message: "Valid session required",
-        code: "SESSION_REQUIRED" 
-      });
+      const error = new SessionError(
+        "Valid session required", 
+        ErrorCode.SESSION_REQUIRED,
+        "Anonymous users must have a valid session ID"
+      );
+      return handleApiError(res, error);
     }
     
     // Session is valid, proceed

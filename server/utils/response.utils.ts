@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { ApiError, normalizeError } from './error.utils';
 
 /**
  * Standard success response
@@ -38,6 +39,26 @@ export function sendError(
   }
   
   return res.status(status).json(response);
+}
+
+/**
+ * Handle any error and send an appropriate response
+ * 
+ * @param res Express response object
+ * @param error Any error object
+ */
+export function handleApiError(res: Response, error: any) {
+  console.error('API Error:', error);
+  
+  // Normalize the error to ensure consistent format
+  const apiError = normalizeError(error);
+  
+  // Return the error response
+  return res.status(apiError.status).json({
+    message: apiError.message,
+    code: apiError.code,
+    ...(apiError.details ? { details: apiError.details } : {})
+  });
 }
 
 /**

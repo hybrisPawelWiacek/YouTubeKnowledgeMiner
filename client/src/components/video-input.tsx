@@ -11,6 +11,8 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { useLocation } from "wouter";
+import { useError } from "@/contexts/error-context";
+import { ApiErrorDisplay } from "@/components/ui/api-error-display";
 
 interface VideoInputProps {
   onVideoProcessed: (video: YoutubeVideo) => void;
@@ -24,6 +26,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   const [pendingVideo, setPendingVideo] = useState<YoutubeVideo | null>(null);
   const [location, setLocation] = useLocation();
   const [anonymousCount, setAnonymousCount] = useState(0);
+  const { error, handleAnonymousError, clearError } = useError();
 
   // Keep anonymous count updated
   useEffect(() => {
@@ -112,12 +115,30 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
         handleVideoProcessed(data);
       }
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Processing failed",
-        description: error.message || "Could not process this video. It may not have available transcripts.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      console.error("Video processing error:", error);
+      
+      // Clear any previous errors
+      clearError();
+      
+      // Try to identify if this is an anonymous limit error
+      if (error?.code === 'ANONYMOUS_LIMIT_REACHED') {
+        handleAnonymousError(error);
+      } else if (error?.response?.data) {
+        // Handle standard API errors with response data
+        handleAnonymousError({
+          message: error.response.data.message || "Failed to process video",
+          code: error.response.data.code,
+          details: error.response.data.details,
+        });
+      } else {
+        // Handle other errors
+        toast({
+          title: "Processing failed",
+          description: error.message || "Could not process this video. It may not have available transcripts.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -238,6 +259,24 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
                   </Button>
                 </div>
               </div>
+              
+              {/* Error display */}
+              {error && (
+                <div className="mt-4">
+                  <ApiErrorDisplay 
+                    type={error.type}
+                    message={error.message}
+                    code={error.code}
+                    details={error.details}
+                    onRetry={() => {
+                      clearError();
+                      if (url) {
+                        analyzeVideo(url);
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>

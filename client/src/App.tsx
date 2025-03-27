@@ -10,6 +10,8 @@ import Library from "@/pages/library";
 import Explorer from "@/pages/explorer";
 import VideoDetailPage from "@/pages/video/[id]";
 import { SupabaseProvider, useSupabase } from "@/hooks/use-supabase";
+import { ErrorProvider } from "@/contexts/error-context";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 // Auth callback handler that processes OAuth redirects
 function AuthCallback() {
@@ -37,15 +39,17 @@ function AuthCallback() {
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/auth" component={Auth} />
-      <Route path="/auth/callback" component={AuthCallback} />
-      <Route path="/library" component={Library} />
-      <Route path="/explorer" component={Explorer} />
-      <Route path="/video/:id" component={VideoDetailPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <ErrorBoundary>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/auth" component={Auth} />
+        <Route path="/auth/callback" component={AuthCallback} />
+        <Route path="/library" component={Library} />
+        <Route path="/explorer" component={Explorer} />
+        <Route path="/video/:id" component={VideoDetailPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </ErrorBoundary>
   );
 }
 
@@ -53,8 +57,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SupabaseProvider>
-        <Router />
-        <Toaster />
+        <ErrorProvider>
+          <Router />
+          <Toaster />
+        </ErrorProvider>
       </SupabaseProvider>
     </QueryClientProvider>
   );

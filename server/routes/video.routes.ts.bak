@@ -4,17 +4,19 @@ import { dbStorage } from '../database-storage';
 import { validateRequest, validateNumericParam } from '../middleware/validation.middleware';
 import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { 
-  videoMetadataSchema, 
-  searchParamsSchema, 
-  youtubeUrlSchema 
+  youtubeUrlSchema,
+  videoMetadataSchema,
+  searchParamsSchema,
+  SearchParams
 } from '../../shared/schema';
-import { applySearchFilters } from '../utils/query-parser';
-import { sendSuccess, sendError } from '../utils/response.utils';
+import { sendSuccess, sendError, handleApiError } from '../utils/response.utils';
+import { AnonymousLimitError, ErrorCode } from '../utils/error.utils';
+// No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
-  processYoutubeVideo, 
   getYoutubeTranscript, 
   generateTranscriptSummary,
-  extractYoutubeId
+  extractYoutubeId,
+  processYoutubeVideo
 } from '../services/youtube';
 import { 
   processTranscriptEmbeddings,
@@ -289,6 +291,12 @@ router.get('/', async (req: Request, res: Response) => {
         
         if (req.query.is_favorite === 'true') {
           filteredVideos = filteredVideos.filter(v => v.is_favorite);
+        }
+        
+        // Apply category filter
+        if (req.query.category_id) {
+          const categoryId = Number(req.query.category_id);
+          filteredVideos = filteredVideos.filter(v => v.category_id === categoryId);
         }
         
         // Apply sorting

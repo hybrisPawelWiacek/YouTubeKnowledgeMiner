@@ -70,22 +70,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(404).json({ message: "API endpoint not found" });
   });
   
-  // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("API Error:", err);
-    
-    if (err instanceof ZodError) {
-      return res.status(400).json({ 
-        message: err.errors[0].message,
-        code: "VALIDATION_ERROR"
-      });
-    }
-    
-    return res.status(500).json({ 
-      message: err.message || "Internal Server Error",
-      code: "SERVER_ERROR"
-    });
-  });
+  // Global error handler is registered in server/index.ts
+  // This is only needed for route-specific errors
   
   // Create HTTP server (but don't start it)
   const { createServer } = await import('http');
