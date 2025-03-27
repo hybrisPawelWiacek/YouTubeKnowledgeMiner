@@ -8,7 +8,7 @@ import { storage } from '../storage';
 import { generateAnswer } from '../services/openai';
 import { performSemanticSearch } from '../services/embeddings';
 import { initializeVectorFunctions } from '../services/supabase';
-import { getUserIdFromRequest, requireAuth } from '../middleware/auth.middleware';
+import { getUserIdFromRequest, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 
@@ -33,8 +33,9 @@ router.get('/:videoId/qa', validateNumericParam('videoId'), async (req: Request,
 /**
  * Support the original route format for creating conversations:
  * POST /api/videos/:videoId/qa
+ * Supports both authenticated users and anonymous sessions
  */
-router.post('/:videoId/qa', requireAuth, validateNumericParam('videoId'), async (req: Request, res: Response) => {
+router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.videoId);
     
@@ -60,7 +61,7 @@ router.post('/:videoId/qa', requireAuth, validateNumericParam('videoId'), async 
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: userId as number // userId is guaranteed to be non-null by requireAuth
+        user_id: userId as number // userId could be null for anonymous sessions, but Drizzle schema allows this
       });
 
       return sendSuccess(res, conversation, 201);
@@ -116,9 +117,9 @@ router.get('/:id([0-9]+)', validateNumericParam('id'), async (req: Request, res:
 
 /**
  * Create a new Q&A conversation for a specific video
- * Requires authentication (not anonymous)
+ * Supports both authenticated users and anonymous sessions
  */
-router.post('/video/:id', requireAuth, validateNumericParam('id'), async (req: Request, res: Response) => {
+router.post('/video/:id', requireSession, validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.id);
     
@@ -151,7 +152,7 @@ router.post('/video/:id', requireAuth, validateNumericParam('id'), async (req: R
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: userId as number // userId is guaranteed to be non-null by requireAuth
+        user_id: userId as number // userId could be null for anonymous sessions, but Drizzle schema allows this
       });
 
       return sendSuccess(res, conversation, 201);
