@@ -338,16 +338,44 @@ router.get('/', async (req: Request, res: Response) => {
     } 
     // Handle authenticated users
     else if (userInfo.user_id !== null) {
-      if (Object.keys(req.query).length > 0) {
-        const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
-        return sendSuccess(res, result);
-      } else {
+      try {
+        console.log('[GET /videos] Authenticated user, ID:', userInfo.user_id);
+        // For now, we'll use getVideosByUserId for all cases since searchVideos is having issues
+        // We'll implement client-side filtering if needed
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        return sendSuccess(res, {
-          videos,
-          totalCount: videos.length,
-          hasMore: false
-        });
+        console.log(`[GET /videos] Found ${videos.length} videos for user ${userInfo.user_id}`);
+        
+        // Implement basic filtering on client-side for now
+        if (Object.keys(req.query).length > 0) {
+          console.log('[GET /videos] Applying filters in-memory:', req.query);
+          // Just apply very basic query filtering if needed
+          let filteredVideos = [...videos];
+          
+          if (searchParams.query) {
+            const query = searchParams.query.toLowerCase();
+            filteredVideos = filteredVideos.filter(v => 
+              v.title.toLowerCase().includes(query) || 
+              (v.description && v.description.toLowerCase().includes(query))
+            );
+          }
+          
+          // Return filtered videos with pagination info
+          return sendSuccess(res, {
+            videos: filteredVideos,
+            totalCount: filteredVideos.length,
+            hasMore: false
+          });
+        } else {
+          // Return all videos without filtering
+          return sendSuccess(res, {
+            videos,
+            totalCount: videos.length,
+            hasMore: false
+          });
+        }
+      } catch (error) {
+        console.error('[GET /videos] Error fetching videos for authenticated user:', error);
+        return handleApiError(res, error);
       }
     } 
     // No user ID and no anonymous session
