@@ -209,13 +209,13 @@ export class DatabaseStorage implements IStorage {
 
     // Check if there are more results beyond the requested limit
     const hasMore = results.length > limit;
-    const videos = hasMore ? results.slice(0, limit) : results;
+    const videoResults = hasMore ? results.slice(0, limit) : results;
 
     // Determine next cursor (last item's ID if there are more results)
-    const nextCursor = hasMore && videos.length > 0 ? videos[videos.length - 1].id : undefined;
+    const nextCursor = hasMore && videoResults.length > 0 ? videoResults[videoResults.length - 1].id : undefined;
 
     return {
-      videos,
+      videos: videoResults,
       totalCount,
       hasMore,
       nextCursor
