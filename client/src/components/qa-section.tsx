@@ -100,7 +100,7 @@ export function QASection() {
   } = useQuery({
     queryKey: ["/api/videos", videoId, "qa"],
     queryFn: async () => {
-      // Use apiRequest instead of axios to include anonymous session headers
+      // Use our improved fetchAPI helper with better response handling
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
@@ -112,14 +112,16 @@ export function QASection() {
         );
       }
 
-      const response = await apiRequest(
+      console.log(`[QA Section] Fetching conversations for video ${videoId}`);
+      const data = await fetchAPI<QASession[]>(
         "GET",
         `/api/videos/${videoId}/qa`,
         undefined,
         headers,
       );
-      const data = await response.json();
-      return data as QASession[];
+      
+      console.log(`[QA Section] Fetched ${data?.length || 0} conversations for video ${videoId}:`, data);
+      return data;
     },
     enabled: videoId > 0,
   });
@@ -134,7 +136,7 @@ export function QASection() {
     queryFn: async () => {
       if (!activeConversation) return null;
 
-      // Use apiRequest instead of axios to include anonymous session headers
+      // Use our improved fetchAPI helper with better response handling
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
@@ -146,13 +148,15 @@ export function QASection() {
         );
       }
 
-      const response = await apiRequest(
+      console.log(`[QA Section] Fetching active conversation ${activeConversation}`);
+      const data = await fetchAPI<any>(
         "GET",
         `/api/qa/${activeConversation}`,
         undefined,
         headers,
       );
-      const data = await response.json();
+      
+      console.log(`[QA Section] Fetched conversation data for ID ${activeConversation}:`, data);
       return data;
     },
     enabled: activeConversation !== null,
@@ -489,7 +493,7 @@ export function QASection() {
   // Delete conversation function
   const deleteConversation = useMutation({
     mutationFn: async (id: number) => {
-      // Use apiRequest instead of axios to include anonymous session headers
+      // Use improved fetchAPI helper with better error handling
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
@@ -501,8 +505,18 @@ export function QASection() {
         );
       }
 
-      // The delete endpoint returns 204 No Content, so we shouldn't try to parse it as JSON
-      await apiRequest("DELETE", `/api/qa/${id}`, undefined, headers);
+      console.log(`[QA Section] Deleting conversation ${id}`);
+      
+      // The fetchAPI will handle empty responses (204 No Content)
+      await fetchAPI(
+        "DELETE", 
+        `/api/qa/${id}`, 
+        undefined, 
+        headers
+      );
+      
+      console.log(`[QA Section] Successfully deleted conversation ${id}`);
+      
       // Return an empty object as the mutation response
       return {};
     },
