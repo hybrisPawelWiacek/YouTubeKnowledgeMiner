@@ -5,6 +5,20 @@ import { AuthenticationError, SessionError, ErrorCode } from '../utils/error.uti
 import { handleApiError } from '../utils/response.utils';
 
 /**
+ * Authentication Middleware
+ * 
+ * This file contains the middleware and helper functions that integrate
+ * all three authentication systems:
+ * 
+ * 1. Anonymous sessions (/api/anonymous/*)
+ * 2. Supabase authentication (/api/supabase-auth/*)
+ * 3. Demo user authentication (/api/demo-auth/*)
+ * 
+ * The middleware provides the glue that allows these systems to coexist
+ * and provides uniform authentication checks throughout the application.
+ */
+
+/**
  * Middleware to extract and validate user from request
  * Attaches user info to res.locals for use in route handlers
  */

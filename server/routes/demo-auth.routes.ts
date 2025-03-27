@@ -5,6 +5,21 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { users } from '../../shared/schema';
 
+/**
+ * Demo Authentication Routes
+ * 
+ * This file contains routes for demonstration users authentication
+ * and is mapped to /api/demo-auth/* in the main routes index.
+ * 
+ * It provides a way to log in with predefined demo users without
+ * going through the actual Supabase authentication process.
+ * This is useful for testing authenticated features in development
+ * or giving demos of the application.
+ * 
+ * This system works alongside both the Supabase auth and anonymous
+ * session systems as part of the complete authentication solution.
+ */
+
 // Create router for demo authentication endpoints
 const router = Router();
 

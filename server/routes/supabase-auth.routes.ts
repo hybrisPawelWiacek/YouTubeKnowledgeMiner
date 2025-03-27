@@ -4,6 +4,20 @@ import { isSupabaseConfigured } from '../services/supabase';
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
 
+/**
+ * Supabase Authentication Routes
+ * 
+ * This file contains routes for Supabase authentication functionality
+ * and is mapped to /api/supabase-auth/* in the main routes index.
+ * 
+ * It provides authentication for registered users via:
+ * 1. Email magic links
+ * 2. Google OAuth (via Supabase client-side SDK)
+ * 
+ * It works alongside the anonymous session system to provide a 
+ * complete authentication solution.
+ */
+
 dotenv.config();
 
 const router = Router();
