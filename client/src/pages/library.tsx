@@ -30,6 +30,20 @@ import {
   Loader2,
   Plus,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Library() {
   // State
@@ -133,7 +147,7 @@ export default function Library() {
       }
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
-      
+
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
@@ -141,10 +155,10 @@ export default function Library() {
         headers = { 'x-anonymous-session': sessionId };
         console.log('Library - Adding anonymous session header:', sessionId);
       }
-      
+
       // Use our API request function which handles all the auth header logic for us
       const response = await apiRequest("GET", url, undefined, headers);
-      
+
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
@@ -224,7 +238,7 @@ export default function Library() {
         headers = { 'x-anonymous-session': sessionId };
         console.log('Bulk Delete - Adding anonymous session header:', sessionId);
       }
-      
+
       const response = await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
       return response.json();
     },
@@ -256,7 +270,7 @@ export default function Library() {
         headers = { 'x-anonymous-session': sessionId };
         console.log('Bulk Toggle Favorite - Adding anonymous session header:', sessionId);
       }
-      
+
       const response = await apiRequest("PATCH", "/api/videos/bulk", { 
         ids, 
         data: { is_favorite: isFavorite } 
@@ -288,7 +302,7 @@ export default function Library() {
         headers = { 'x-anonymous-session': sessionId };
         console.log('Add to Collection - Adding anonymous session header:', sessionId);
       }
-      
+
       const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
         video_ids: videoIds
       }, headers);
@@ -392,13 +406,13 @@ export default function Library() {
 
   // State for delete confirmation dialog
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
-  
+
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
     setShowDeleteConfirmation(true);
   };
-  
+
   // Handle confirmed deletion
   const confirmDelete = () => {
     bulkDeleteMutation.mutate(selectedVideos);
@@ -471,14 +485,14 @@ export default function Library() {
           setShowedPrompt(true);
         }
       };
-      
+
       // Only execute the check once - not on initial render
       if (libraryInteractions > 0) {
         checkAnonymousLimit();
       } else {
         setShowedPrompt(true);
       }
-      
+
       // Load videos from local storage
       const localData = getLocalData();
       if (localData.videos.length > 0) {
@@ -902,7 +916,6 @@ export default function Library() {
           </div>
         </div>
       </main>
-
       <Footer />
 
       {/* Create Collection Dialog */}
@@ -930,7 +943,7 @@ export default function Library() {
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
-      
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
         <DialogContent>
