@@ -67,6 +67,7 @@ export default function ExplorerPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [videoInfoMap, setVideoInfoMap] = useState<Record<number, VideoInfo>>({});
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(true);
   
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -295,48 +296,70 @@ export default function ExplorerPage() {
     );
   };
   
-  // Filter components
+  // Filter components with enhanced visual styling
   const filtersContent = (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <h3 className="font-medium mb-2">Content Types</h3>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
+        <h3 className="font-medium mb-3 text-gray-200">Content Types</h3>
+        <div className="space-y-3">
+          <div className="flex items-center space-x-3 p-2 rounded-md hover:bg-zinc-800/70 transition-colors">
             <Checkbox 
               id="filter-transcript" 
               checked={activeFilters.contentTypes.includes('transcript')}
               onCheckedChange={() => toggleContentTypeFilter('transcript')}
+              className="border-blue-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
             />
-            <Label htmlFor="filter-transcript">Transcripts</Label>
+            <div className="flex flex-col">
+              <Label htmlFor="filter-transcript" className="font-medium">Transcripts</Label>
+              <span className="text-xs text-gray-400">Search in video transcriptions</span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3 p-2 rounded-md hover:bg-zinc-800/70 transition-colors">
             <Checkbox 
               id="filter-summary" 
               checked={activeFilters.contentTypes.includes('summary')}
               onCheckedChange={() => toggleContentTypeFilter('summary')}
+              className="border-purple-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
             />
-            <Label htmlFor="filter-summary">Summaries</Label>
+            <div className="flex flex-col">
+              <Label htmlFor="filter-summary" className="font-medium">Summaries</Label>
+              <span className="text-xs text-gray-400">Search in AI-generated summaries</span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3 p-2 rounded-md hover:bg-zinc-800/70 transition-colors">
             <Checkbox 
               id="filter-notes" 
               checked={activeFilters.contentTypes.includes('note')}
               onCheckedChange={() => toggleContentTypeFilter('note')}
+              className="border-green-500 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
             />
-            <Label htmlFor="filter-notes">Notes</Label>
+            <div className="flex flex-col">
+              <Label htmlFor="filter-notes" className="font-medium">Notes</Label>
+              <span className="text-xs text-gray-400">Search in your personal notes</span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3 p-2 rounded-md hover:bg-zinc-800/70 transition-colors">
             <Checkbox 
               id="filter-conversation" 
               checked={activeFilters.contentTypes.includes('conversation')}
               onCheckedChange={() => toggleContentTypeFilter('conversation')}
+              className="border-orange-500 data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
             />
-            <Label htmlFor="filter-conversation">Conversations</Label>
+            <div className="flex flex-col">
+              <Label htmlFor="filter-conversation" className="font-medium">Conversations</Label>
+              <span className="text-xs text-gray-400">Search in Q&A conversations</span>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="pt-2">
+        <Button className="w-full" size="sm" variant="secondary" onClick={handleSearch}>
+          Apply Filters
+        </Button>
       </div>
     </div>
   );
@@ -380,14 +403,24 @@ export default function ExplorerPage() {
                 )}
               </Button>
               
-              {isMobile ? (
+              <Button
+                variant="outline" 
+                size="icon"
+                onClick={() => isMobile ? setMobileFiltersOpen(true) : setDesktopFiltersOpen(!desktopFiltersOpen)}
+                className="relative"
+                title="Toggle filters"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                {activeFilters.contentTypes.length < 4 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                    {activeFilters.contentTypes.length}
+                  </span>
+                )}
+              </Button>
+              
+              {isMobile && (
                 <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <SlidersHorizontal className="h-4 w-4" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent>
+                  <SheetContent className="bg-zinc-950 border-zinc-800">
                     <SheetHeader>
                       <SheetTitle>Search Filters</SheetTitle>
                       <SheetDescription>
@@ -401,19 +434,11 @@ export default function ExplorerPage() {
                     
                     <SheetFooter>
                       <SheetClose asChild>
-                        <Button onClick={handleSearch}>Apply Filters</Button>
+                        <Button onClick={handleSearch}>Apply Filters & Search</Button>
                       </SheetClose>
                     </SheetFooter>
                   </SheetContent>
                 </Sheet>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                </Button>
               )}
             </div>
             
@@ -421,30 +446,56 @@ export default function ExplorerPage() {
             {activeFilters.contentTypes.length < 4 && (
               <div className="flex mt-2 gap-2 flex-wrap">
                 <div className="text-sm text-gray-400">Searching in:</div>
-                {activeFilters.contentTypes.map(type => (
-                  <Badge key={type} variant="secondary" className="flex items-center gap-1">
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => toggleContentTypeFilter(type)}
-                    />
-                  </Badge>
-                ))}
+                {activeFilters.contentTypes.map(type => {
+                  // Get color for content type badge
+                  const badgeColor = {
+                    transcript: 'bg-blue-600/20 text-blue-300 border-blue-600/30',
+                    summary: 'bg-purple-600/20 text-purple-300 border-purple-600/30',
+                    note: 'bg-green-600/20 text-green-300 border-green-600/30',
+                    conversation: 'bg-orange-600/20 text-orange-300 border-orange-600/30'
+                  }[type];
+                  
+                  return (
+                    <Badge 
+                      key={type} 
+                      variant="outline" 
+                      className={`flex items-center gap-1 ${badgeColor}`}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                      <X 
+                        className="h-3 w-3 cursor-pointer" 
+                        onClick={() => toggleContentTypeFilter(type)}
+                      />
+                    </Badge>
+                  );
+                })}
               </div>
             )}
           </div>
           
           {/* Main Content Area with filters sidebar */}
           <div className="flex flex-col md:flex-row gap-6">
-            {/* Filters sidebar (desktop) */}
-            {!isMobile && (
-              <div className="w-full md:w-64 flex-shrink-0">
-                <div className="sticky top-4 bg-zinc-900 p-4 rounded-lg border border-zinc-800">
-                  <h2 className="text-lg font-medium mb-4">Search Filters</h2>
-                  {filtersContent}
+            {/* Filters sidebar (desktop) with animation */}
+            <div 
+              className={`md:w-64 flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+                !isMobile && desktopFiltersOpen ? 'md:max-w-64 md:opacity-100 md:visible' : 'md:max-w-0 md:opacity-0 md:invisible md:h-0'
+              }`}
+            >
+              <div className="sticky top-4 bg-zinc-900/90 backdrop-blur-sm p-4 rounded-lg border border-zinc-700 shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium">Search Filters</h2>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 hover:bg-zinc-800" 
+                    onClick={() => setDesktopFiltersOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
+                {filtersContent}
               </div>
-            )}
+            </div>
             
             {/* Results area */}
             <div className="flex-grow">
