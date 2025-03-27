@@ -205,6 +205,12 @@ export function QASection() {
     },
     onError: (error) => {
       console.error("Failed to create conversation:", error);
+      // Report error to user and reset submitting state
+      setIsSubmitting(false);
+      // Try to log more details about the error
+      if (error instanceof Error) {
+        console.error("Error details:", error.message, error.stack);
+      }
     },
   });
 
@@ -296,58 +302,99 @@ export function QASection() {
     };
   }, []);
 
-  const handleCreateNewConversation = () => {
-    // If user has entered a title in the dialog, use it; otherwise create one from the question
-    let title = newConversationTitle.trim();
-    if (!title) {
-      title = `Q: ${question.substring(0, 25)}${question.length > 25 ? "..." : ""}`;
-    }
+  const handleCreateNewConversation = async () => {
+    try {
+      // If user has entered a title in the dialog, use it; otherwise create one from the question
+      let title = newConversationTitle.trim();
+      if (!title) {
+        title = `Q: ${question.substring(0, 25)}${question.length > 25 ? "..." : ""}`;
+      }
 
-    // Store the current question to use after conversation is created
-    const initialQuestion = question;
+      // Store the current question to use after conversation is created
+      const initialQuestion = question;
 
-    // Clear the question input field and conversation title immediately
-    setQuestion("");
-    setNewConversationTitle("");
-    
-    // Set submitting state to provide visual feedback
-    setIsSubmitting(true);
+      // Clear the question input field and conversation title immediately
+      setQuestion("");
+      setNewConversationTitle("");
+      
+      // Set submitting state to provide visual feedback
+      setIsSubmitting(true);
 
-    createConversation.mutate(title, {
-      onSuccess: (data) => {
-        console.log("Conversation created successfully:", data);
+      console.log("Creating new conversation with title:", title);
+      
+      // Get the anonymous session ID
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
+
+      if (anonymousSessionId) {
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA CreateConv] Using anonymous session:",
+          anonymousSessionId
+        );
+      }
+
+      // Directly make the API call instead of using the mutate wrapper
+      const response = await apiRequest(
+        "POST",
+        `/api/videos/${videoId}/qa`,
+        { title },
+        headers
+      );
+      
+      // Don't try to parse non-OK responses to avoid JSON parse errors
+      if (!response.ok) {
+        throw new Error(`Failed to create conversation: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log("Conversation created API response:", data);
+      
+      // After conversation is created successfully, force refetch conversations
+      refetchConversations();
+      
+      if (data && typeof data === "object" && "id" in data && typeof data.id === "number") {
+        // Set the active conversation
+        setActiveConversation(data.id);
         
-        // After conversation is created successfully, send the initial question
-        if (
-          data &&
-          typeof data === "object" &&
-          "id" in data &&
-          typeof data.id === "number"
-        ) {
-          // Make sure activeConversation is set
-          setActiveConversation(data.id);
-          
-          // Only send the initial question if there's actual content
-          if (initialQuestion.trim()) {
-            // Send the initial question to get an answer
-            addMessage.mutate({
-              conversationId: data.id,
-              content: initialQuestion,
-            });
-          } else {
-            // If no initial question, just end the submitting state
-            setIsSubmitting(false);
+        // Only send the initial question if there's actual content
+        if (initialQuestion.trim()) {
+          try {
+            // Send the initial question directly
+            const messageResponse = await apiRequest(
+              "POST",
+              `/api/qa/${data.id}/ask`,
+              {
+                question: initialQuestion,
+                video_id: videoId,
+              },
+              headers
+            );
+            
+            if (!messageResponse.ok) {
+              throw new Error(`Failed to send message: ${messageResponse.status} ${messageResponse.statusText}`);
+            }
+            
+            const messageData = await messageResponse.json();
+            console.log("Initial message sent, response:", messageData);
+            
+            // Update messages with the new AI response
+            if (messageData && messageData.conversation && Array.isArray(messageData.conversation.messages)) {
+              setMessages(messageData.conversation.messages);
+            }
+          } catch (messageError) {
+            console.error("Error sending initial message:", messageError);
           }
-        } else {
-          console.error("Invalid conversation data received:", data);
-          setIsSubmitting(false);
         }
-      },
-      onError: (error) => {
-        console.error("Failed to create conversation:", error);
-        setIsSubmitting(false);
-      },
-    });
+      } else {
+        console.error("Invalid conversation data received:", data);
+      }
+    } catch (error) {
+      console.error("Error in handleCreateNewConversation:", error);
+    } finally {
+      // Always reset the submitting state when done
+      setIsSubmitting(false);
+    }
   };
 
   const handleSelectConversation = (conversationId: number) => {
@@ -364,24 +411,62 @@ export function QASection() {
       return;
     }
 
-    // Store question content before clearing
-    const currentQuestion = question;
+    try {
+      // Store question content before clearing
+      const currentQuestion = question;
 
-    // Add user message immediately to UI for better UX
-    const userMessage: Message = { role: "user", content: currentQuestion };
-    setMessages([...messages, userMessage]);
+      // Add user message immediately to UI for better UX
+      const userMessage: Message = { role: "user", content: currentQuestion };
+      setMessages([...messages, userMessage]);
 
-    // Clear the input immediately
-    setQuestion("");
+      // Clear the input immediately
+      setQuestion("");
 
-    // Set loading state
-    setIsSubmitting(true);
+      // Set loading state
+      setIsSubmitting(true);
 
-    // Send the question to the API
-    await addMessage.mutateAsync({
-      conversationId: activeConversation,
-      content: currentQuestion,
-    });
+      // Get the anonymous session ID for the request
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
+
+      if (anonymousSessionId) {
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA SubmitQ] Using anonymous session:",
+          anonymousSessionId
+        );
+      }
+
+      // Send the question directly to the API
+      const response = await apiRequest(
+        "POST",
+        `/api/qa/${activeConversation}/ask`,
+        {
+          question: currentQuestion,
+          video_id: videoId,
+        },
+        headers
+      );
+
+      // Don't try to parse non-OK responses to avoid JSON parse errors
+      if (!response.ok) {
+        throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("Message added, response:", data);
+
+      // Update messages with the new AI response
+      if (data && data.conversation && Array.isArray(data.conversation.messages)) {
+        setMessages(data.conversation.messages);
+      }
+    } catch (error) {
+      console.error("Error sending question:", error);
+      // Show error in UI if needed
+    } finally {
+      // Always reset submitting state
+      setIsSubmitting(false);
+    }
   };
 
   const handleNewConversation = () => {
