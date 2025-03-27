@@ -58,7 +58,14 @@ export function QASection() {
   const [question, setQuestion] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(() => {
+    // Check if window is available (client-side only)
+    if (typeof window !== 'undefined') {
+      // Show sidebar by default on desktop (width >= 768px)
+      return window.innerWidth >= 768;
+    }
+    return true; // Default to true for SSR
+  });
   const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [newConversationTitle, setNewConversationTitle] = useState("");
@@ -201,6 +208,25 @@ export function QASection() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Add window resize event listener to adjust sidebar visibility
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setShowSidebar(true); // Always show sidebar on desktop
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    // Initial check
+    handleResize();
+    
+    // Cleanup listener on component unmount
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleCreateNewConversation = () => {
     // If user has entered a title in the dialog, use it; otherwise create one from the question
