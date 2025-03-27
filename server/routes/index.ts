@@ -14,6 +14,7 @@ import searchRoutes from './search.routes';
 import semanticSearchRoutes from './semantic-search.routes';
 import exportRoutes from './export.routes';
 import qaRoutes from './qa.routes';
+import loggingRoutes from './logging.routes';
 
 // Import services to initialize before handling requests
 import { isOpenAIConfigured } from '../services/openai';
@@ -66,6 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);
   app.use('/api/qa', qaRoutes);
+  app.use('/api/logs', loggingRoutes); // Add the new logging routes
   
   // Also register the qa routes under the videos path for backward compatibility
   app.use('/api/videos', qaRoutes);

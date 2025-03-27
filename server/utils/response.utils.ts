@@ -13,6 +13,20 @@ export function sendSuccess(res: Response, data: any, status: number = 200) {
 }
 
 /**
+ * Handle API success response
+ * 
+ * @param res Express response object
+ * @param data Data to send in the response
+ * @param status HTTP status code (default: 200) 
+ */
+export function handleApiSuccess(res: Response, data: any, status: number = 200) {
+  return res.status(status).json({
+    success: true,
+    data
+  });
+}
+
+/**
  * Standard error response
  * 
  * @param res Express response object

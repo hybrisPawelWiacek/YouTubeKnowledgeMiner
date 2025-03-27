@@ -3,9 +3,23 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
+import requestIdMiddleware from "./middleware/request-id.middleware";
+import { requestLogger, responseLogger, errorLogger } from "./middleware/logging.middleware";
+import { logger } from "./utils/logger";
 config();
 
+// Initialize the application
 const app = express();
+
+// Apply request ID middleware first, so all subsequent middleware can use the request ID
+app.use(requestIdMiddleware);
+
+// Apply request logging middleware to log all incoming requests
+app.use(requestLogger);
+
+// Apply response logging middleware to log all outgoing responses
+app.use(responseLogger);
+
 // JSON middleware with increased size limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -17,6 +31,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Legacy logging middleware - keep for backward compatibility with the log function
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -51,10 +66,23 @@ app.use((req, res, next) => {
   // Create a server first, then register the API routes
   const server = await registerRoutes(app);
 
-  // Error handling middleware
+  // Error logging middleware - should come before the global error handler
+  app.use(errorLogger);
+  
   // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error('Global error handler caught:', err);
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    logger.error('Global error handler caught', {
+      error: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+        code: err.code,
+        status: err.status,
+      },
+      requestId: req.requestId,
+      url: req.originalUrl,
+      method: req.method
+    });
     
     // Import these dynamically to avoid circular dependencies
     const { handleApiError } = require('./utils/response.utils');
@@ -115,7 +143,16 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
+    // Log using both the old and new logging systems for transition period
     log(`✅ Server running on http://0.0.0.0:${port}`);
     log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Log using the new structured logger
+    logger.info('Server started successfully', {
+      port,
+      host: '0.0.0.0',
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version
+    });
   });
 })();

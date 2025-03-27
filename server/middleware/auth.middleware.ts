@@ -3,6 +3,7 @@ import { dbStorage } from '../database-storage';
 import { ZodError } from 'zod';
 import { AuthenticationError, SessionError, ErrorCode } from '../utils/error.utils';
 import { handleApiError } from '../utils/response.utils';
+import { logger, logAuthEvent } from '../utils/logger';
 
 /**
  * Authentication Middleware
@@ -28,7 +29,7 @@ export async function getUserInfo(req: Request, res: Response, next: NextFunctio
     res.locals.userInfo = userInfo;
     next();
   } catch (error) {
-    console.error("[Auth Middleware] Error getting user info:", error);
+    logger.error("Error getting user info", { error, requestId: req.requestId });
     handleApiError(res, error);
   }
 }
@@ -44,8 +45,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       "Authentication required to access this resource", 
       ErrorCode.AUTH_REQUIRED
     );
+    logger.warn("Authentication required but user is anonymous or not authenticated", { 
+      requestId: req.requestId, 
+      path: req.path,
+      method: req.method,
+      isAnonymous: userInfo?.is_anonymous,
+      hasUserInfo: !!userInfo
+    });
     return handleApiError(res, error);
   }
+  
+  logger.debug("User authenticated successfully", { requestId: req.requestId, 
+    userId: userInfo.user_id
+  });
   next();
 }
 
@@ -58,13 +70,17 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
   if (!res.locals.userInfo) {
     // If getUserInfo middleware hasn't run yet, run it now
     try {
-      console.log("[Auth Middleware] User info not found, extracting from request");
+      logger.debug("User info not found, extracting from request", { requestId: req.requestId, 
+        path: req.path,
+        method: req.method
+      });
+      
       const userInfoPromise = getUserInfoFromRequest(req);
       
       // Handle the promise synchronously to maintain middleware flow
       userInfoPromise.then(userInfo => {
         res.locals.userInfo = userInfo;
-        console.log("[Auth Middleware] Successfully extracted user info:", userInfo);
+        logger.debug("Successfully extracted user info", { requestId: req.requestId,  userInfo });
         
         // Now check if session is valid
         if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
@@ -73,27 +89,44 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
             ErrorCode.SESSION_REQUIRED,
             "Anonymous users must have a valid session ID"
           );
+          
+          logger.warn("Anonymous user missing valid session ID", { requestId: req.requestId, 
+            path: req.path,
+            method: req.method
+          });
+          
           return handleApiError(res, error);
         }
+        
+        logger.info("Session validated successfully", { requestId: req.requestId, 
+          userType: userInfo.is_anonymous ? 'anonymous' : 'authenticated',
+          userId: userInfo.user_id,
+          sessionId: userInfo.anonymous_session_id
+        });
+        
         next();
       }).catch(error => {
-        console.error("[Auth Middleware] Error extracting user info:", error);
+        logger.error("Error extracting user info", { requestId: req.requestId,  error });
+        
         const sessionError = new SessionError(
           "Valid session required", 
           ErrorCode.SESSION_REQUIRED,
           "Failed to extract user information"
         );
+        
         return handleApiError(res, sessionError);
       });
       
       return; // Don't call next() here as it will be called by the promise
     } catch (error) {
-      console.error("[Auth Middleware] Synchronous error in requireSession:", error);
+      logger.error("Synchronous error in requireSession", { requestId: req.requestId,  error });
+      
       const sessionError = new SessionError(
         "Valid session required", 
         ErrorCode.SESSION_REQUIRED,
         "Unexpected error processing session"
       );
+      
       return handleApiError(res, sessionError);
     }
   } else {
@@ -102,16 +135,26 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
     
     // For anonymous users, we need a valid session ID
     if (userInfo.is_anonymous && !userInfo.anonymous_session_id) {
-      console.log("[Auth Middleware] Anonymous user without valid session ID");
+      logger.warn("Anonymous user without valid session ID", { requestId: req.requestId, 
+        path: req.path,
+        method: req.method
+      });
+      
       const error = new SessionError(
         "Valid session required", 
         ErrorCode.SESSION_REQUIRED,
         "Anonymous users must have a valid session ID"
       );
+      
       return handleApiError(res, error);
     }
     
     // Session is valid, proceed
+    logger.debug("Using existing session", { requestId: req.requestId, 
+      userType: userInfo.is_anonymous ? 'anonymous' : 'authenticated',
+      userId: userInfo.user_id
+    });
+    
     next();
   }
 }
@@ -128,7 +171,7 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
   anonymous_session_id?: string;
   is_anonymous: boolean;
 }> {
-  console.log("[Auth Helper] Extracting user info from request headers");
+  logger.debug("Extracting user info from request headers", { requestId: req.requestId });
   
   // 1. Try to get the user ID from the x-user-id header (for authenticated users)
   // Default to 7 for anonymous users (our dedicated anonymous user ID)
@@ -140,7 +183,7 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
   if (req.headers['x-user-id']) {
     try {
       const headerValue = req.headers['x-user-id'];
-      console.log("[Auth Helper] Found x-user-id header:", headerValue);
+      logger.debug("Found x-user-id header", { requestId: req.requestId,  headerValue });
       
       // Handle both string and array formats
       const idValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
@@ -160,19 +203,22 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
       if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
         userId = parsedId;
         isAnonymous = false;
-        console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
+        logger.info("Successfully parsed authenticated user ID", { requestId: req.requestId,  userId });
       } else if (!isNaN(parsedId) && parsedId === 1) {
         // This is an anonymous user, so check for a session header
-        console.log("[Auth Helper] Found user ID 1 (old anonymous), using new anonymous user ID 7");
+        logger.debug("Found user ID 1 (old anonymous), using new anonymous user ID 7", { requestId: req.requestId });
         userId = 7; // Use our dedicated anonymous user
       } else {
-        console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Parsed as:", parsedId);
+        logger.warn("Invalid user ID format in header", { requestId: req.requestId,  
+          headerValue: idValue, 
+          parsedId
+        });
       }
     } catch (error) {
-      console.error("[Auth Helper] Error parsing user ID from header:", error)
+      logger.error("Error parsing user ID from header", { requestId: req.requestId,  error });
     }
   } else {
-    console.log("[Auth Helper] No x-user-id header found, using anonymous user ID 7");
+    logger.debug("No x-user-id header found, using anonymous user ID 7", { requestId: req.requestId });
   }
   
   // 2. If this is an anonymous user, look for session tracking
@@ -181,26 +227,29 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
     const sessionHeader = req.headers['x-anonymous-session'];
     if (sessionHeader) {
       const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
-      console.log("[Auth Helper] Found anonymous session header:", sessionId);
+      logger.debug("Found anonymous session header", { requestId: req.requestId,  sessionId });
       
       // Check if this session exists in the database
       let session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
       
       if (!session) {
         // Create a new session if it doesn't exist
-        console.log("[Auth Helper] Creating new anonymous session in database");
+        logger.info("Creating new anonymous session in database", { requestId: req.requestId,  sessionId });
         try {
           session = await dbStorage.createAnonymousSession({
             session_id: sessionId,
             user_agent: req.headers['user-agent'] || null,
             ip_address: req.ip || null
           });
-          console.log("[Auth Helper] Session created successfully:", session);
+          logger.info("Session created successfully", { requestId: req.requestId,  sessionId });
         } catch (error) {
-          console.error("[Auth Helper] ERROR creating anonymous session:", error);
+          logger.error("Error creating anonymous session", { requestId: req.requestId,  
+            sessionId,
+            error
+          });
         }
       } else {
-        console.log("[Auth Helper] Using existing anonymous session from database");
+        logger.debug("Using existing anonymous session from database", { requestId: req.requestId,  sessionId });
       }
       
       // Update the session's last active timestamp
@@ -209,11 +258,11 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
       // Set the anonymous session ID for return
       anonymousSessionId = sessionId;
     } else {
-      console.log("[Auth Helper] No anonymous session header found, using default anonymous user ID 7");
+      logger.debug("No anonymous session header found, using default anonymous user ID 7", { requestId: req.requestId });
     }
   }
   
-  console.log("[Auth Helper] Final user info:", { 
+  logger.debug("Final user info", { requestId: req.requestId,  
     user_id: userId, 
     is_anonymous: isAnonymous, 
     has_session: !!anonymousSessionId 
@@ -234,7 +283,7 @@ export async function getUserInfoFromRequest(req: Request): Promise<{
  * @returns The user ID for authenticated users or anonymous user ID (7) for anonymous users
  */
 export async function getUserIdFromRequest(req: Request): Promise<number> {
-  console.log("[Auth Helper] Extracting user ID from request headers");
+  logger.debug("Extracting user ID from request headers", { requestId: req.requestId });
   
   // Default to the anonymous user ID (7) for anonymous users
   let userId: number = 7; // Using our dedicated anonymous user ID
@@ -245,7 +294,7 @@ export async function getUserIdFromRequest(req: Request): Promise<number> {
   if (req.headers['x-user-id']) {
     try {
       const headerValue = req.headers['x-user-id'];
-      console.log("[Auth Helper] Found x-user-id header:", headerValue);
+      logger.debug("Found x-user-id header", { requestId: req.requestId,  headerValue });
       
       // Handle both string and array formats
       const idValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
@@ -264,19 +313,22 @@ export async function getUserIdFromRequest(req: Request): Promise<number> {
       if (!isNaN(parsedId) && parsedId > 0 && parsedId !== 1) {
         userId = parsedId;
         isAnonymous = false; // This is an authenticated user
-        console.log("[Auth Helper] Successfully parsed authenticated user ID:", userId);
+        logger.info("Successfully parsed authenticated user ID", { requestId: req.requestId,  userId });
       } else if (!isNaN(parsedId) && parsedId === 1) {
         // This is the old anonymous user ID, use the new one (7)
-        console.log("[Auth Helper] Found old anonymous user ID 1, using dedicated anonymous user ID 7");
+        logger.debug("Found old anonymous user ID 1, using dedicated anonymous user ID 7", { requestId: req.requestId });
         userId = 7;
       } else {
-        console.warn("[Auth Helper] Invalid user ID format in header:", idValue, "- Using anonymous user ID 7");
+        logger.warn("Invalid user ID format in header", { requestId: req.requestId,  
+          headerValue: idValue,
+          parsedId
+        });
       }
     } catch (error) {
-      console.error("[Auth Helper] Error parsing user ID from header:", error);
+      logger.error("Error parsing user ID from header", { requestId: req.requestId,  error });
     }
   } else {
-    console.log("[Auth Helper] No x-user-id header found, checking for anonymous session");
+    logger.debug("No x-user-id header found, checking for anonymous session", { requestId: req.requestId });
   }
   
   // If this is an anonymous user, try to get their session
@@ -285,17 +337,17 @@ export async function getUserIdFromRequest(req: Request): Promise<number> {
     if (sessionHeader) {
       try {
         const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
-        console.log("[Auth Helper] Found anonymous session header:", sessionId);
+        logger.debug("Found anonymous session header", { requestId: req.requestId,  sessionId });
         anonymousSessionId = sessionId;
         
         // Get or create session and update last active time
         let session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
         
         if (session) {
-          console.log("[Auth Helper] Found existing anonymous session, updating last active time");
+          logger.debug("Found existing anonymous session, updating last active time", { requestId: req.requestId,  sessionId });
           await dbStorage.updateAnonymousSessionLastActive(sessionId);
         } else {
-          console.log("[Auth Helper] Creating new anonymous session");
+          logger.info("Creating new anonymous session", { requestId: req.requestId,  sessionId });
           session = await dbStorage.createAnonymousSession({
             session_id: sessionId,
             user_agent: req.headers['user-agent'] || null,
@@ -305,15 +357,21 @@ export async function getUserIdFromRequest(req: Request): Promise<number> {
         
         // For anonymous users, we use the dedicated anonymous user ID (7)
         // The session ID header is what ties videos to specific anonymous users
-        console.log("[Auth Helper] Using anonymous session ID:", sessionId, "with user ID 7");
+        logger.debug("Using anonymous session ID with user ID 7", { requestId: req.requestId,  sessionId });
       } catch (error) {
-        console.error("[Auth Helper] Error handling anonymous session:", error);
+        logger.error("Error handling anonymous session", { requestId: req.requestId,  
+          sessionId: anonymousSessionId,
+          error
+        });
       }
     } else {
-      console.log("[Auth Helper] No anonymous session header found, using anonymous user ID 7");
+      logger.debug("No anonymous session header found, using anonymous user ID 7", { requestId: req.requestId });
     }
   }
   
-  console.log("[Auth Helper] Final user ID being used:", userId, "(type:", typeof userId, ")");
+  logger.debug("Final user ID being used", { requestId: req.requestId,  
+    userId,
+    type: typeof userId
+  });
   return userId;
 }
