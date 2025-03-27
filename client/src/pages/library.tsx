@@ -226,7 +226,9 @@ export default function Library() {
         description: `${selectedVideos.length} videos have been deleted from your library.`,
       });
       setSelectedVideos([]);
+      // Invalidate both the videos query and the anonymous video count query
       queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/anonymous/videos/count"] });
     },
     onError: () => {
       toast({
