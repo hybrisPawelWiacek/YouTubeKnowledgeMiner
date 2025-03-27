@@ -111,7 +111,7 @@ export default function ExplorerPage() {
       }
       
       // Perform semantic search using the dedicated RAG endpoint
-      const response = await apiRequest('POST', '/api/search', {
+      const results = await apiRequest('POST', '/api/search', {
         query: searchQuery,
         filter: {
           content_types: activeFilters.contentTypes,
@@ -119,16 +119,13 @@ export default function ExplorerPage() {
         limit: 20
       });
       
-      console.log("Search response:", response);
+      console.log("Search results:", results);
       
-      if (response && response.data && Array.isArray(response.data)) {
-        setSearchResults(response.data);
-        console.log(`Found ${response.data.length} search results`);
-      } else if (response && Array.isArray(response)) {
-        setSearchResults(response);
-        console.log(`Found ${response.length} search results (direct array)`);
+      if (results && Array.isArray(results) && results.length > 0) {
+        setSearchResults(results);
+        console.log(`Found ${results.length} search results`);
       } else {
-        console.log("No results found in response:", response);
+        console.log("No results found in response:", results);
         setSearchResults([]);
         toast({
           title: "No results found",

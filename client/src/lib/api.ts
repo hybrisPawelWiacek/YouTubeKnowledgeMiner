@@ -115,11 +115,15 @@ export async function apiRequest(
 
   try {
     const response = await fetch(url, options);
+    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || response.statusText);
     }
-    return response;
+    
+    // Parse and return the JSON data from the response
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('API request failed:', error);
     throw error; // Re-throw the error to be handled by the caller
