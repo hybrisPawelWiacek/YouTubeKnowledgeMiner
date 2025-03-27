@@ -272,119 +272,35 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
     
-    // Handle anonymous users with session
-    if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-      try {
-        console.log("[video routes] Retrieving videos for anonymous session:", userInfo.anonymous_session_id);
-        // For anonymous users with session, search their videos
-        const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
-        console.log("[video routes] Found", videos.length, "videos for anonymous session");
-        
-        // For anonymous users, skip Zod validation and manually handle search parameters
-        // to avoid type conversion issues
-        let filteredVideos = videos;
-        
-        // Apply simple filters manually instead of using searchParams
-        if (req.query.query) {
-          const searchTerm = String(req.query.query).toLowerCase();
-          filteredVideos = filteredVideos.filter(v => 
-            v.title.toLowerCase().includes(searchTerm) || 
-            v.channel.toLowerCase().includes(searchTerm) ||
-            (v.transcript && v.transcript.toLowerCase().includes(searchTerm))
-          );
-        }
-        
-        if (req.query.is_favorite === 'true') {
-          filteredVideos = filteredVideos.filter(v => v.is_favorite);
-        }
-        
-        // Apply category filter
-        if (req.query.category_id) {
-          const categoryId = Number(req.query.category_id);
-          filteredVideos = filteredVideos.filter(v => v.category_id === categoryId);
-        }
-        
-        // Apply sorting
-        const sortBy = req.query.sort_by as string || 'date';
-        const sortOrder = req.query.sort_order as string || 'desc';
-        
-        filteredVideos.sort((a, b) => {
-          if (sortBy === 'title') {
-            return sortOrder === 'asc' 
-              ? a.title.localeCompare(b.title)
-              : b.title.localeCompare(a.title);
-          } else if (sortBy === 'rating') {
-            const ratingA = a.rating || 0;
-            const ratingB = b.rating || 0;
-            return sortOrder === 'asc' ? ratingA - ratingB : ratingB - ratingA;
-          } else {
-            // Default: sort by date
-            const dateA = new Date(a.created_at).getTime();
-            const dateB = new Date(b.created_at).getTime();
-            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-          }
-        });
-        
-        console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
+    // Use the unified searchVideos method that works for both anonymous and authenticated users
+    try {
+      // Create a userInfo object with the correct identifier based on user type
+      const searchUserInfo = { 
+        user_id: userInfo.is_anonymous ? null : userInfo.user_id,
+        anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null
+      };
+      
+      // If we have no user ID and no session ID, return empty results
+      if (!searchUserInfo.user_id && !searchUserInfo.anonymous_session_id) {
         return sendSuccess(res, {
-          videos: filteredVideos,
-          totalCount: filteredVideos.length,
+          videos: [],
+          totalCount: 0,
           hasMore: false
         });
-      } catch (error) {
-        console.error("[video routes] Error processing anonymous videos:", error);
-        return handleApiError(res, error);
       }
-    } 
-    // Handle authenticated users
-    else if (userInfo.user_id !== null) {
-      try {
-        console.log('[GET /videos] Authenticated user, ID:', userInfo.user_id);
-        // For now, we'll use getVideosByUserId for all cases since searchVideos is having issues
-        // We'll implement client-side filtering if needed
-        const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        console.log(`[GET /videos] Found ${videos.length} videos for user ${userInfo.user_id}`);
         
-        // Implement basic filtering on client-side for now
-        if (Object.keys(req.query).length > 0) {
-          console.log('[GET /videos] Applying filters in-memory:', req.query);
-          // Just apply very basic query filtering if needed
-          let filteredVideos = [...videos];
-          
-          if (searchParams.query) {
-            const query = searchParams.query.toLowerCase();
-            filteredVideos = filteredVideos.filter(v => 
-              v.title.toLowerCase().includes(query) || 
-              (v.description && v.description.toLowerCase().includes(query))
-            );
-          }
-          
-          // Return filtered videos with pagination info
-          return sendSuccess(res, {
-            videos: filteredVideos,
-            totalCount: filteredVideos.length,
-            hasMore: false
-          });
-        } else {
-          // Return all videos without filtering
-          return sendSuccess(res, {
-            videos,
-            totalCount: videos.length,
-            hasMore: false
-          });
-        }
-      } catch (error) {
-        console.error('[GET /videos] Error fetching videos for authenticated user:', error);
-        return handleApiError(res, error);
-      }
-    } 
-    // No user ID and no anonymous session
-    else {
-      return sendSuccess(res, {
-        videos: [],
-        totalCount: 0,
-        hasMore: false
-      });
+      console.log(`[GET /videos] Searching videos for ${userInfo.is_anonymous ? 'anonymous' : 'authenticated'} user:`, 
+        userInfo.is_anonymous ? userInfo.anonymous_session_id : userInfo.user_id);
+      
+      // Use the unified search method that handles both user types
+      const result = await dbStorage.searchVideos(searchUserInfo, searchParams);
+      
+      console.log(`[GET /videos] Found ${result.videos.length} videos (total: ${result.totalCount})`);
+      
+      return sendSuccess(res, result);
+    } catch (error) {
+      console.error(`[GET /videos] Error searching videos:`, error);
+      return handleApiError(res, error);
     }
   } catch (error) {
     if (error instanceof ZodError) {

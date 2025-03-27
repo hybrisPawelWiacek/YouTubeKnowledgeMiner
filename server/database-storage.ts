@@ -1,4 +1,4 @@
-import { eq, and, or, like, ilike, sql, desc, asc, inArray, lt, gt } from 'drizzle-orm';
+import { eq, and, or, like, ilike, sql, desc, asc, inArray, lt, gt, lte, gte, SQL } from 'drizzle-orm';
 import { 
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
@@ -86,103 +86,213 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(videos).where(eq(videos.user_id, userId));
   }
 
-  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
+  /**
+   * Search videos for a user with filtering and pagination
+   * This method works for both authenticated users (via user_id) and anonymous users (via session_id)
+   * 
+   * @param userInfo Object with either user_id or anonymous_session_id
+   * @param params Search parameters
+   * @returns Filtered videos with pagination info
+   */
+  async searchVideos(
+    userInfo: { user_id?: number | null, anonymous_session_id?: string | null },
+    params: SearchParams
+  ): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
     try {
-      console.log('[DB] Search videos for user ID:', userId);
+      console.log('[DB] Search videos for:', userInfo);
       
-      // For simplicity in debugging, let's first try to get all videos for this user
-      // This will help us identify if the issue is with queries or if there are actually no videos
-      const allUserVideos = await this.getVideosByUserId(userId);
-      console.log(`[DB] User ${userId} has ${allUserVideos.length} videos total`);
+      // Build the base query - we'll start by selecting everything
+      let query = db.select().from(videos);
       
-      if (allUserVideos.length === 0) {
-        // No videos for this user at all
+      // Build filter conditions
+      let conditions: SQL<unknown>[] = [];
+      
+      // User ownership condition - either user_id or anonymous_session_id
+      if (userInfo.user_id) {
+        console.log('[DB] Filtering by user_id:', userInfo.user_id);
+        conditions.push(eq(videos.user_id, userInfo.user_id));
+      } else if (userInfo.anonymous_session_id) {
+        console.log('[DB] Filtering by anonymous_session_id:', userInfo.anonymous_session_id);
+        conditions.push(eq(videos.anonymous_session_id, userInfo.anonymous_session_id));
+      } else {
+        // No user identifier - return empty result
+        console.log('[DB] No user identifier provided, returning empty results');
         return { videos: [], totalCount: 0, hasMore: false };
       }
-
-      // Manual filtering for demonstration purposes
-      let filteredVideos = [...allUserVideos];
       
-      // Simple text search
+      // Text search condition
       if (params.query) {
-        const query = params.query.toLowerCase();
-        filteredVideos = filteredVideos.filter(v => 
-          (v.title?.toLowerCase().includes(query)) || 
-          (v.description?.toLowerCase().includes(query)) ||
-          (v.transcript?.toLowerCase().includes(query))
-        );
+        // Create different OR conditions based on deep_search flag
+        if (params.deep_search === true) {
+          conditions.push(
+            or(
+              ilike(videos.title, `%${params.query}%`),
+              ilike(videos.description || '', `%${params.query}%`),
+              ilike(videos.transcript || '', `%${params.query}%`)
+            )
+          );
+        } else {
+          conditions.push(
+            or(
+              ilike(videos.title, `%${params.query}%`),
+              ilike(videos.description || '', `%${params.query}%`)
+            )
+          );
+        }
       }
       
       // Category filter
       if (params.category_id !== undefined) {
-        filteredVideos = filteredVideos.filter(v => v.category_id === params.category_id);
-      }
-      
-      // Favorite filter
-      if (params.is_favorite !== undefined) {
-        filteredVideos = filteredVideos.filter(v => v.is_favorite === params.is_favorite);
+        conditions.push(eq(videos.category_id, params.category_id));
       }
       
       // Rating filters
       if (params.rating_min !== undefined) {
-        filteredVideos = filteredVideos.filter(v => (v.rating || 0) >= (params.rating_min || 0));
+        conditions.push(gte(videos.rating, params.rating_min));
       }
+      
       if (params.rating_max !== undefined) {
-        filteredVideos = filteredVideos.filter(v => (v.rating || 5) <= (params.rating_max || 5));
+        conditions.push(lte(videos.rating, params.rating_max));
       }
       
-      // Collection filter
+      // Date range filters
+      if (params.date_from) {
+        const fromDate = new Date(params.date_from);
+        conditions.push(gte(videos.created_at, fromDate));
+      }
+      
+      if (params.date_to) {
+        const toDate = new Date(params.date_to);
+        conditions.push(lte(videos.created_at, toDate));
+      }
+      
+      // Favorite filter
+      if (params.is_favorite !== undefined) {
+        conditions.push(eq(videos.is_favorite, params.is_favorite));
+      }
+      
+      // Apply all conditions to the query
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      // Add collection filter if specified
       if (params.collection_id !== undefined) {
-        // Get videos in this collection
-        const collectionVideos = await this.getCollectionVideos(params.collection_id);
-        const collectionVideoIds = new Set(collectionVideos.map(v => v.id));
-        filteredVideos = filteredVideos.filter(v => collectionVideoIds.has(v.id));
+        const collectionVideosQuery = db
+          .select({ video_id: collection_videos.video_id })
+          .from(collection_videos)
+          .where(eq(collection_videos.collection_id, params.collection_id));
+        
+        // Execute the subquery to get collection video IDs
+        const collectionVideosResult = await collectionVideosQuery;
+        const videoIds = collectionVideosResult.map(v => v.video_id);
+        
+        if (videoIds.length === 0) {
+          // Collection exists but has no videos
+          return { videos: [], totalCount: 0, hasMore: false };
+        }
+        
+        // Add the video ID filter
+        query = query.where(inArray(videos.id, videoIds));
       }
       
-      // Sort results
-      const sortBy = params.sort_by || 'date';
-      const sortOrder = params.sort_order || 'desc';
+      // Get total count first - separate query for accurate count without pagination
+      const countQuery = db.select({ count: sql`count(*)` }).from(videos);
       
-      filteredVideos.sort((a, b) => {
-        switch (sortBy) {
-          case 'title':
-            return sortOrder === 'desc' 
-              ? b.title.localeCompare(a.title)
-              : a.title.localeCompare(b.title);
-          case 'rating':
-            return sortOrder === 'desc'
-              ? (b.rating || 0) - (a.rating || 0)
-              : (a.rating || 0) - (b.rating || 0);
-          case 'date':
-          default:
-            const dateA = a.created_at instanceof Date ? a.created_at : new Date(a.created_at);
-            const dateB = b.created_at instanceof Date ? b.created_at : new Date(b.created_at);
-            return sortOrder === 'desc'
-              ? dateB.getTime() - dateA.getTime()
-              : dateA.getTime() - dateB.getTime();
+      // Apply the same conditions to the count query
+      if (conditions.length > 0) {
+        countQuery.where(and(...conditions));
+      }
+      
+      // Execute count query
+      const countResult = await countQuery;
+      const totalCount = Number(countResult[0]?.count || 0);
+      
+      console.log(`[DB] Total matching records: ${totalCount}`);
+      
+      // If no results, return early
+      if (totalCount === 0) {
+        return { videos: [], totalCount: 0, hasMore: false };
+      }
+      
+      // Apply sorting
+      const sortDir = params.sort_order === 'desc' ? desc : asc;
+      
+      switch (params.sort_by) {
+        case 'title':
+          query = query.orderBy(sortDir(videos.title));
+          break;
+        case 'rating':
+          query = query.orderBy(sortDir(videos.rating));
+          break;
+        case 'date':
+        default:
+          query = query.orderBy(sortDir(videos.created_at));
+          break;
+      }
+      
+      // Apply pagination - using both offset/limit and cursor pagination
+      const limit = Number(params.limit) || 20;
+      
+      if (params.cursor !== undefined) {
+        // Cursor-based pagination
+        const cursorId = Number(params.cursor);
+        if (!isNaN(cursorId)) {
+          const cursorRow = await db
+            .select()
+            .from(videos)
+            .where(eq(videos.id, cursorId))
+            .limit(1);
+          
+          if (cursorRow.length > 0) {
+            // Add cursor filtering based on sort field and direction
+            if (params.sort_by === 'title') {
+              const cursorValue = cursorRow[0].title;
+              query = params.sort_order === 'desc'
+                ? query.where(lt(videos.title, cursorValue))
+                : query.where(gt(videos.title, cursorValue));
+            } else if (params.sort_by === 'rating') {
+              const cursorValue = cursorRow[0].rating;
+              if (cursorValue !== null) {
+                query = params.sort_order === 'desc'
+                  ? query.where(lt(videos.rating, cursorValue))
+                  : query.where(gt(videos.rating, cursorValue));
+              }
+            } else {
+              // Default to date sorting
+              const cursorValue = cursorRow[0].created_at;
+              query = params.sort_order === 'desc'
+                ? query.where(lt(videos.created_at, cursorValue))
+                : query.where(gt(videos.created_at, cursorValue));
+            }
+          }
         }
-      });
+      } else {
+        // Offset-based pagination
+        const page = Number(params.page) || 1;
+        const offset = (page - 1) * limit;
+        query = query.offset(offset);
+      }
       
-      // Calculate total count before pagination
-      const totalCount = filteredVideos.length;
+      // Apply the limit with +1 to check if there are more results
+      query = query.limit(limit + 1);
       
-      // Apply pagination
-      const page = params.page || 1;
-      const limit = params.limit || 20;
-      const startIndex = (page - 1) * limit;
-      const paginatedVideos = filteredVideos.slice(startIndex, startIndex + limit + 1);
+      // Execute the final query
+      const results = await query;
       
       // Check if there are more results beyond the requested limit
-      const hasMore = paginatedVideos.length > limit;
-      const finalVideos = hasMore ? paginatedVideos.slice(0, limit) : paginatedVideos;
+      const hasMore = results.length > limit;
+      const limitedResults = hasMore ? results.slice(0, limit) : results;
       
-      // Determine next cursor if using cursor-based pagination
-      const nextCursor = hasMore && finalVideos.length > 0 ? finalVideos[finalVideos.length - 1].id : undefined;
-
-      console.log(`[DB] Returning ${finalVideos.length} filtered videos of ${totalCount} total`);
+      // Determine next cursor (last item's ID if there are more results)
+      const nextCursor = hasMore && limitedResults.length > 0 
+        ? limitedResults[limitedResults.length - 1].id 
+        : undefined;
+      
+      console.log(`[DB] Returning ${limitedResults.length} filtered videos of ${totalCount} total`);
       
       return {
-        videos: finalVideos,
+        videos: limitedResults,
         totalCount,
         hasMore,
         nextCursor
