@@ -12,19 +12,44 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { getLocalAnonymousVideoCount } from "@/lib/anonymous-session";
+import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { useQuery } from "@tanstack/react-query";
+
+// Define maximum videos allowed for anonymous users
+const MAX_ANONYMOUS_VIDEOS = 3;
 
 export function Header() {
   const { user, signOut } = useSupabase();
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
-  const [maxAllowedVideos] = useState(3); // Maximum videos allowed for anonymous users
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch anonymous session video count from server when not authenticated
-  const anonymousSessionVideoCountQuery = useQuery({
+  const { data: videoCountData, isLoading: isVideoCountLoading } = useQuery({
     queryKey: ['/api/anonymous/videos/count'],
+    queryFn: async () => {
+      try {
+        // Get the anonymous session ID
+        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Make the request with the session ID header
+        const response = await fetch('/api/anonymous/videos/count', {
+          headers: {
+            'x-anonymous-session': sessionId
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch video count');
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error fetching anonymous video count:', error);
+        return { count: 0 };
+      }
+    },
     enabled: !user, // Only run this query for anonymous users
     refetchInterval: 30000, // Refetch every 30 seconds
     refetchOnWindowFocus: true,
@@ -33,20 +58,22 @@ export function Header() {
 
   // Track anonymous video count using session-based approach
   useEffect(() => {
-    if (!user) {
-      // First try to get count from server response
-      const responseData = anonymousSessionVideoCountQuery.data;
-      if (responseData && typeof responseData.count === 'number') {
-        setAnonymousVideoCount(responseData.count);
-      } else {
-        // Fall back to local cache while waiting for server response
-        setAnonymousVideoCount(getLocalAnonymousVideoCount());
+    setIsLoading(isVideoCountLoading);
+    
+    if (!user && videoCountData) {
+      if (typeof videoCountData.count === 'number') {
+        console.log('[Header] Anonymous video count from server:', videoCountData.count);
+        setAnonymousVideoCount(videoCountData.count);
       }
+    } else if (user) {
+      // Reset counter for authenticated users
+      setAnonymousVideoCount(0);
     }
-  }, [user, anonymousSessionVideoCountQuery.data]);
+  }, [user, videoCountData, isVideoCountLoading]);
 
   const isActive = (path: string) => location === path;
-  const showVideoCounter = !user && anonymousVideoCount > 0;
+  // Always show the counter for anonymous users, even if it's 0/3
+  const showVideoCounter = !user;
 
   const handleSignOut = async () => {
     try {
@@ -105,7 +132,7 @@ export function Header() {
                   <span>Library</span>
                   {showVideoCounter && (
                     <Badge variant="secondary" className="ml-2 text-xs">
-                      {anonymousVideoCount}/{maxAllowedVideos}
+                      {anonymousVideoCount}/{MAX_ANONYMOUS_VIDEOS}
                     </Badge>
                   )}
                 </Button>
