@@ -33,6 +33,7 @@ export interface IStorage {
   updateVideo(id: number, data: Partial<Video>): Promise<Video | undefined>;
   deleteVideo(id: number): Promise<boolean>;
   bulkUpdateVideos(ids: number[], data: Partial<Video>): Promise<number>;
+  bulkDeleteVideos(ids: number[]): Promise<number>;
   
   // Collection methods
   getCollection(id: number): Promise<Collection | undefined>;

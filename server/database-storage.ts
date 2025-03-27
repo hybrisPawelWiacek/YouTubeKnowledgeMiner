@@ -277,6 +277,21 @@ export class DatabaseStorage implements IStorage {
 
     return result.length;
   }
+  
+  async bulkDeleteVideos(ids: number[]): Promise<number> {
+    // First, delete related collection associations
+    await db
+      .delete(collection_videos)
+      .where(inArray(collection_videos.video_id, ids));
+
+    // Then delete the videos
+    const result = await db
+      .delete(videos)
+      .where(inArray(videos.id, ids))
+      .returning();
+
+    return result.length;
+  }
 
   // Collection methods
   async getCollection(id: number): Promise<Collection | undefined> {

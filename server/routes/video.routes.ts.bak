@@ -4,18 +4,17 @@ import { dbStorage } from '../database-storage';
 import { validateRequest, validateNumericParam } from '../middleware/validation.middleware';
 import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { 
-  youtubeUrlSchema,
-  videoMetadataSchema,
-  searchParamsSchema,
-  SearchParams
+  videoMetadataSchema, 
+  searchParamsSchema, 
+  youtubeUrlSchema 
 } from '../../shared/schema';
+import { applySearchFilters } from '../utils/query-parser';
 import { sendSuccess, sendError } from '../utils/response.utils';
-// No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
+  processYoutubeVideo, 
   getYoutubeTranscript, 
   generateTranscriptSummary,
-  extractYoutubeId,
-  processYoutubeVideo
+  extractYoutubeId
 } from '../services/youtube';
 import { 
   processTranscriptEmbeddings,
