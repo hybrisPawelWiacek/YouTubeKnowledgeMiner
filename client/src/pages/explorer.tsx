@@ -110,8 +110,8 @@ export default function ExplorerPage() {
         getOrCreateAnonymousSessionId();
       }
       
-      // Perform semantic search
-      const response: SearchResult[] = await apiRequest('POST', '/api/search/semantic', {
+      // Perform semantic search using the dedicated RAG endpoint
+      const response: SearchResult[] = await apiRequest('POST', '/api/search', {
         query: searchQuery,
         filter: {
           content_types: activeFilters.contentTypes,

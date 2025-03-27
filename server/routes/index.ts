@@ -9,6 +9,7 @@ import categoryRoutes from './category.routes';
 import authRoutes from './auth.routes';
 import debugRoutes from './debug-api';
 import searchRoutes from './search.routes';
+import semanticSearchRoutes from './semantic-search.routes';
 import exportRoutes from './export.routes';
 import qaRoutes from './qa.routes';
 
@@ -57,7 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/categories', categoryRoutes);
   app.use('/api/anonymous', authRoutes);
   app.use('/api/saved-searches', searchRoutes);
-  app.use('/api/search', searchRoutes);
+  app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);
   app.use('/api/qa', qaRoutes);
   

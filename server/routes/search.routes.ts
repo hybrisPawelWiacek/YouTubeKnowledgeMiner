@@ -1,13 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { insertSavedSearchSchema, semanticSearchSchema } from '@shared/schema';
+import { insertSavedSearchSchema } from '@shared/schema';
 import { storage } from '../storage';
-import { 
-  performSemanticSearch, 
-  saveSearchHistory 
-} from '../services/embeddings';
-import { initializeVectorFunctions } from '../services/supabase';
-import { getUserIdFromRequest, getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { getUserIdFromRequest, getUserInfo, requireAuth } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { log } from '../vite';
@@ -102,64 +97,7 @@ router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Reque
   }
 });
 
-/**
- * Semantic Search API endpoint
- * Supports both authenticated users and anonymous users with sessions
- */
-router.post('/semantic', requireSession, async (req: Request, res: Response) => {
-  try {
-    const { query, filter, limit } = semanticSearchSchema.parse(req.body);
-
-    // Initialize Supabase vector functions if not already done
-    await initializeVectorFunctions();
-
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    const userId = userInfo.user_id;
-    
-    console.log("SEMANTIC SEARCH: Using user ID from request:", userId);
-    console.log("SEMANTIC SEARCH: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
-
-    // Execute semantic search - works for both anonymous and authenticated users
-    const searchFilters: any = {
-      contentTypes: filter?.content_types,
-      videoId: filter?.video_id,
-      categoryId: filter?.category_id,
-      collectionId: filter?.collection_id,
-      isFavorite: filter?.is_favorite,
-    };
-    
-    // For anonymous users, add the session ID to filter by their videos
-    if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
-      log(`Adding anonymous session ID ${userInfo.anonymous_session_id} to search filters`, 'routes');
-      searchFilters.anonymous_session_id = userInfo.anonymous_session_id;
-    }
-    
-    const results = await performSemanticSearch(
-      userId,
-      query,
-      searchFilters,
-      limit
-    );
-
-    // Save search to history only for authenticated users (not anonymous)
-    if (!userInfo.is_anonymous && userId) {
-      try {
-        await saveSearchHistory(userId, query, filter, results.length);
-      } catch (error) {
-        // Non-critical, log but continue
-        log(`Error saving search history: ${error}`, 'routes');
-      }
-    }
-
-    return sendSuccess(res, results);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return sendError(res, error.errors[0].message, 400);
-    }
-    log(`Error performing semantic search: ${error}`, 'routes');
-    return sendError(res, "Failed to perform semantic search");
-  }
-});
+// Note: Semantic Search functionality has been moved to /server/routes/semantic-search.routes.ts
+// to better align with PRD requirements for the Explorer page
 
 export default router;
