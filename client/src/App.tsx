@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Auth from "@/pages/auth";
 import Library from "@/pages/library";
+import Explorer from "@/pages/explorer";
 import VideoDetailPage from "@/pages/video/[id]";
 import { SupabaseProvider, useSupabase } from "@/hooks/use-supabase";
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/auth" component={Auth} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/library" component={Library} />
+      <Route path="/explorer" component={Explorer} />
       <Route path="/video/:id" component={VideoDetailPage} />
       <Route component={NotFound} />
     </Switch>

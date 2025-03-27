@@ -1,7 +1,7 @@
 import { useSupabase } from "@/hooks/use-supabase";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { FolderOpen, Home, User, LogOut, ChevronDown } from "lucide-react";
+import { FolderOpen, Home, User, LogOut, ChevronDown, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,6 +132,16 @@ export function Header() {
                       {anonymousVideoCount}/{maxAllowedVideos}
                     </Badge>
                   )}
+                </Button>
+              </Link>
+              <Link href="/explorer">
+                <Button 
+                  variant={isActive("/explorer") ? "default" : "ghost"} 
+                  size="sm"
+                  className="flex items-center"
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  <span>Explorer</span>
                 </Button>
               </Link>
             </nav>

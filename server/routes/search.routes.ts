@@ -121,7 +121,7 @@ router.post('/semantic', requireSession, async (req: Request, res: Response) => 
     console.log("SEMANTIC SEARCH: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
 
     // Execute semantic search - works for both anonymous and authenticated users
-    const searchFilters = {
+    const searchFilters: any = {
       contentTypes: filter?.content_types,
       videoId: filter?.video_id,
       categoryId: filter?.category_id,
