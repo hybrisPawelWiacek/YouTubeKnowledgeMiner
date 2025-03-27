@@ -166,6 +166,11 @@ export function AuthPromptDialog({
     }
   }
 
+  useEffect(() => {
+    // Debug log when dialog state changes
+    console.log('[AuthPromptDialog] Dialog open state changed:', isOpen);
+  }, [isOpen]);
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">

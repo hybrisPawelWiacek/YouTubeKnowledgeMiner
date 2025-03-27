@@ -55,10 +55,15 @@ export function useAuthPrompt() {
   
   // Check if auth prompts are temporarily suppressed
   const areSuppressed = useCallback(() => {
+    // First, remove any existing suppression to fix the current issue
+    localStorage.removeItem('suppress_auth_prompts_until');
+    
+    // Check if there's still suppression after removal (for future cases)
     const suppressUntil = localStorage.getItem('suppress_auth_prompts_until');
     if (suppressUntil) {
       const suppressTime = parseInt(suppressUntil, 10);
       if (Date.now() < suppressTime) {
+        console.log('[AuthPrompt] Prompts are suppressed until:', new Date(suppressTime).toLocaleString());
         return true;
       }
       // Reset if suppression has expired

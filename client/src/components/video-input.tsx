@@ -165,7 +165,19 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
         console.log("[VideoInput] Anonymous limit reached:", limitReached);
         if (limitReached) {
           setPendingVideo(null);
-          promptAuth('analyze_again');
+          
+          // Show limit reached message directly
+          toast({
+            title: "Video Limit Reached",
+            description: "You've reached the limit of 3 videos as a guest user. Please sign in to analyze more videos.",
+            variant: "destructive",
+          });
+          
+          // After a short delay, redirect to the auth page
+          setTimeout(() => {
+            setLocation('/auth');
+          }, 2000);
+          
           return;
         }
       } catch (error) {
