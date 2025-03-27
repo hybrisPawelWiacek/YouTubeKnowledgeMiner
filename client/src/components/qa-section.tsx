@@ -22,6 +22,7 @@ import { ExportButton } from "@/components/export/export-button";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { highlightText } from "@/lib/highlight-utils";
 import { apiRequest } from "@/lib/api";
+import { fetchAPI } from "@/lib/api-helper";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import {
   Dialog,
@@ -334,31 +335,17 @@ export function QASection() {
         );
       }
 
-      // Directly make the API call instead of using the mutate wrapper
+      // Use improved fetchAPI helper to create the conversation
       console.log(`Making API request to create conversation: POST /api/videos/${videoId}/qa with title: ${title}`);
       
-      const response = await apiRequest(
+      const data = await fetchAPI<any>(
         "POST",
         `/api/videos/${videoId}/qa`,
         { title },
         headers
       );
       
-      console.log("Conversation creation response status:", response.status, response.statusText);
-      
-      // Don't try to parse non-OK responses to avoid JSON parse errors
-      if (!response.ok) {
-        throw new Error(`Failed to create conversation: ${response.status} ${response.statusText}`);
-      }
-      
-      // Clone the response to log it without affecting the original
-      const clonedResponse = response.clone();
-      const responseText = await clonedResponse.text();
-      console.log("Conversation creation raw response:", responseText);
-      
-      // Parse the response as JSON
-      const data = await response.json();
-      console.log("Conversation created API response (parsed):", data);
+      console.log("Conversation created successfully:", data);
       
       // After conversation is created successfully, force refetch conversations
       refetchConversations();
@@ -370,8 +357,10 @@ export function QASection() {
         // Only send the initial question if there's actual content
         if (initialQuestion.trim()) {
           try {
-            // Send the initial question directly
-            const messageResponse = await apiRequest(
+            // Send the initial question using improved fetchAPI helper
+            console.log(`Sending initial question to conversation ${data.id}:`, initialQuestion);
+            
+            const messageData = await fetchAPI<any>(
               "POST",
               `/api/qa/${data.id}/ask`,
               {
@@ -381,11 +370,6 @@ export function QASection() {
               headers
             );
             
-            if (!messageResponse.ok) {
-              throw new Error(`Failed to send message: ${messageResponse.status} ${messageResponse.statusText}`);
-            }
-            
-            const messageData = await messageResponse.json();
             console.log("Initial message sent, response:", messageData);
             
             // Update messages with the new AI response
@@ -447,8 +431,10 @@ export function QASection() {
         );
       }
 
-      // Send the question directly to the API
-      const response = await apiRequest(
+      // Send the question using our improved API helper
+      console.log(`Sending question to conversation ${activeConversation}:`, currentQuestion);
+      
+      const data = await fetchAPI<any>(
         "POST",
         `/api/qa/${activeConversation}/ask`,
         {
@@ -457,13 +443,7 @@ export function QASection() {
         },
         headers
       );
-
-      // Don't try to parse non-OK responses to avoid JSON parse errors
-      if (!response.ok) {
-        throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      
       console.log("Message added, response:", data);
 
       // Update messages with the new AI response
