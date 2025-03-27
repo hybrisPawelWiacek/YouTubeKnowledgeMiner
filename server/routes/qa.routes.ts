@@ -39,23 +39,19 @@ router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), asy
   try {
     const videoId = parseInt(req.params.videoId);
     
-    // Get user ID using our helper function
+    // Get user ID using our helper function (now returns 7 for anonymous users)
     const userId = await getUserIdFromRequest(req);
     
     console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
     console.log("Creating Q&A conversation with body:", req.body);
     
     try {
-      // For anonymous users, we need to provide a default user_id since the schema requires a number
-      // Using -1 as a sentinel value to indicate an anonymous user
-      const anonymousUserId = -1;
-      
       // Ensure all required fields are in the request body
       const requestWithDefaults = {
         ...req.body,
         messages: req.body.messages || [],
         video_id: videoId,
-        user_id: userId === null ? anonymousUserId : userId
+        user_id: userId // userId is now always a number (7 for anonymous users)
       };
 
       // Validate with schema
@@ -65,7 +61,7 @@ router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), asy
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: validatedData.user_id // Use the validated user_id which is always a number after our transformation
+        user_id: validatedData.user_id
       });
 
       return sendSuccess(res, conversation, 201);
@@ -127,7 +123,7 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
   try {
     const videoId = parseInt(req.params.id);
     
-    // Get user ID using our helper function
+    // Get user ID using our helper function (now returns 7 for anonymous users)
     const userId = await getUserIdFromRequest(req);
     
     console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
@@ -136,17 +132,13 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
     try {
       // Validate schema requirements first
       console.log("Schema requirements:", Object.keys(insertQAConversationSchema.shape));
-
-      // For anonymous users, we need to provide a default user_id since the schema requires a number
-      // Using -1 as a sentinel value to indicate an anonymous user
-      const anonymousUserId = -1;
       
       // Ensure all required fields are in the request body
       const requestWithDefaults = {
         ...req.body,
         messages: req.body.messages || [],
         video_id: videoId,
-        user_id: userId === null ? anonymousUserId : userId
+        user_id: userId // userId is now always a number (7 for anonymous users)
       };
 
       console.log("Modified request with defaults:", requestWithDefaults);
@@ -160,7 +152,7 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: validatedData.user_id // Use the validated user_id which is always a number after our transformation
+        user_id: validatedData.user_id
       });
 
       return sendSuccess(res, conversation, 201);
