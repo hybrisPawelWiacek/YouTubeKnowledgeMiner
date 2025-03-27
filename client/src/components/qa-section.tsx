@@ -7,7 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Send, Loader2, Plus, PanelLeftOpen, PanelLeftClose, Trash2, Download, Search } from "lucide-react";
+import {
+  MessageCircle,
+  Send,
+  Loader2,
+  Plus,
+  PanelLeftOpen,
+  PanelLeftClose,
+  Trash2,
+  Download,
+  Search,
+} from "lucide-react";
 import { ExportButton } from "@/components/export/export-button";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { highlightText } from "@/lib/highlight-utils";
@@ -34,7 +44,7 @@ interface Citation {
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   citations?: Citation[];
 }
@@ -53,23 +63,28 @@ export function QASection() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // States
-  const [activeConversation, setActiveConversation] = useState<number | null>(null);
+  const [activeConversation, setActiveConversation] = useState<number | null>(
+    null,
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => {
     // Check if window is available (client-side only)
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       // Show sidebar by default on desktop (width >= 768px)
       return window.innerWidth >= 768;
     }
     return true; // Default to true for SSR
   });
-  const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<
+    number | null
+  >(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [newConversationTitle, setNewConversationTitle] = useState("");
-  const [showNewConversationDialog, setShowNewConversationDialog] = useState(false);
+  const [showNewConversationDialog, setShowNewConversationDialog] =
+    useState(false);
 
   // CSS classes for the sidebar based on visibility
   const sidebarClasses = showSidebar
@@ -77,48 +92,70 @@ export function QASection() {
     : "hidden";
 
   // Fetch conversations for this video
-  const { data: conversations, isLoading: isLoadingConversations, refetch: refetchConversations } =
-    useQuery({
-      queryKey: ['/api/videos', videoId, 'qa'],
-      queryFn: async () => {
-        // Use apiRequest instead of axios to include anonymous session headers
-        const anonymousSessionId = getOrCreateAnonymousSessionId();
-        const headers: Record<string, string> = {};
+  const {
+    data: conversations,
+    isLoading: isLoadingConversations,
+    refetch: refetchConversations,
+  } = useQuery({
+    queryKey: ["/api/videos", videoId, "qa"],
+    queryFn: async () => {
+      // Use apiRequest instead of axios to include anonymous session headers
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
 
-        if (anonymousSessionId) {
-          headers['x-anonymous-session'] = anonymousSessionId;
-          console.log("[QA Section] Using anonymous session ID for GET conversations:", anonymousSessionId);
-        }
+      if (anonymousSessionId) {
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA Section] Using anonymous session ID for GET conversations:",
+          anonymousSessionId,
+        );
+      }
 
-        const response = await apiRequest('GET', `/api/videos/${videoId}/qa`, undefined, headers);
-        const data = await response.json();
-        return data as QASession[];
-      },
-      enabled: videoId > 0,
-    });
+      const response = await apiRequest(
+        "GET",
+        `/api/videos/${videoId}/qa`,
+        undefined,
+        headers,
+      );
+      const data = await response.json();
+      return data as QASession[];
+    },
+    enabled: videoId > 0,
+  });
 
   // Fetch active conversation if set
-  const { data: conversationData, isLoading: isLoadingConversation, refetch: refetchConversation } =
-    useQuery({
-      queryKey: ['/api/qa', activeConversation],
-      queryFn: async () => {
-        if (!activeConversation) return null;
+  const {
+    data: conversationData,
+    isLoading: isLoadingConversation,
+    refetch: refetchConversation,
+  } = useQuery({
+    queryKey: ["/api/qa", activeConversation],
+    queryFn: async () => {
+      if (!activeConversation) return null;
 
-        // Use apiRequest instead of axios to include anonymous session headers
-        const anonymousSessionId = getOrCreateAnonymousSessionId();
-        const headers: Record<string, string> = {};
+      // Use apiRequest instead of axios to include anonymous session headers
+      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const headers: Record<string, string> = {};
 
-        if (anonymousSessionId) {
-          headers['x-anonymous-session'] = anonymousSessionId;
-          console.log("[QA Section] Using anonymous session ID for GET conversation:", anonymousSessionId);
-        }
+      if (anonymousSessionId) {
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA Section] Using anonymous session ID for GET conversation:",
+          anonymousSessionId,
+        );
+      }
 
-        const response = await apiRequest('GET', `/api/qa/${activeConversation}`, undefined, headers);
-        const data = await response.json();
-        return data;
-      },
-      enabled: activeConversation !== null,
-    });
+      const response = await apiRequest(
+        "GET",
+        `/api/qa/${activeConversation}`,
+        undefined,
+        headers,
+      );
+      const data = await response.json();
+      return data;
+    },
+    enabled: activeConversation !== null,
+  });
 
   // Create a new conversation
   const createConversation = useMutation({
@@ -128,13 +165,21 @@ export function QASection() {
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
-        headers['x-anonymous-session'] = anonymousSessionId;
-        console.log("[QA Section] Using anonymous session ID:", anonymousSessionId);
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA Section] Using anonymous session ID:",
+          anonymousSessionId,
+        );
       }
 
-      const response = await apiRequest('POST', `/api/videos/${videoId}/qa`, {
-        title
-      }, headers);
+      const response = await apiRequest(
+        "POST",
+        `/api/videos/${videoId}/qa`,
+        {
+          title,
+        },
+        headers,
+      );
 
       const data = await response.json();
       return data;
@@ -142,7 +187,12 @@ export function QASection() {
     onSuccess: (data) => {
       console.log("Conversation created:", data);
 
-      if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
+      if (
+        data &&
+        typeof data === "object" &&
+        "id" in data &&
+        typeof data.id === "number"
+      ) {
         // Force refetching conversation list
         refetchConversations();
 
@@ -155,25 +205,39 @@ export function QASection() {
     },
     onError: (error) => {
       console.error("Failed to create conversation:", error);
-    }
+    },
   });
 
   // Mutation for adding a new message to a conversation
   const addMessage = useMutation({
-    mutationFn: async ({ conversationId, content }: { conversationId: number, content: string }) => {
+    mutationFn: async ({
+      conversationId,
+      content,
+    }: {
+      conversationId: number;
+      content: string;
+    }) => {
       // Use apiRequest instead of axios to include anonymous session headers
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
-        headers['x-anonymous-session'] = anonymousSessionId;
-        console.log("[QA Section] Using anonymous session ID for adding message:", anonymousSessionId);
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA Section] Using anonymous session ID for adding message:",
+          anonymousSessionId,
+        );
       }
 
-      const response = await apiRequest('POST', `/api/qa/${conversationId}/ask`, {
-        question: content,
-        video_id: videoId
-      }, headers);
+      const response = await apiRequest(
+        "POST",
+        `/api/qa/${conversationId}/ask`,
+        {
+          question: content,
+          video_id: videoId,
+        },
+        headers,
+      );
 
       const data = await response.json();
       return data;
@@ -182,7 +246,11 @@ export function QASection() {
       console.log("Message added, response:", data);
 
       // Update messages with the new AI response
-      if (data && data.conversation && Array.isArray(data.conversation.messages)) {
+      if (
+        data &&
+        data.conversation &&
+        Array.isArray(data.conversation.messages)
+      ) {
         setMessages(data.conversation.messages);
       }
 
@@ -192,7 +260,7 @@ export function QASection() {
     onError: (error) => {
       console.error("Failed to send message:", error);
       setIsSubmitting(false);
-    }
+    },
   });
 
   // Update messages when conversation data changes
@@ -205,7 +273,7 @@ export function QASection() {
   // Scroll to bottom when new messages are added
   useEffect(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
@@ -217,14 +285,14 @@ export function QASection() {
       }
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
     // Initial check
     handleResize();
 
     // Cleanup listener on component unmount
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
@@ -232,7 +300,7 @@ export function QASection() {
     // If user has entered a title in the dialog, use it; otherwise create one from the question
     let title = newConversationTitle.trim();
     if (!title) {
-      title = `Q: ${question.substring(0, 25)}${question.length > 25 ? '...' : ''}`;
+      title = `Q: ${question.substring(0, 25)}${question.length > 25 ? "..." : ""}`;
     }
 
     // Store the current question to use after conversation is created
@@ -245,14 +313,19 @@ export function QASection() {
     createConversation.mutate(title, {
       onSuccess: (data) => {
         // After conversation is created successfully, send the initial question
-        if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'number') {
+        if (
+          data &&
+          typeof data === "object" &&
+          "id" in data &&
+          typeof data.id === "number"
+        ) {
           // Send the initial question to get an answer
           addMessage.mutate({
             conversationId: data.id,
-            content: initialQuestion
+            content: initialQuestion,
           });
         }
-      }
+      },
     });
   };
 
@@ -274,7 +347,7 @@ export function QASection() {
     const currentQuestion = question;
 
     // Add user message immediately to UI for better UX
-    const userMessage: Message = { role: 'user', content: currentQuestion };
+    const userMessage: Message = { role: "user", content: currentQuestion };
     setMessages([...messages, userMessage]);
 
     // Clear the input immediately
@@ -286,7 +359,7 @@ export function QASection() {
     // Send the question to the API
     await addMessage.mutateAsync({
       conversationId: activeConversation,
-      content: currentQuestion
+      content: currentQuestion,
     });
   };
 
@@ -310,7 +383,7 @@ export function QASection() {
 
     // Focus the question input
     setTimeout(() => {
-      const questionInput = document.getElementById('new-question-input');
+      const questionInput = document.getElementById("new-question-input");
       if (questionInput) {
         questionInput.focus();
       }
@@ -325,12 +398,15 @@ export function QASection() {
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
-        headers['x-anonymous-session'] = anonymousSessionId;
-        console.log("[QA Section] Using anonymous session ID for delete conversation:", anonymousSessionId);
+        headers["x-anonymous-session"] = anonymousSessionId;
+        console.log(
+          "[QA Section] Using anonymous session ID for delete conversation:",
+          anonymousSessionId,
+        );
       }
 
       // The delete endpoint returns 204 No Content, so we shouldn't try to parse it as JSON
-      await apiRequest('DELETE', `/api/qa/${id}`, undefined, headers);
+      await apiRequest("DELETE", `/api/qa/${id}`, undefined, headers);
       // Return an empty object as the mutation response
       return {};
     },
@@ -351,7 +427,7 @@ export function QASection() {
       console.error("Failed to delete conversation:", error);
       // Reset the conversation to delete even on error
       setConversationToDelete(null);
-    }
+    },
   });
 
   const handleDeleteConversation = () => {
@@ -375,16 +451,20 @@ export function QASection() {
         </Button>
 
         {/* Conversations sidebar */}
-        <div className={`
-          ${showSidebar ? 'fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden' : 'hidden'}
+        <div
+          className={`
+          ${showSidebar ? "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden" : "hidden"}
           md:block md:relative md:inset-auto md:z-auto md:bg-transparent md:backdrop-filter-none
-        `}>
-          <div className={`
+        `}
+        >
+          <div
+            className={`
             w-64 h-full flex-shrink-0 bg-muted/20 rounded-lg p-3 overflow-hidden 
             fixed left-0 top-0 bottom-0 z-50 transition-transform 
-            ${showSidebar ? 'translate-x-0' : '-translate-x-full'} 
+            ${showSidebar ? "translate-x-0" : "-translate-x-full"} 
             md:relative md:translate-x-0 md:z-auto
-          `}>
+          `}
+          >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium">Conversations</h3>
               <div className="flex gap-2">
@@ -394,7 +474,20 @@ export function QASection() {
                   onClick={() => setShowSidebar(false)}
                   className="h-7 px-2 text-xs md:hidden"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
                 </Button>
                 <Button
                   variant="outline"
@@ -417,48 +510,65 @@ export function QASection() {
                 <div className="space-y-1.5">
                   {conversations.map((conversation) => (
                     <div key={conversation.id} className="group">
-                    <div
-                      key={conversation.id}
-                      className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${
-                        activeConversation === conversation.id ? 'bg-muted' : ''
-                      }`}
-                    >
-                      <div 
-                        className="flex justify-between items-start"
+                      <div
+                        key={conversation.id}
+                        className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${
+                          activeConversation === conversation.id
+                            ? "bg-muted"
+                            : ""
+                        }`}
                       >
-                        <div 
-                          className="flex-grow cursor-pointer overflow-hidden mr-1"
-                          onClick={() => {
-                            handleSelectConversation(conversation.id);
-                            if (window.innerWidth < 768) setShowSidebar(false);
-                          }}
-                        >
-                          <div className="truncate">
-                            {conversation.title}
+                        <div className="flex justify-between items-start">
+                          <div
+                            className="flex-grow cursor-pointer overflow-hidden mr-1"
+                            onClick={() => {
+                              handleSelectConversation(conversation.id);
+                              if (window.innerWidth < 768)
+                                setShowSidebar(false);
+                            }}
+                          >
+                            <div className="truncate">{conversation.title}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {conversation.created_at
+                                ? new Date(
+                                    conversation.created_at,
+                                  ).toLocaleString("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "No date available"}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {conversation.created_at ? new Date(conversation.created_at).toLocaleString('en-US', {
-                              year: 'numeric', 
-                              month: 'short', 
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            }) : 'No date available'}
-                          </div>
+                          <button
+                            className="text-xs text-red-500 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted-foreground/10 flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConversationToDelete(conversation.id);
+                            }}
+                            aria-label="Delete conversation"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                            </svg>
+                          </button>
                         </div>
-                        <button
-                          className="text-xs text-red-500 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted-foreground/10 flex-shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConversationToDelete(conversation.id);
-                          }}
-                          aria-label="Delete conversation"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
                       </div>
                     </div>
-                  </div>
                   ))}
                 </div>
               ) : (
@@ -475,10 +585,15 @@ export function QASection() {
           <div className="flex-grow bg-muted/20 rounded-lg p-6 mb-6 overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-2 bg-muted/30 border-b border-border">
               <div>
-                {activeConversation && conversationData ? 
-                  <span className="text-sm font-medium">{conversationData.title}</span> : 
-                  <span className="text-sm text-muted-foreground">No active conversation</span>
-                }
+                {activeConversation && conversationData ? (
+                  <span className="text-sm font-medium">
+                    {conversationData.title}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    No active conversation
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 {activeConversation && conversationData && (
@@ -523,8 +638,14 @@ export function QASection() {
                   size="sm"
                   onClick={() => setShowSidebar(!showSidebar)}
                 >
-                  {showSidebar ? <PanelLeftClose className="h-4 w-4 mr-2" /> : <PanelLeftOpen className="h-4 w-4 mr-2" />}
-                  <span className="hidden sm:inline">{showSidebar ? "Hide Conversations" : "Show Conversations"}</span>
+                  {showSidebar ? (
+                    <PanelLeftClose className="h-4 w-4 mr-2" />
+                  ) : (
+                    <PanelLeftOpen className="h-4 w-4 mr-2" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {showSidebar ? "Show Conversations" : "Hide Conversations"}
+                  </span>
                 </Button>
               </div>
             </div>
@@ -534,110 +655,162 @@ export function QASection() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-              <div className="flex-grow flex flex-col">
-                <ScrollArea className="flex-grow pr-4">
-                  <div className="space-y-6">
-                    {messages.map((message, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
+                <div className="flex-grow flex flex-col">
+                  <ScrollArea className="flex-grow pr-4">
+                    <div className="space-y-6">
+                      {messages.map((message, index) => (
                         <div
-                          className={`max-w-[80%] rounded-lg p-4 ${
-                            message.role === 'user'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
-                          }`}
+                          key={index}
+                          className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                         >
-                          {searchTerm ? (
-                            <div 
-                              className="whitespace-pre-wrap" 
-                              dangerouslySetInnerHTML={{ 
-                                __html: highlightText({
-                                  text: message.content,
-                                  searchTerm,
-                                  showFullTextWithHighlights: true
-                                }) 
-                              }} 
-                            />
-                          ) : (
-                            <div className="whitespace-pre-wrap">{message.content}</div>
-                          )}
-
-                          {/* Citation section */}
-                          {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
-                            <div className="mt-3 pt-2 border-t border-border">
-                              <div className="text-xs font-medium mb-1.5">Sources cited:</div>
-                              <div className="flex flex-col gap-2">
-                                {message.citations.map((citation, idx) => (
-                                  <div key={idx} className="text-xs p-2 bg-muted/50 rounded border border-border/60 shadow-sm">
-                                    <div className="flex items-center gap-1.5 mb-1.5">
-                                      <span className="font-medium text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded-sm">[{idx + 1}]</span>
-                                      {citation.timestamp && (
-                                        <button 
-                                          className="text-primary hover:underline flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-sm transition-colors hover:bg-primary/10"
-                                          onClick={() => {
-                                            // Create URL with timestamp parameter
-                                            const timestampInSeconds = citation.timestamp 
-                                              ? citation.timestamp.split(':').reduce((acc, time) => (60 * acc) + +time, 0)
-                                              : 0;
-                                            window.open(`https://youtube.com/watch?v=${videoIdParam}&t=${timestampInSeconds}s`, '_blank');
-                                          }}
-                                          title="Jump to this timestamp on YouTube"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-                                          {citation.timestamp}
-                                        </button>
-                                      )}
-                                      <span className="text-muted-foreground text-xs ml-auto">
-                                        {citation.content_type === 'transcript' ? 'Transcript' : 
-                                         citation.content_type === 'summary' ? 'Summary' : 
-                                         citation.content_type === 'note' ? 'Note' : 'Content'}
-                                      </span>
-                                    </div>
-                                    <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">
-                                      {searchTerm ? (
-                                        <div 
-                                          dangerouslySetInnerHTML={{ 
-                                            __html: '"' + highlightText({
-                                              text: citation.content,
-                                              searchTerm,
-                                              showFullTextWithHighlights: true
-                                            }) + '"'
-                                          }} 
-                                        />
-                                      ) : (
-                                        <>"{citation.content}"</>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
+                          <div
+                            className={`max-w-[80%] rounded-lg p-4 ${
+                              message.role === "user"
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {searchTerm ? (
+                              <div
+                                className="whitespace-pre-wrap"
+                                dangerouslySetInnerHTML={{
+                                  __html: highlightText({
+                                    text: message.content,
+                                    searchTerm,
+                                    showFullTextWithHighlights: true,
+                                  }),
+                                }}
+                              />
+                            ) : (
+                              <div className="whitespace-pre-wrap">
+                                {message.content}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {isSubmitting && (
-                      <div className="flex justify-start">
-                        <div className="max-w-[80%] rounded-lg p-4 bg-muted text-muted-foreground">
-                          <div className="flex items-center space-x-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>AI is thinking...</span>
+                            )}
+
+                            {/* Citation section */}
+                            {message.role === "assistant" &&
+                              message.citations &&
+                              message.citations.length > 0 && (
+                                <div className="mt-3 pt-2 border-t border-border">
+                                  <div className="text-xs font-medium mb-1.5">
+                                    Sources cited:
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    {message.citations.map((citation, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="text-xs p-2 bg-muted/50 rounded border border-border/60 shadow-sm"
+                                      >
+                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                          <span className="font-medium text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded-sm">
+                                            [{idx + 1}]
+                                          </span>
+                                          {citation.timestamp && (
+                                            <button
+                                              className="text-primary hover:underline flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-sm transition-colors hover:bg-primary/10"
+                                              onClick={() => {
+                                                // Create URL with timestamp parameter
+                                                const timestampInSeconds =
+                                                  citation.timestamp
+                                                    ? citation.timestamp
+                                                        .split(":")
+                                                        .reduce(
+                                                          (acc, time) =>
+                                                            60 * acc + +time,
+                                                          0,
+                                                        )
+                                                    : 0;
+                                                window.open(
+                                                  `https://youtube.com/watch?v=${videoIdParam}&t=${timestampInSeconds}s`,
+                                                  "_blank",
+                                                );
+                                              }}
+                                              title="Jump to this timestamp on YouTube"
+                                            >
+                                              <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                className="h-3 w-3"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              >
+                                                <circle
+                                                  cx="12"
+                                                  cy="12"
+                                                  r="10"
+                                                />
+                                                <polygon points="10 8 16 12 10 16 10 8" />
+                                              </svg>
+                                              {citation.timestamp}
+                                            </button>
+                                          )}
+                                          <span className="text-muted-foreground text-xs ml-auto">
+                                            {citation.content_type ===
+                                            "transcript"
+                                              ? "Transcript"
+                                              : citation.content_type ===
+                                                  "summary"
+                                                ? "Summary"
+                                                : citation.content_type ===
+                                                    "note"
+                                                  ? "Note"
+                                                  : "Content"}
+                                          </span>
+                                        </div>
+                                        <div className="opacity-90 italic bg-background/50 p-1.5 rounded border-l-2 border-primary/30">
+                                          {searchTerm ? (
+                                            <div
+                                              dangerouslySetInnerHTML={{
+                                                __html:
+                                                  '"' +
+                                                  highlightText({
+                                                    text: citation.content,
+                                                    searchTerm,
+                                                    showFullTextWithHighlights:
+                                                      true,
+                                                  }) +
+                                                  '"',
+                                              }}
+                                            />
+                                          ) : (
+                                            <>"{citation.content}"</>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                           </div>
                         </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-              </div>
-            )
+                      ))}
+                      {isSubmitting && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[80%] rounded-lg p-4 bg-muted text-muted-foreground">
+                            <div className="flex items-center space-x-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>AI is thinking...</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </ScrollArea>
+                </div>
+              )
             ) : (
               <div className="flex items-center justify-center h-48 flex-col">
                 <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg text-muted-foreground">No active conversation</p>
-                <p className="text-sm text-muted-foreground mt-1">Type a question below to start a new conversation</p>
+                <p className="text-lg text-muted-foreground">
+                  No active conversation
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Type a question below to start a new conversation
+                </p>
               </div>
             )}
           </div>
@@ -650,7 +823,7 @@ export function QASection() {
               placeholder="Ask a question about this video..."
               className="flex-grow min-h-[80px]"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   handleSubmitQuestion(e);
                 }
@@ -661,19 +834,27 @@ export function QASection() {
               className="flex-shrink-0"
               disabled={!question.trim() || isSubmitting}
             >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
       </div>
 
       {/* Delete Confirmation Modal */}
-      <Dialog open={conversationToDelete !== null} onOpenChange={(open) => !open && setConversationToDelete(null)}>
+      <Dialog
+        open={conversationToDelete !== null}
+        onOpenChange={(open) => !open && setConversationToDelete(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete Conversation</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this conversation? This action cannot be undone.
+              Are you sure you want to delete this conversation? This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-end">
@@ -706,12 +887,16 @@ export function QASection() {
         </DialogContent>
       </Dialog>
       {/* New Conversation Dialog */}
-      <Dialog open={showNewConversationDialog} onOpenChange={setShowNewConversationDialog}>
+      <Dialog
+        open={showNewConversationDialog}
+        onOpenChange={setShowNewConversationDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Start a New Conversation</DialogTitle>
             <DialogDescription>
-              You're about to start a new conversation. Any unsaved changes in your current conversation will be lost.
+              You're about to start a new conversation. Any unsaved changes in
+              your current conversation will be lost.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -726,17 +911,16 @@ export function QASection() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setShowNewConversationDialog(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowNewConversationDialog(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={startNewConversation}>
-              Start New
-            </Button>
+            <Button onClick={startNewConversation}>Start New</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-
     </div>
   );
 }
