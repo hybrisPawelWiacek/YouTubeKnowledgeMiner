@@ -727,8 +727,8 @@ export default function Library() {
 
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Unified Sidebar for filters (visible on desktop when enabled, and responsive on mobile) */}
-            <div className={`${!isFilterSidebarOpen ? "hidden lg:block" : ""}`}>
+            {/* Unified Sidebar for filters (toggled by the Filters button) */}
+            <div className={`${isFilterSidebarOpen ? "block" : "hidden"}`}>
               <FilterSidebar
                 categories={categoriesQuery.data || []}
                 collections={collectionsQuery.data || []}
