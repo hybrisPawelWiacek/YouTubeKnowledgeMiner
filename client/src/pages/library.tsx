@@ -118,12 +118,12 @@ export default function Library() {
         url += `query=${encodeURIComponent(searchQuery)}&`;
       }
 
-      // Add filters
-      if (selectedCategory) {
+      // Add filters - make sure we're sending valid numeric values
+      if (selectedCategory && typeof selectedCategory === 'number') {
         url += `category_id=${selectedCategory}&`;
       }
 
-      if (selectedCollection) {
+      if (selectedCollection && typeof selectedCollection === 'number') {
         url += `collection_id=${selectedCollection}&`;
       }
 
@@ -522,39 +522,53 @@ export default function Library() {
       // ... existing videosQuery logic ...
     }
 
-    // Load categories
+    // Load categories - but don't directly set as filter
     async function loadCategories() {
       try {
         if (!user) {
           // For anonymous users, no categories are available
+          // Just clear the category selection
           setSelectedCategory(undefined);
           return;
         }
-        const response = await apiRequest("GET", '/api/categories');
-        if (response.ok) {
-          const data = await response.json();
-          setSelectedCategory(data);
+        
+        // Don't set the fetched categories array directly as the selected category
+        // Instead, load them for the UI but keep selectedCategory as a single ID
+        const response = await fetch('/api/categories', {
+          headers: { 'x-user-id': String(user.id) },
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to load categories, status:', response.status);
         }
+        // We don't set selectedCategory here - that should be selected by the user from the UI
       } catch (error) {
         console.error('Failed to load categories:', error);
       }
     }
     loadCategories();
 
-    // Load collections
+    // Load collections - but don't directly set as filter
     async function loadCollections() {
       try {
         if (!user) {
-          // For anonymous users, get collections from local storage
-          const localData = getLocalData();
-          setSelectedCollection(localData.collections || []);
+          // For anonymous users, no collections available
+          setSelectedCollection(undefined);
           return;
         }
-        const response = await apiRequest("GET", '/api/collections');
-        if (response.ok) {
-          const data = await response.json();
-          setSelectedCollection(data);
+        
+        // Don't set the fetched collections array directly as the selected collection
+        // Instead, load them for the UI but keep selectedCollection as a single ID
+        const response = await fetch('/api/collections', {
+          headers: { 'x-user-id': String(user.id) },
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to load collections, status:', response.status);
         }
+        // We don't set selectedCollection here - that should be selected by the user from the UI
       } catch (error) {
         console.error('Failed to load collections:', error);
       }
