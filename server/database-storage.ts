@@ -279,23 +279,76 @@ export class DatabaseStorage implements IStorage {
   }
   
   async bulkDeleteVideos(ids: number[]): Promise<number> {
-    // First, delete related QA conversations
-    await db
-      .delete(qa_conversations)
-      .where(inArray(qa_conversations.video_id, ids));
-    
-    // Second, delete related collection associations
-    await db
-      .delete(collection_videos)
-      .where(inArray(collection_videos.video_id, ids));
+    // Try-catch to handle and log any deletion errors
+    try {
+      // First, delete related QA conversations
+      console.log(`Deleting QA conversations for video IDs: ${ids.join(', ')}`);
+      const deletedQaResult = await db
+        .delete(qa_conversations)
+        .where(inArray(qa_conversations.video_id, ids))
+        .returning();
+      console.log(`Deleted ${deletedQaResult.length} QA conversations`);
+      
+      // Second, delete related collection associations
+      console.log(`Deleting collection associations for video IDs: ${ids.join(', ')}`);
+      const deletedCollectionAssocs = await db
+        .delete(collection_videos)
+        .where(inArray(collection_videos.video_id, ids))
+        .returning();
+      console.log(`Deleted ${deletedCollectionAssocs.length} collection associations`);
 
-    // Finally delete the videos
-    const result = await db
-      .delete(videos)
-      .where(inArray(videos.id, ids))
-      .returning();
+      // Finally delete the videos
+      console.log(`Deleting videos with IDs: ${ids.join(', ')}`);
+      const result = await db
+        .delete(videos)
+        .where(inArray(videos.id, ids))
+        .returning();
+      console.log(`Successfully deleted ${result.length} videos`);
 
-    return result.length;
+      return result.length;
+    } catch (error) {
+      console.error("Error in bulkDeleteVideos:", error);
+      
+      // Check if this is a foreign key constraint error
+      if (error instanceof Error && error.message.includes('foreign key constraint')) {
+        console.log("Foreign key constraint error detected. Attempting manual cascade delete...");
+        
+        // Try a more thorough approach for each video individually
+        let deletedCount = 0;
+        
+        for (const id of ids) {
+          try {
+            // Delete QA conversations for this specific video
+            await db
+              .delete(qa_conversations)
+              .where(eq(qa_conversations.video_id, id));
+              
+            // Delete collection associations for this specific video
+            await db
+              .delete(collection_videos)
+              .where(eq(collection_videos.video_id, id));
+              
+            // Delete the video itself
+            const deleted = await db
+              .delete(videos)
+              .where(eq(videos.id, id))
+              .returning();
+              
+            if (deleted.length > 0) {
+              deletedCount++;
+              console.log(`Successfully deleted video ID: ${id}`);
+            }
+          } catch (innerError) {
+            console.error(`Failed to delete video ID: ${id}`, innerError);
+          }
+        }
+        
+        return deletedCount;
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   // Collection methods
