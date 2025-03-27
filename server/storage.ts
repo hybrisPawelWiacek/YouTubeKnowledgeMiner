@@ -28,7 +28,10 @@ export interface IStorage {
   // Video methods
   getVideo(id: number): Promise<Video | undefined>;
   getVideosByUserId(userId: number | null): Promise<Video[]>;
-  searchVideos(userId: number | null, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }>;
+  searchVideos(
+    userIdentifier: { userId?: number; anonymousSessionId?: string },
+    params: SearchParams
+  ): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }>;
   insertVideo(video: InsertVideo): Promise<Video>;
   updateVideo(id: number, data: Partial<Video>): Promise<Video | undefined>;
   deleteVideo(id: number): Promise<boolean>;

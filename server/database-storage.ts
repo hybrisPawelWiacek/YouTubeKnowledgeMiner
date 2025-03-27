@@ -86,9 +86,23 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(videos).where(eq(videos.user_id, userId));
   }
 
-  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
-    // Build query conditions
-    let conditions = [eq(videos.user_id, userId)];
+  async searchVideos(
+    userIdentifier: { userId?: number; anonymousSessionId?: string },
+    params: SearchParams
+  ): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
+    // Build query conditions based on user type
+    let conditions = [];
+    
+    if (userIdentifier.userId) {
+      // For authenticated users, filter by user_id
+      conditions.push(eq(videos.user_id, userIdentifier.userId));
+    } else if (userIdentifier.anonymousSessionId) {
+      // For anonymous users, filter by anonymous_session_id
+      conditions.push(eq(videos.anonymous_session_id, userIdentifier.anonymousSessionId));
+    } else {
+      // If no valid identifier provided, return empty results
+      return { videos: [], totalCount: 0, hasMore: false };
+    }
 
     // Add text search condition
     if (params.query) {
