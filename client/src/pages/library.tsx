@@ -148,16 +148,30 @@ export default function Library() {
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
 
-      // Add anonymous session header for anonymous users
+      // Setup headers - this is critical for authenticated users
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // For authenticated users, explicitly add user ID header
+      if (user && user.id) {
+        headers = { 'x-user-id': String(user.id) };
+        console.log('Library - Adding user ID header for authenticated user:', user.id);
+      } 
+      // For anonymous users, add anonymous session header
+      else if (!user) {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
         console.log('Library - Adding anonymous session header:', sessionId);
       }
 
-      // Use our API request function which handles all the auth header logic for us
-      const response = await apiRequest("GET", url, undefined, headers);
+      // Make the API request with proper headers
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers
+        },
+        credentials: 'include'
+      });
 
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
