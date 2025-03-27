@@ -54,7 +54,8 @@ interface QASession {
   id: number;
   title: string;
   messages: Message[];
-  createdAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export function QASection() {
@@ -659,9 +660,9 @@ export function QASection() {
                           >
                             <div className="truncate">{conversation.title}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {conversation.createdAt
+                              {conversation.created_at
                                 ? new Date(
-                                    conversation.createdAt,
+                                    conversation.created_at,
                                   ).toLocaleString("en-US", {
                                     year: "numeric",
                                     month: "short",
