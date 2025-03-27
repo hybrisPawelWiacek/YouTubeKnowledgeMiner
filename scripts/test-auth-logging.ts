@@ -6,7 +6,8 @@
  * the logs are properly generated.
  */
 
-import { logAuthEvent, logSecurityEvent } from '../server/utils/logger';
+// Import the entire logger module to ensure we have access to the actual logger instances
+import logger, { logAuthEvent, logSecurityEvent, flushLogs } from '../server/utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -160,15 +161,26 @@ async function testAuthLogging() {
     );
     console.log(`Logged anonymous conversion event with request ID: ${conversionRequestId}`);
     
+    // Explicitly flush logs to disk using our new mechanism
+    console.log('Explicitly flushing logs to disk...');
+    await flushLogs();
+    
     // Check for auth log file
     const authLogPath = path.join(process.cwd(), 'logs', 'auth-' + new Date().toISOString().split('T')[0] + '.log');
+    const authDebugPath = path.join(process.cwd(), 'logs', 'auth-debug.log');
+    
+    console.log('Checking log files:');
+    console.log(`- Auth log: ${authLogPath}`);
+    console.log(`- Auth debug log: ${authDebugPath}`);
+    
+    // Check auth log file
     if (fs.existsSync(authLogPath)) {
       console.log(`Auth log file exists at: ${authLogPath}`);
       
       // Read last few lines to verify log entries
       const data = fs.readFileSync(authLogPath, 'utf8');
       const lines = data.trim().split('\n');
-      console.log(`Auth log contains ${lines.length} entries`);
+      console.log(`Auth log contains ${lines.length || 0} entries`);
       
       if (lines.length > 0) {
         console.log('Last log entry:');
@@ -178,19 +190,50 @@ async function testAuthLogging() {
       console.log(`Auth log file not found at: ${authLogPath}`);
     }
     
+    // Check auth debug log file
+    if (fs.existsSync(authDebugPath)) {
+      console.log(`Auth debug log file exists at: ${authDebugPath}`);
+      
+      // Read last few lines to verify log entries
+      const data = fs.readFileSync(authDebugPath, 'utf8');
+      const lines = data.trim().split('\n');
+      console.log(`Auth debug log contains ${lines.length || 0} entries`);
+      
+      if (lines.length > 0) {
+        console.log('Last debug log entry:');
+        console.log(lines[lines.length - 1]);
+      }
+    } else {
+      console.log(`Auth debug log file not found at: ${authDebugPath}`);
+    }
+    
+    // List all files in the logs directory
+    console.log('All files in logs directory:');
+    const logsDir = path.join(process.cwd(), 'logs');
+    const files = fs.readdirSync(logsDir);
+    files.forEach(file => console.log(`- ${file}`));
+    
     console.log('Authentication logging test completed');
   } catch (error) {
     console.error('Error testing authentication logging:', error);
   }
 }
 
+// Register exit handlers for proper log flushing
+import { registerExitHandlers } from '../server/utils/logger';
+registerExitHandlers();
+
 // Run the test
 testAuthLogging()
-  .then(() => {
+  .then(async () => {
     console.log('Test completed successfully');
+    // Ensure logs are flushed before exit
+    await flushLogs();
     process.exit(0);
   })
-  .catch(err => {
+  .catch(async (err) => {
     console.error('Test failed:', err);
+    // Ensure logs are flushed even on error
+    await flushLogs();
     process.exit(1);
   });

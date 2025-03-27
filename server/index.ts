@@ -5,12 +5,15 @@ import { setupVite, serveStatic, log } from "./vite";
 import { config } from "dotenv";
 import requestIdMiddleware from "./middleware/request-id.middleware";
 import { requestLogger, responseLogger, errorLogger } from "./middleware/logging.middleware";
-import { logger, setupConsoleRedirection } from "./utils/logger";
+import { logger, setupConsoleRedirection, registerExitHandlers } from "./utils/logger";
 config();
 
 // Set up console redirection to route all console.* calls through Winston
 // This helps capture console logs from throughout the application in our structured logging system
 setupConsoleRedirection();
+
+// Register process exit handlers to ensure logs are flushed on shutdown
+registerExitHandlers();
 
 // Initialize the application
 const app = express();

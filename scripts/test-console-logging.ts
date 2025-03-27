@@ -5,7 +5,7 @@
  * through the Winston logging system for consistent formatted logging.
  */
 
-import { logger, setupConsoleRedirection } from '../server/utils/logger';
+import { logger, setupConsoleRedirection, flushLogs, registerExitHandlers } from '../server/utils/logger';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
 import path from 'path';
@@ -110,13 +110,20 @@ async function testConsoleLogging() {
   }
 }
 
+// Register exit handlers for proper log flushing
+registerExitHandlers();
+
 // Run the test
 testConsoleLogging()
-  .then(() => {
+  .then(async () => {
     console.log('Test completed successfully');
+    // Explicitly flush logs before exit, including our test logger
+    await flushLogs([testLogger]);
     process.exit(0);
   })
-  .catch(err => {
+  .catch(async (err) => {
     console.error('Test failed:', err);
+    // Ensure logs are flushed even on error, including our test logger
+    await flushLogs([testLogger]);
     process.exit(1);
   });

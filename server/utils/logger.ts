@@ -513,6 +513,85 @@ export function setupConsoleRedirection() {
   };
 }
 
+/**
+ * Flush all logs and close transport streams before exit.
+ * This ensures that all logs are written to disk even in short-lived processes.
+ * 
+ * @param additionalLoggers Optional array of Winston loggers to flush alongside the default loggers
+ * @returns Promise that resolves when all logs are flushed
+ */
+export function flushLogs(additionalLoggers: winston.Logger[] = []): Promise<void> {
+  return new Promise<void>((resolve) => {
+    // Create an array of promises for each logger
+    const loggers = [logger, apiLogger, authLogger, ...additionalLoggers].filter(Boolean);
+    
+    // Start counting how many loggers we've processed
+    let completed = 0;
+    
+    // For each logger, close all transports
+    loggers.forEach(l => {
+      // First end all writable streams
+      l.transports.forEach(transport => {
+        // Try to flush the transport if it has a flush method or end if it has a stream
+        if (transport instanceof winston.transports.File || 
+            transport instanceof winston.transports.DailyRotateFile) {
+          // For file transports, check if they have a stream
+          if ((transport as any).stream && (transport as any).stream.write) {
+            (transport as any).stream.end();
+          }
+        }
+      });
+      
+      // Then close the logger (which ends remaining transports)
+      l.on('finish', () => {
+        completed++;
+        if (completed >= loggers.length) {
+          resolve();
+        }
+      });
+      
+      l.end();
+    });
+    
+    // Safety timeout in case the loggers don't emit 'finish'
+    setTimeout(() => {
+      resolve();
+    }, 1000);
+  });
+}
+
+/**
+ * Register process exit handlers to ensure logs are flushed before exit
+ */
+export function registerExitHandlers() {
+  // Handle normal exit
+  process.on('exit', () => {
+    // Can't use async code in 'exit' handler
+    console.log('Process exiting, logs may not be completely flushed');
+  });
+  
+  // Handle CTRL+C
+  process.on('SIGINT', async () => {
+    console.log('Received SIGINT, flushing logs before exit...');
+    await flushLogs();
+    process.exit(0);
+  });
+  
+  // Handle CTRL+C in Windows
+  process.on('SIGTERM', async () => {
+    console.log('Received SIGTERM, flushing logs before exit...');
+    await flushLogs();
+    process.exit(0);
+  });
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', async (error) => {
+    console.error('Uncaught exception:', error);
+    await flushLogs();
+    process.exit(1);
+  });
+}
+
 export default {
   logger,
   logApiRequest,
@@ -520,4 +599,6 @@ export default {
   logAuthEvent,
   logSecurityEvent,
   setupConsoleRedirection,
+  flushLogs,
+  registerExitHandlers,
 };
