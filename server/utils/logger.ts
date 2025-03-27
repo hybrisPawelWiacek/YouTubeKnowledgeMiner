@@ -10,12 +10,32 @@ import winston from 'winston';
 import 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
+import express from 'express';
+import util from 'util';
 
 // Ensure logs directory exists
 const logsDir = path.join(process.cwd(), 'logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
+
+// Determine the environment
+// Check multiple sources to ensure reliability
+const isProduction = () => {
+  // Check NODE_ENV environment variable
+  if (process.env.NODE_ENV === 'production') {
+    return true;
+  }
+  
+  // Check for production-specific paths or settings in Replit
+  const isReplitProduction = !!process.env.REPL_SLUG && !process.env.REPL_OWNER;
+  
+  return isReplitProduction;
+};
+
+// Set environment for consistent use throughout the application
+const environment = isProduction() ? 'production' : 'development';
+console.log(`Logger initialized in ${environment} mode`);
 
 // Define log formats
 const developmentFormat = winston.format.combine(
@@ -67,13 +87,12 @@ const productionFormat = winston.format.combine(
 
 // Create Winston transports
 const consoleTransport = new winston.transports.Console({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  level: environment === 'production' ? 'info' : 'debug',
 });
 
 const combinedFileTransport = new winston.transports.DailyRotateFile({
   level: 'info',
-  dirname: logsDir,
-  filename: 'combined-%DATE%.log',
+  filename: path.join(logsDir, 'combined-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
   maxSize: '20m',
   maxFiles: '14d',
@@ -81,8 +100,7 @@ const combinedFileTransport = new winston.transports.DailyRotateFile({
 
 const errorFileTransport = new winston.transports.DailyRotateFile({
   level: 'error',
-  dirname: logsDir,
-  filename: 'error-%DATE%.log',
+  filename: path.join(logsDir, 'error-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
   maxSize: '20m',
   maxFiles: '14d',
@@ -91,8 +109,7 @@ const errorFileTransport = new winston.transports.DailyRotateFile({
 // Specialized transports for API and auth events
 const apiFileTransport = new winston.transports.DailyRotateFile({
   level: 'info',
-  dirname: logsDir,
-  filename: 'api-%DATE%.log',
+  filename: path.join(logsDir, 'api-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
   maxSize: '20m',
   maxFiles: '14d',
@@ -100,18 +117,26 @@ const apiFileTransport = new winston.transports.DailyRotateFile({
 
 const authFileTransport = new winston.transports.DailyRotateFile({
   level: 'info',
-  dirname: logsDir,
-  filename: 'auth-%DATE%.log',
+  filename: path.join(logsDir, 'auth-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
   maxSize: '20m',
   maxFiles: '14d',
 });
 
+// Add a direct file transport for auth events (without rotation)
+const authDebugFileTransport = new winston.transports.File({
+  level: 'debug',
+  filename: path.join(logsDir, 'auth-debug.log'),
+});
+
 // Create the logger
 export const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: process.env.NODE_ENV === 'production' ? productionFormat : developmentFormat,
-  defaultMeta: { service: 'youtube-knowledge-miner' },
+  level: environment === 'production' ? 'info' : 'debug',
+  format: environment === 'production' ? productionFormat : developmentFormat,
+  defaultMeta: { 
+    service: 'youtube-knowledge-miner',
+    environment
+  },
   transports: [
     consoleTransport,
     combinedFileTransport,
@@ -122,8 +147,11 @@ export const logger = winston.createLogger({
 // Add specialized loggers
 const apiLogger = winston.createLogger({
   level: 'info',
-  format: process.env.NODE_ENV === 'production' ? productionFormat : developmentFormat,
-  defaultMeta: { service: 'youtube-knowledge-miner-api' },
+  format: environment === 'production' ? productionFormat : developmentFormat,
+  defaultMeta: { 
+    service: 'youtube-knowledge-miner-api',
+    environment 
+  },
   transports: [
     consoleTransport,
     apiFileTransport,
@@ -132,11 +160,18 @@ const apiLogger = winston.createLogger({
 
 const authLogger = winston.createLogger({
   level: 'info',
-  format: process.env.NODE_ENV === 'production' ? productionFormat : developmentFormat,
-  defaultMeta: { service: 'youtube-knowledge-miner-auth' },
+  format: environment === 'production' ? productionFormat : developmentFormat,
+  defaultMeta: { 
+    service: 'youtube-knowledge-miner-auth',
+    environment
+  },
   transports: [
     consoleTransport,
     authFileTransport,
+    // Also log auth events to the combined log file to ensure they're captured
+    combinedFileTransport,
+    // Use the direct file transport for debugging auth logging issues
+    authDebugFileTransport
   ],
 });
 
@@ -299,10 +334,190 @@ export function logSecurityEvent(
   });
 }
 
+/**
+ * Console Redirection
+ * Intercepts console.log and other console methods and routes them through Winston logger
+ * This ensures that all console output is properly formatted and saved to log files
+ */
+export function setupConsoleRedirection() {
+  // Store original console methods
+  const originalConsole = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug,
+  };
+
+  // Special paths/namespaces we want to ignore or handle differently
+  const ignoredPrefixes = [
+    '[winston]', // Avoid infinite loops with Winston's own logs
+    '[express]', // Let Express server logs go through normally
+    '[vite]',    // Vite development server logs
+    'Logger initialized', // Our own logger initialization message
+    '10:', // Time-prefixed logs from Express
+    '11:', // Time-prefixed logs from Express
+    '12:', // Time-prefixed logs from Express
+    'GET /',   // Express route logs
+    'POST /',  // Express route logs
+    'PUT /',   // Express route logs
+    'DELETE /', // Express route logs
+    'PATCH /', // Express route logs
+  ];
+
+  // Get name of caller module when possible
+  function getCallerInfo() {
+    try {
+      const err = new Error();
+      const stack = err.stack?.split('\n');
+      // Find the first non-logger file in the stack
+      const callerLine = stack?.find(line => 
+        !line.includes('logger.ts') && 
+        !line.includes('node_modules/winston') &&
+        line.includes('at ')
+      );
+      
+      if (callerLine) {
+        // Extract module name/path when possible
+        const match = callerLine.match(/at\s+(.+?)\s+\((.+?):(\d+):(\d+)\)/);
+        if (match) {
+          // Full caller info available
+          return { 
+            function: match[1], 
+            file: path.basename(match[2]),
+            line: match[3]
+          };
+        } else {
+          // Simplified caller info
+          return { 
+            raw: callerLine.trim()
+              .replace('at ', '')
+              .substring(0, 50) 
+          };
+        }
+      }
+    } catch (e) {
+      // If anything goes wrong, just return null
+      return null;
+    }
+    return null;
+  }
+
+  // Helper function to detect if message should be ignored
+  function shouldIgnore(message: any) {
+    if (typeof message !== 'string') return false;
+    
+    for (const prefix of ignoredPrefixes) {
+      if (message.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Override console methods
+  console.log = function(...args) {
+    // Let original calls through for direct terminal visibility
+    originalConsole.log.apply(console, args);
+    
+    // Skip logging to Winston if this is from an ignored namespace
+    if (args.length > 0 && shouldIgnore(args[0])) {
+      return;
+    }
+    
+    // Get caller information for context
+    const caller = getCallerInfo();
+    
+    // Format the message - handle both string and object cases
+    let message = '';
+    if (args.length === 1) {
+      message = typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0]);
+    } else if (args.length > 1) {
+      // Handle format string patterns (like console.log('User %s logged in', username))
+      if (typeof args[0] === 'string' && args[0].includes('%')) {
+        try {
+          message = util.format.apply(null, args);
+        } catch (e) {
+          message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        }
+      } else {
+        message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+      }
+    }
+    
+    // Log through Winston
+    logger.info(message, { caller });
+  };
+
+  console.info = function(...args) {
+    originalConsole.info.apply(console, args);
+    
+    if (args.length > 0 && shouldIgnore(args[0])) {
+      return;
+    }
+    
+    const caller = getCallerInfo();
+    let message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    logger.info(message, { caller });
+  };
+
+  console.warn = function(...args) {
+    originalConsole.warn.apply(console, args);
+    
+    if (args.length > 0 && shouldIgnore(args[0])) {
+      return;
+    }
+    
+    const caller = getCallerInfo();
+    let message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    logger.warn(message, { caller });
+  };
+
+  console.error = function(...args) {
+    originalConsole.error.apply(console, args);
+    
+    if (args.length > 0 && shouldIgnore(args[0])) {
+      return;
+    }
+    
+    const caller = getCallerInfo();
+    let message = args.map(arg => {
+      if (arg instanceof Error) {
+        return `${arg.name}: ${arg.message}\n${arg.stack}`;
+      }
+      return typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+    }).join(' ');
+    
+    logger.error(message, { caller });
+  };
+
+  console.debug = function(...args) {
+    originalConsole.debug.apply(console, args);
+    
+    if (args.length > 0 && shouldIgnore(args[0])) {
+      return;
+    }
+    
+    const caller = getCallerInfo();
+    let message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    logger.debug(message, { caller });
+  };
+
+  // Return a function to restore original console behavior if needed
+  return function restoreConsole() {
+    console.log = originalConsole.log;
+    console.info = originalConsole.info;
+    console.warn = originalConsole.warn;
+    console.error = originalConsole.error;
+    console.debug = originalConsole.debug;
+  };
+}
+
 export default {
   logger,
   logApiRequest,
   logApiResponse,
   logAuthEvent,
   logSecurityEvent,
+  setupConsoleRedirection,
 };

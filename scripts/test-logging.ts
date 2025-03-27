@@ -142,6 +142,8 @@ async function testLoggingSystem() {
   const requestId1 = await generateTestLog('GET', '/anonymous/videos/count');
   console.log(`Request ID: ${requestId1}`);
   
+  // Note: This request is expected to fail with a 404 error - that's okay
+  // We're testing that both successful and failed requests are properly logged
   const requestId2 = await generateTestLog('POST', '/anonymous/videos', {
     youtube_id: 'test_video_id',
     title: 'Test Video',

@@ -220,32 +220,56 @@ router.get('/:requestId', (req: Request, res: Response, next: NextFunction) => {
     const sortedLogFiles = [...todayLogFiles, ...otherLogFiles];
     
     // Search each file for the request ID
-    sortedLogFiles.forEach(file => {
+    for (const file of sortedLogFiles) {
       const filePath = path.join(logsDir, file);
-      const fileContents = fs.readFileSync(filePath, 'utf8');
+      let fileContents;
       
-      const lines = fileContents.split('\n').filter(line => line.trim() !== '');
-      
-      lines.forEach(line => {
-        try {
-          const logEntry = JSON.parse(line);
-          if (logEntry.requestId === requestId) {
-            // Add the log file information
-            requestLogs.push({
-              ...logEntry,
-              _logFile: file,
-            });
-          }
-        } catch (err) {
-          // Skip non-JSON lines
-        }
-      });
-      
-      // Stop searching after finding logs to avoid checking all files
-      if (requestLogs.length > 0) {
-        return;
+      try {
+        fileContents = fs.readFileSync(filePath, 'utf8');
+      } catch (err) {
+        logger.warn(`Failed to read log file: ${file}`, { error: err });
+        continue;
       }
-    });
+      
+      // First do a quick check if the file contains the request ID at all
+      if (!fileContents.includes(requestId)) {
+        continue;
+      }
+
+      const lines = fileContents.split('\n').filter(line => line.trim() !== '');
+      let foundLogs = false;
+      
+      for (const line of lines) {
+        // Check if the line contains the request ID before further processing
+        if (line.includes(requestId)) {
+          // Try to extract timestamp and log level from the line using regex
+          const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)/);
+          const timestamp = timestampMatch ? timestampMatch[1] : null;
+          
+          // Try to determine log level
+          let level = 'info'; // Default level
+          if (line.includes('error')) level = 'error';
+          else if (line.includes('warn')) level = 'warn';
+          else if (line.includes('debug')) level = 'debug';
+          
+          // Store the log entry with extracted metadata
+          const logEntry = {
+            raw: line,
+            timestamp,
+            level,
+            _file: file,
+          };
+          
+          requestLogs.push(logEntry);
+          foundLogs = true;
+        }
+      }
+      
+      // If we found logs in this file and have a reasonable number, stop searching
+      if (foundLogs && requestLogs.length >= 5) {
+        break;
+      }
+    }
     
     // Sort the logs by timestamp
     requestLogs.sort((a, b) => {

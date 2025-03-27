@@ -5,8 +5,12 @@ import { setupVite, serveStatic, log } from "./vite";
 import { config } from "dotenv";
 import requestIdMiddleware from "./middleware/request-id.middleware";
 import { requestLogger, responseLogger, errorLogger } from "./middleware/logging.middleware";
-import { logger } from "./utils/logger";
+import { logger, setupConsoleRedirection } from "./utils/logger";
 config();
+
+// Set up console redirection to route all console.* calls through Winston
+// This helps capture console logs from throughout the application in our structured logging system
+setupConsoleRedirection();
 
 // Initialize the application
 const app = express();
@@ -107,8 +111,13 @@ app.use((req, res, next) => {
     res.json({ status: 'API is working' });
   });
 
+  // Determine environment using Express app's environment setting
+  const expressEnv = app.get("env");
   // Setup Vite in development after API routes
-  if (app.get("env") === "development") {
+  if (expressEnv === "development") {
+    // Log environment detection
+    logger.info(`Express environment detected as: ${expressEnv}`);
+    
     // Add middleware to conditionally bypass Vite for API calls
     app.use((req, res, next) => {
       if (req.path.startsWith('/api/')) {
@@ -131,6 +140,7 @@ app.use((req, res, next) => {
 
     await setupVite(app, server);
   } else {
+    logger.info(`Express environment detected as: ${expressEnv} - serving static files`);
     serveStatic(app);
   }
 
@@ -145,13 +155,13 @@ app.use((req, res, next) => {
   }, () => {
     // Log using both the old and new logging systems for transition period
     log(`✅ Server running on http://0.0.0.0:${port}`);
-    log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    log(`📝 Express Environment: ${expressEnv}`);
     
     // Log using the new structured logger
     logger.info('Server started successfully', {
       port,
       host: '0.0.0.0',
-      environment: process.env.NODE_ENV || 'development',
+      expressEnvironment: expressEnv,
       nodeVersion: process.version
     });
   });
