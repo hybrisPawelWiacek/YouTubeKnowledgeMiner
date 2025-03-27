@@ -294,19 +294,24 @@ export default function Library() {
 
   // Track engagement levels and show auth prompt at strategic points
   useEffect(() => {
-    if (!user) {
+    // We'll only check on libraryInteractions changes, not on initial mount
+    if (!user && libraryInteractions > 0) {
       // Determine whether to show auth prompt based on user engagement
       // Use different thresholds based on prompt history
       const hasSeenPromptBefore = promptAuth('access_library', true);
       const threshold = hasSeenPromptBefore ? 8 : 3;
 
       // Only show prompt if we've reached the threshold
-      if (libraryInteractions >= threshold) {
+      if (libraryInteractions >= threshold && !showedPrompt) {
+        console.log(`[Library] Checking auth prompt at interactions: ${libraryInteractions}`);
         const shouldPrompt = promptAuth('access_library');
         setShowAuthPrompt(shouldPrompt);
+        if (shouldPrompt) {
+          setShowedPrompt(true);
+        }
       }
     }
-  }, [user, promptAuth, libraryInteractions]);
+  }, [user, promptAuth, libraryInteractions, showedPrompt]);
 
   // Track significant user engagement with library features
   const trackEngagement = useCallback(() => {
@@ -420,14 +425,28 @@ export default function Library() {
     // For anonymous users
     if (!user && !showedPrompt) {
       // Check video count - only show prompt if they've reached the limit
-      if (hasReachedAnonymousLimit()) {
-        setShowAuthPrompt(true);
-        setShowedPrompt(true);
+      // hasReachedAnonymousLimit is async, so we need to handle it properly
+      const checkAnonymousLimit = async () => {
+        try {
+          const hasReached = await hasReachedAnonymousLimit();
+          console.log('[Library] Anonymous limit check:', hasReached);
+          if (hasReached) {
+            setShowAuthPrompt(true);
+          }
+          setShowedPrompt(true);
+        } catch (error) {
+          console.error('[Library] Error checking anonymous limit:', error);
+          setShowedPrompt(true);
+        }
+      };
+      
+      // Only execute the check once - not on initial render
+      if (libraryInteractions > 0) {
+        checkAnonymousLimit();
       } else {
         setShowedPrompt(true);
       }
-
-
+      
       // Load videos from local storage
       const localData = getLocalData();
       if (localData.videos.length > 0) {
