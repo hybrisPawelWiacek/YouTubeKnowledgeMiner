@@ -181,13 +181,33 @@ export function VideoResult({ video }: VideoResultProps) {
       
       // Only prompt if we have strategic reasons to do so:
       // 1. User has 2 videos already (about to reach limit)
-      // 2. User has invested time in adding quality metadata
-      // 3. User has significant interaction with the video
-      if (currentCount >= maxAllowed - 1 || hasQualityMetadata || interactionCount >= 5) {
+      // 2. User has invested time in adding quality metadata AND has significant video count
+      // 3. User has significant interaction with the video AND has significant video count
+      
+      // Always show prompt when about to reach limit
+      const approachingLimit = currentCount >= maxAllowed - 1;
+      
+      // For quality engagement, only prompt if they also have saved enough videos
+      const hasHighQualityEngagement = hasQualityMetadata && currentCount > 0;
+      
+      // For high interaction, only prompt if they also have saved enough videos
+      const hasHighInteraction = interactionCount >= 5 && currentCount > 0;
+      
+      // Check if ANY of the strategic conditions are met
+      if (approachingLimit || hasHighQualityEngagement || hasHighInteraction) {
         console.log('[VideoResult] Strategic prompt condition met, checking if we should prompt');
-        const prompted = promptAuth('save_video', true); // Use check-only mode first
-        if (prompted) {
-          // If eligible to show a prompt, show it
+        console.log('[VideoResult] Prompt reasons:', { 
+          approachingLimit, 
+          hasHighQualityEngagement, 
+          hasHighInteraction,
+          videoCount: currentCount
+        });
+        
+        // Only show the prompt if the auth system says user is eligible to see prompts
+        const isEligibleForPrompt = promptAuth('save_video', true); // Use check-only mode first
+        
+        if (isEligibleForPrompt) {
+          // If eligible, show the prompt
           promptAuth('save_video');
         } else {
           // If not eligible for a prompt, save normally
