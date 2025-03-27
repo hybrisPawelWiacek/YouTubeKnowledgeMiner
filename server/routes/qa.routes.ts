@@ -46,12 +46,16 @@ router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), asy
     console.log("Creating Q&A conversation with body:", req.body);
     
     try {
+      // For anonymous users, we need to provide a default user_id since the schema requires a number
+      // Using -1 as a sentinel value to indicate an anonymous user
+      const anonymousUserId = -1;
+      
       // Ensure all required fields are in the request body
       const requestWithDefaults = {
         ...req.body,
         messages: req.body.messages || [],
         video_id: videoId,
-        user_id: userId
+        user_id: userId === null ? anonymousUserId : userId
       };
 
       // Validate with schema
@@ -61,7 +65,7 @@ router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), asy
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: userId as number // userId could be null for anonymous sessions, but Drizzle schema allows this
+        user_id: validatedData.user_id // Use the validated user_id which is always a number after our transformation
       });
 
       return sendSuccess(res, conversation, 201);
@@ -133,12 +137,16 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
       // Validate schema requirements first
       console.log("Schema requirements:", Object.keys(insertQAConversationSchema.shape));
 
+      // For anonymous users, we need to provide a default user_id since the schema requires a number
+      // Using -1 as a sentinel value to indicate an anonymous user
+      const anonymousUserId = -1;
+      
       // Ensure all required fields are in the request body
       const requestWithDefaults = {
         ...req.body,
         messages: req.body.messages || [],
         video_id: videoId,
-        user_id: userId
+        user_id: userId === null ? anonymousUserId : userId
       };
 
       console.log("Modified request with defaults:", requestWithDefaults);
@@ -152,7 +160,7 @@ router.post('/video/:id', requireSession, validateNumericParam('id'), async (req
       const conversation = await storage.createQAConversation({
         ...validatedData,
         video_id: videoId,
-        user_id: userId as number // userId could be null for anonymous sessions, but Drizzle schema allows this
+        user_id: validatedData.user_id // Use the validated user_id which is always a number after our transformation
       });
 
       return sendSuccess(res, conversation, 201);
