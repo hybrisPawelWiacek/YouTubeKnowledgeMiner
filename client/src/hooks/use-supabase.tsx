@@ -78,13 +78,27 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           
           // Check for a stored session in localStorage
           const storedSessionStr = localStorage.getItem(SUPABASE_SESSION_KEY);
+          // Also check for a session in the default Supabase key (for backwards compatibility)
+          const supabaseAuthToken = localStorage.getItem('supabase.auth.token');
           let storedSession = null;
           
           try {
+            // First check our app's custom key
             if (storedSessionStr) {
               storedSession = JSON.parse(storedSessionStr);
-              console.log('Found stored session, checking if still valid');
-              
+              console.log('Found stored session in app key, checking if still valid');
+            } 
+            // Then check if there's a session in the default Supabase key
+            else if (supabaseAuthToken) {
+              console.log('Found legacy session in Supabase key, migrating');
+              storedSession = JSON.parse(supabaseAuthToken);
+              // Migrate to our custom key for consistency
+              localStorage.setItem(SUPABASE_SESSION_KEY, supabaseAuthToken);
+              // Remove the old key
+              localStorage.removeItem('supabase.auth.token');
+            }
+            
+            if (storedSession) {
               // Check if this is a demo user session
               const isDemoUser = storedSession?.user?.user_metadata?.is_demo === true;
               if (isDemoUser) {
@@ -98,6 +112,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
                 if (!hasValidToken || !storedSession.user?.id) {
                   console.warn('Invalid demo user session found, removing it');
                   localStorage.removeItem(SUPABASE_SESSION_KEY);
+                  localStorage.removeItem('supabase.auth.token'); // Also clear legacy key
                   storedSession = null;
                 }
               }
@@ -105,6 +120,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.error('Error parsing stored session:', e);
             localStorage.removeItem(SUPABASE_SESSION_KEY);
+            localStorage.removeItem('supabase.auth.token'); // Also clear legacy key
           }
           
           // Use the active session from Supabase or try to restore from stored session
@@ -493,7 +509,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         setSession(null);
         
         // IMPORTANT: Always remove session from localStorage for all user types
+        // Clear both session storage keys
         localStorage.removeItem(SUPABASE_SESSION_KEY);
+        localStorage.removeItem('supabase.auth.token');
         
         // Clear the session in our API module
         updateCurrentSession(null);
@@ -522,7 +540,9 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       setSession(null);
       
       // IMPORTANT: Always remove session from localStorage for all user types
+      // Clear both session storage keys
       localStorage.removeItem(SUPABASE_SESSION_KEY);
+      localStorage.removeItem('supabase.auth.token');
       
       // Clear the session in our API module
       updateCurrentSession(null);

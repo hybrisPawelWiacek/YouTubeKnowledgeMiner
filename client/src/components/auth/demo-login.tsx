@@ -113,7 +113,8 @@ export function DemoLogin() {
       updateCurrentSession(mockSession);
       
       // Explicitly save to localStorage to ensure persistence
-      localStorage.setItem('supabase.auth.token', JSON.stringify(mockSession));
+      // IMPORTANT: Must use the same key that use-supabase.tsx uses (youtube-miner-supabase-session)
+      localStorage.setItem('youtube-miner-supabase-session', JSON.stringify(mockSession));
       
       toast({
         title: 'Demo Login Successful',
