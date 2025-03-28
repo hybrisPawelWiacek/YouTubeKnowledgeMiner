@@ -4,11 +4,13 @@ import {
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
   SavedSearch, InsertSavedSearch, SearchParams, QAConversation, InsertQAConversation,
   ExportPreferences, InsertExportPreferences, AnonymousSession, InsertAnonymousSession,
+  UserSession, InsertUserSession, 
   users, categories, videos, collections, collection_videos, saved_searches, qa_conversations,
-  export_preferences, anonymous_sessions
+  export_preferences, anonymous_sessions, user_sessions
 } from '@shared/schema';
 import { db } from './db';
 import { IStorage } from './storage';
+import { createLogger } from './services/logger';
 
 export class DatabaseStorage implements IStorage {
   // User methods
@@ -636,6 +638,82 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return result.length;
+  }
+
+  // User session methods
+  async getUserSessionByToken(token: string): Promise<UserSession | undefined> {
+    const result = await db
+      .select()
+      .from(user_sessions)
+      .where(eq(user_sessions.session_token, token));
+    
+    return result[0];
+  }
+  
+  async createUserSession(session: InsertUserSession): Promise<UserSession> {
+    const result = await db
+      .insert(user_sessions)
+      .values(session)
+      .returning();
+    
+    return result[0];
+  }
+  
+  async updateUserSessionLastActive(id: number): Promise<void> {
+    await db
+      .update(user_sessions)
+      .set({ last_active_at: new Date() })
+      .where(eq(user_sessions.id, id));
+  }
+  
+  async deleteUserSession(id: number): Promise<boolean> {
+    const result = await db
+      .delete(user_sessions)
+      .where(eq(user_sessions.id, id))
+      .returning();
+    
+    return result.length > 0;
+  }
+  
+  async deleteUserSessionByToken(token: string): Promise<boolean> {
+    const result = await db
+      .delete(user_sessions)
+      .where(eq(user_sessions.session_token, token))
+      .returning();
+    
+    return result.length > 0;
+  }
+  
+  async deleteUserSessionsByUserId(userId: number): Promise<number> {
+    const result = await db
+      .delete(user_sessions)
+      .where(eq(user_sessions.user_id, userId))
+      .returning();
+    
+    return result.length;
+  }
+  
+  // User authentication methods
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+    
+    return result[0];
+  }
+  
+  async updateUser(id: number, data: Partial<User>): Promise<User | undefined> {
+    const result = await db
+      .update(users)
+      .set({
+        ...data,
+        updated_at: new Date()
+      })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result[0];
   }
 }
 

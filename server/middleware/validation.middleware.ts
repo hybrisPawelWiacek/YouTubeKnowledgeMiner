@@ -2,6 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 
 /**
+ * Simple validation middleware alias for body validation
+ * 
+ * @param schema The Zod schema to validate against
+ * @returns Express middleware function
+ */
+export function validate<T>(schema: ZodSchema<T>) {
+  return validateRequest(schema, 'body');
+}
+
+/**
  * Generic validation middleware for validating request data against a Zod schema
  * 
  * @param schema The Zod schema to validate against

@@ -1,163 +1,254 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import { db } from '../db';
 import { storage } from '../storage';
-import { getUserInfoFromRequest } from '../middleware/auth.middleware';
-import { sendSuccess, sendError } from '../utils/response.utils';
+import { ZodError } from 'zod';
+import { authService } from '../services/auth.service';
+import { validate } from '../middleware/validation.middleware';
+import { 
+  loginSchema, 
+  registerSchema, 
+  passwordResetRequestSchema, 
+  passwordResetSchema 
+} from '@shared/schema';
+import { createLogger } from '../services/logger';
 
+const logger = createLogger('auth');
 const router = Router();
 
 /**
- * Get the count of videos for an anonymous session
+ * @route POST /api/auth/register
+ * @desc Register a new user
+ * @access Public
  */
-router.get("/videos/count", async (req: Request, res: Response) => {
+router.post('/register', validate(registerSchema), async (req, res) => {
   try {
-    // Get session ID from header
-    const sessionHeader = req.headers['x-anonymous-session'];
-    if (!sessionHeader) {
-      return sendSuccess(res, { count: 0 });
-    }
+    const userData = req.body;
     
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+    // Create new user
+    const user = await authService.register(userData);
     
-    // Get session from database
-    const session = await storage.getAnonymousSessionBySessionId(sessionId);
+    // Create session for the new user
+    const session = await authService.createSession(
+      user.id, 
+      req.headers['user-agent'],
+      req.ip
+    );
     
-    if (!session) {
-      return sendSuccess(res, { count: 0 });
-    }
-    
-    // Get actual videos for verification
-    const actualVideos = await storage.getVideosByAnonymousSessionId(sessionId);
-    const actualCount = actualVideos.length;
-    
-    // If there's a discrepancy, update the count to match reality
-    if (session.video_count !== actualCount) {
-      console.log(`[Auth] Fixing video count discrepancy for session ${sessionId}: DB=${session.video_count}, Actual=${actualCount}`);
-      await storage.updateAnonymousSession(sessionId, { video_count: actualCount });
-    }
-    
-    // Update last active timestamp for the session
-    await storage.updateAnonymousSessionLastActive(sessionId);
-    
-    return sendSuccess(res, { 
-      count: actualCount, // Use actual count instead of session.video_count
-      session_id: sessionId,
-      max_allowed: 3 // Hard-coded limit for now, could move to config
-    });
-  } catch (error) {
-    console.error("Error getting anonymous video count:", error);
-    return sendError(res, "Failed to get anonymous video count", 500);
-  }
-});
-
-/**
- * Migrate videos from anonymous session to authenticated user
- * Used when a user registers after using the app anonymously
- */
-router.post("/migrate", async (req: Request, res: Response) => {
-  try {
-    // Get session ID from header
-    const sessionHeader = req.headers['x-anonymous-session'];
-    if (!sessionHeader) {
-      return sendError(res, "No anonymous session ID provided", 400);
-    }
-    
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
-    const { userId } = req.body;
-    
-    if (!userId || typeof userId !== 'number') {
-      return sendError(res, "Invalid user ID provided", 400);
-    }
-    
-    // Get videos attached to this anonymous session
-    const anonymousVideos = await storage.getVideosByAnonymousSessionId(sessionId);
-    
-    if (!anonymousVideos || anonymousVideos.length === 0) {
-      return sendSuccess(res, { message: "No videos to migrate", migratedCount: 0 });
-    }
-    
-    // Update the user_id on all these videos
-    let migratedCount = 0;
-    for (const video of anonymousVideos) {
-      await storage.updateVideo(video.id, { user_id: userId });
-      migratedCount++;
-    }
-    
-    console.log(`Successfully migrated ${migratedCount} videos from anonymous session ${sessionId} to user ${userId}`);
-    
-    return sendSuccess(res, { 
-      message: "Videos successfully migrated", 
-      migratedCount,
-      sessionId
-    });
-  } catch (error) {
-    console.error("Error migrating anonymous session:", error);
-    return sendError(res, "Failed to migrate anonymous session", 500);
-  }
-});
-
-/**
- * Legacy endpoint to import anonymous data from local storage
- * This is kept for backward compatibility with older clients
- */
-router.post("/import-data", async (req: Request, res: Response) => {
-  try {
-    const { userData, userId } = req.body;
-    
-    if (!userData || !userId) {
-      return sendError(res, "Missing user data or user ID", 400);
-    }
-    
-    let importedCount = 0;
-    
-    // Process videos if they exist
-    if (userData.videos && Array.isArray(userData.videos)) {
-      for (const video of userData.videos) {
-        if (video && video.youtube_id) {
-          try {
-            // Check if this video already exists for this user
-            const existingVideos = await storage.searchVideos(userId, {
-              query: video.youtube_id, // Use the query parameter instead of youtube_id directly
-              limit: 1,
-              page: 1
-            });
-            
-            if (existingVideos && existingVideos.videos.length === 0) {
-              // Create a new video entry
-              await storage.insertVideo({
-                youtube_id: video.youtube_id,
-                title: video.title || 'Imported Video',
-                channel: video.channel || 'Unknown Channel',
-                duration: video.duration || '0:00',
-                publish_date: video.publish_date || new Date().toISOString(),
-                thumbnail: video.thumbnail || '',
-                transcript: video.transcript || null,
-                summary: video.summary || null,
-                description: video.description || null,
-                tags: video.tags || null,
-                user_id: userId,
-                notes: video.notes || null,
-                category_id: video.category_id || null,
-                rating: video.rating || null,
-                is_favorite: video.is_favorite || false
-              });
-              
-              importedCount++;
-            }
-          } catch (videoError) {
-            console.error(`Error importing video ${video.youtube_id}:`, videoError);
-            // Continue with other videos even if one fails
-          }
-        }
+    // If there's an anonymous session, migrate its content
+    const anonymousSessionId = req.cookies.anonymousSessionId;
+    if (anonymousSessionId) {
+      try {
+        const migratedCount = await authService.migrateAnonymousSession(user.id, anonymousSessionId);
+        logger.info(`Migrated ${migratedCount} videos from anonymous session to new user: ${user.id}`);
+      } catch (err) {
+        logger.error(`Error migrating anonymous session: ${err instanceof Error ? err.message : String(err)}`);
+        // Continue despite migration error
       }
     }
     
-    return sendSuccess(res, {
-      message: `Successfully imported ${importedCount} videos`,
-      importedCount
+    // Set session cookie
+    res.cookie('sessionToken', session.session_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      sameSite: 'lax'
+    });
+    
+    // Return user data without sensitive info
+    const { password_hash, password_salt, verification_token, reset_token, ...safeUser } = user;
+    
+    res.status(201).json({
+      user: safeUser,
+      message: 'User registered successfully'
     });
   } catch (error) {
-    console.error("Error importing anonymous data:", error);
-    return sendError(res, "Failed to import anonymous data", 500);
+    logger.error(`Registration error: ${error instanceof Error ? error.message : String(error)}`);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        return res.status(409).json({ error: error.message });
+      }
+    }
+    
+    res.status(500).json({ error: 'Error creating user account' });
+  }
+});
+
+/**
+ * @route POST /api/auth/login
+ * @desc Authenticate user & get token
+ * @access Public
+ */
+router.post('/login', validate(loginSchema), async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Authenticate user
+    const user = await authService.login(email, password);
+    
+    if (!user) {
+      logger.warn(`Failed login attempt for: ${email}`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // Create new session
+    const session = await authService.createSession(
+      user.id, 
+      req.headers['user-agent'],
+      req.ip
+    );
+    
+    // If there's an anonymous session, migrate its content
+    const anonymousSessionId = req.cookies.anonymousSessionId;
+    if (anonymousSessionId) {
+      try {
+        const migratedCount = await authService.migrateAnonymousSession(user.id, anonymousSessionId);
+        logger.info(`Migrated ${migratedCount} videos from anonymous session to user: ${user.id}`);
+      } catch (err) {
+        logger.error(`Error migrating anonymous session: ${err instanceof Error ? err.message : String(err)}`);
+        // Continue despite migration error
+      }
+    }
+    
+    // Set session cookie
+    res.cookie('sessionToken', session.session_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      sameSite: 'lax'
+    });
+    
+    // Return user data without sensitive info
+    const { password_hash, password_salt, verification_token, reset_token, ...safeUser } = user;
+    
+    res.json({
+      user: safeUser,
+      message: 'Login successful'
+    });
+  } catch (error) {
+    logger.error(`Login error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+});
+
+/**
+ * @route POST /api/auth/logout
+ * @desc Logout user & clear cookies
+ * @access Private
+ */
+router.post('/logout', async (req, res) => {
+  try {
+    const sessionToken = req.cookies.sessionToken;
+    
+    if (sessionToken) {
+      // Invalidate session in database
+      await authService.invalidateSession(sessionToken);
+      
+      // Clear session cookie
+      res.clearCookie('sessionToken');
+    }
+    
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    logger.error(`Logout error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+/**
+ * @route GET /api/auth/me
+ * @desc Get current user's profile
+ * @access Private
+ */
+router.get('/me', async (req, res) => {
+  try {
+    // Check if user is authenticated through middleware
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    // Return user data without sensitive info
+    const { password_hash, password_salt, verification_token, reset_token, ...safeUser } = req.user;
+    
+    res.json({ user: safeUser });
+  } catch (error) {
+    logger.error(`Get user profile error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
+/**
+ * @route POST /api/auth/request-password-reset
+ * @desc Request a password reset link
+ * @access Public
+ */
+router.post('/request-password-reset', validate(passwordResetRequestSchema), async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Initiate password reset process
+    const resetToken = await authService.initiatePasswordReset(email);
+    
+    // For security reasons, always indicate success, even if email doesn't exist
+    res.json({ 
+      message: 'If your email exists in our system, you will receive a password reset link' 
+    });
+    
+    // Note: In a production app, you would send an email with the reset link here
+    if (resetToken) {
+      logger.info(`Password reset token generated for ${email}: ${resetToken}`);
+      // For development, log the token
+      console.log(`Reset token for ${email}: ${resetToken}`); 
+    }
+  } catch (error) {
+    logger.error(`Password reset request error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+/**
+ * @route POST /api/auth/reset-password
+ * @desc Reset password using token
+ * @access Public
+ */
+router.post('/reset-password', validate(passwordResetSchema), async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    // Complete password reset
+    const success = await authService.completePasswordReset(token, password);
+    
+    if (!success) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+    
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    logger.error(`Password reset error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+/**
+ * @route GET /api/auth/verify-email/:token
+ * @desc Verify user email with token
+ * @access Public
+ */
+router.get('/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Verify email with token
+    const success = await authService.verifyEmail(token);
+    
+    if (!success) {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+    
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    logger.error(`Email verification error: ${error instanceof Error ? error.message : String(error)}`);
+    res.status(500).json({ error: 'Failed to verify email' });
   }
 });
 

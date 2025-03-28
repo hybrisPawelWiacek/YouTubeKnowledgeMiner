@@ -20,6 +20,18 @@ export const anonymous_sessions = pgTable("anonymous_sessions", {
   ip_address: text("ip_address"),
 });
 
+// Table for storing authenticated user sessions
+export const user_sessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  session_token: text("session_token").notNull().unique(),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  last_active_at: timestamp("last_active_at").defaultNow().notNull(),
+  user_agent: text("user_agent"),
+  ip_address: text("ip_address"),
+});
+
 // Table for storing text chunks and their vector embeddings
 export const embeddings = pgTable("embeddings", {
   id: serial("id").primaryKey(),
@@ -43,12 +55,25 @@ export const search_history = pgTable("search_history", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+// User role type enum
+export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
   email: text("email").notNull().unique(),
+  // Updated password storage with secure hash and salt
+  password_hash: text("password_hash").notNull(),
+  password_salt: text("password_salt").notNull(),
+  // Additional user fields for auth management
+  role: userRoleEnum("role").default("user").notNull(),
+  is_verified: boolean("is_verified").default(false).notNull(),
+  verification_token: text("verification_token"),
+  reset_token: text("reset_token"),
+  reset_token_expires: timestamp("reset_token_expires"),
+  last_login: timestamp("last_login"),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const categories = pgTable("categories", {
@@ -256,6 +281,37 @@ export const qaQuestionSchema = z.object({
   conversation_id: z.number().optional(),
 });
 
+// Authentication schemas
+export const loginSchema = z.object({
+  email: z.string().email().or(z.string().min(3)), // Allow email or username
+  password: z.string().min(6),
+});
+
+export const registerSchema = z.object({
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/, {
+    message: "Username must contain only letters, numbers, and underscores"
+  }),
+  email: z.string().email(),
+  password: z.string().min(6).max(100),
+  confirmPassword: z.string().min(6).max(100),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const passwordResetSchema = z.object({
+  token: z.string(),
+  password: z.string().min(6).max(100),
+  confirmPassword: z.string().min(6).max(100),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
 // Semantic search schema
 export const semanticSearchSchema = z.object({
   query: z.string().min(3),
@@ -289,6 +345,12 @@ export const insertAnonymousSessionSchema = createInsertSchema(anonymous_session
   video_count: true,
 });
 
+export const insertUserSessionSchema = createInsertSchema(user_sessions).omit({
+  id: true,
+  created_at: true,
+  last_active_at: true,
+});
+
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -300,6 +362,7 @@ export type InsertSavedSearch = z.infer<typeof insertSavedSearchSchema>;
 export type InsertEmbedding = z.infer<typeof insertEmbeddingSchema>;
 export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
 export type InsertAnonymousSession = z.infer<typeof insertAnonymousSessionSchema>;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Video = typeof videos.$inferSelect;
@@ -310,6 +373,7 @@ export type QAConversation = typeof qa_conversations.$inferSelect;
 export type Embedding = typeof embeddings.$inferSelect;
 export type SearchHistory = typeof search_history.$inferSelect;
 export type AnonymousSession = typeof anonymous_sessions.$inferSelect;
+export type UserSession = typeof user_sessions.$inferSelect;
 export type InsertQAConversation = z.infer<typeof insertQAConversationSchema>;
 export type InsertExportPreferences = z.infer<typeof insertExportPreferencesSchema>;
 export type QAMessage = z.infer<typeof qaMessageSchema>;
@@ -321,3 +385,7 @@ export type SearchParams = z.infer<typeof searchParamsSchema>;
 export type SemanticSearchParams = z.infer<typeof semanticSearchSchema>;
 export type ExportPreferences = typeof export_preferences.$inferSelect;
 export type ExportRequest = z.infer<typeof exportRequestSchema>;
+export type LoginRequest = z.infer<typeof loginSchema>;
+export type RegisterRequest = z.infer<typeof registerSchema>;
+export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
+export type PasswordResetConfirmRequest = z.infer<typeof passwordResetSchema>;

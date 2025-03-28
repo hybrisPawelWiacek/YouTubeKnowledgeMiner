@@ -9,7 +9,7 @@ import {
   searchParamsSchema,
   SearchParams
 } from '../../shared/schema';
-import { sendSuccess, sendError, handleApiError } from '../utils/response.utils';
+import { apiSuccess, handleApiError, sendSuccess, sendError } from '../utils/response.utils';
 import { AnonymousLimitError, ErrorCode } from '../utils/error.utils';
 // No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
@@ -43,7 +43,7 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
     
     if (!sessionHeader) {
       console.log('[video routes] No anonymous session header found');
-      return sendSuccess(res, { count: 0 });
+      return apiSuccess(res, { count: 0 });
     }
     
     const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
@@ -61,15 +61,15 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
           ip_address: req.ip || null
         });
         console.log('[video routes] Created new anonymous session:', newSession);
-        return sendSuccess(res, { count: 0 });
+        return apiSuccess(res, { count: 0 });
       } catch (err) {
         console.error('[video routes] Error creating anonymous session:', err);
-        return sendSuccess(res, { count: 0 });
+        return apiSuccess(res, { count: 0 });
       }
     }
     
     console.log('[video routes] Found session with video count:', session.video_count);
-    return sendSuccess(res, { 
+    return apiSuccess(res, { 
       count: session.video_count || 0,
       max_allowed: 3 
     });
@@ -190,7 +190,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     }
     
     // Return the processed video data
-    return sendSuccess(res, { 
+    return apiSuccess(res, { 
       message: "Video processed successfully", 
       video 
     }, 201);
@@ -201,7 +201,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
         code: ErrorCode.VALIDATION_ERROR,
         details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
-      return sendError(res, validationError.message, 400, validationError.code, validationError.details);
+      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
     }
     console.error("Error processing video:", error);
     return handleApiError(res, error);
@@ -261,14 +261,14 @@ router.get('/', async (req: Request, res: Response) => {
       if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
         // For anonymous users with session, return count of their videos
         const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
-        return sendSuccess(res, { count: videos.length });
+        return apiSuccess(res, { count: videos.length });
       } else if (userInfo.user_id !== null) {
         // For authenticated users, get count of their videos
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        return sendSuccess(res, { count: videos.length });
+        return apiSuccess(res, { count: videos.length });
       } else {
         // No user ID and no anonymous session
-        return sendSuccess(res, { count: 0 });
+        return apiSuccess(res, { count: 0 });
       }
     }
     
@@ -326,7 +326,7 @@ router.get('/', async (req: Request, res: Response) => {
         });
         
         console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
-        return sendSuccess(res, {
+        return apiSuccess(res, {
           videos: filteredVideos,
           totalCount: filteredVideos.length,
           hasMore: false
@@ -340,10 +340,10 @@ router.get('/', async (req: Request, res: Response) => {
     else if (userInfo.user_id !== null) {
       if (Object.keys(req.query).length > 0) {
         const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
-        return sendSuccess(res, result);
+        return apiSuccess(res, result);
       } else {
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        return sendSuccess(res, {
+        return apiSuccess(res, {
           videos,
           totalCount: videos.length,
           hasMore: false
@@ -352,7 +352,7 @@ router.get('/', async (req: Request, res: Response) => {
     } 
     // No user ID and no anonymous session
     else {
-      return sendSuccess(res, {
+      return apiSuccess(res, {
         videos: [],
         totalCount: 0,
         hasMore: false
@@ -365,7 +365,7 @@ router.get('/', async (req: Request, res: Response) => {
         code: ErrorCode.VALIDATION_ERROR,
         details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
-      return sendError(res, validationError.message, 400, validationError.code, validationError.details);
+      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
     }
     console.error("Error fetching videos:", error);
     return handleApiError(res, error);
@@ -383,14 +383,14 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // Extract video ID from URL
     const videoId = extractYoutubeId(url);
     if (!videoId) {
-      return sendError(res, "Invalid YouTube URL format", 400, "VALIDATION_ERROR");
+      return handleApiError(res, new ValidationError(res, "Invalid YouTube URL format", 400, "VALIDATION_ERROR");
     }
     
     // Process the YouTube video without saving
     const videoData = await processYoutubeVideo(videoId);
     
     // Return the processed video data
-    return sendSuccess(res, videoData);
+    return apiSuccess(res, videoData);
   } catch (error) {
     if (error instanceof ZodError) {
       const validationError = {
@@ -398,7 +398,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
         code: ErrorCode.VALIDATION_ERROR,
         details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
-      return sendError(res, validationError.message, 400, validationError.code, validationError.details);
+      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
     }
     console.error("Error analyzing video:", error);
     return handleApiError(res, error);
@@ -492,7 +492,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     }
     
     // Return the processed video data
-    return sendSuccess(res, { 
+    return apiSuccess(res, { 
       message: "Video processed successfully", 
       video 
     }, 201);
@@ -503,7 +503,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
         code: ErrorCode.VALIDATION_ERROR,
         details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
-      return sendError(res, validationError.message, 400, validationError.code, validationError.details);
+      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
     }
     console.error("Error processing video:", error);
     return handleApiError(res, error);
@@ -522,11 +522,11 @@ router.patch('/', requireSession, async (req: Request, res: Response) => {
     const { ids, data } = req.body;
     
     if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return handleApiError(res, new ValidationError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
     }
     
     if (!data || typeof data !== 'object') {
-      return sendError(res, "You must provide update data object", 400, "VALIDATION_ERROR");
+      return handleApiError(res, new ValidationError(res, "You must provide update data object", 400, "VALIDATION_ERROR");
     }
     
     // For security, we need to make sure users can only update their own videos
@@ -551,13 +551,13 @@ router.patch('/', requireSession, async (req: Request, res: Response) => {
       .map(video => video!.id);  // Extract just the IDs
     
     if (validIds.length === 0) {
-      return sendError(res, "No valid videos found to update", 404, "RESOURCE_NOT_FOUND");
+      return handleApiError(res, new ValidationError(res, "No valid videos found to update", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Perform the update with validated IDs
     const updateCount = await dbStorage.bulkUpdateVideos(validIds, data);
     
-    return sendSuccess(res, { 
+    return apiSuccess(res, { 
       message: `${updateCount} videos updated successfully`, 
       updated_count: updateCount 
     });
@@ -579,7 +579,7 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
     const { ids } = req.body;
     
     if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return handleApiError(res, new ValidationError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
     }
     
     // For security, we need to make sure users can only delete their own videos
@@ -604,7 +604,7 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
       .map(video => video!.id);  // Extract just the IDs
     
     if (validIds.length === 0) {
-      return sendError(res, "No valid videos found to delete", 404, "RESOURCE_NOT_FOUND");
+      return handleApiError(res, new ValidationError(res, "No valid videos found to delete", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Delete embeddings first
@@ -615,7 +615,7 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
     // Perform the delete with validated IDs
     const deleteCount = await dbStorage.bulkDeleteVideos(validIds);
     
-    return sendSuccess(res, { 
+    return apiSuccess(res, { 
       message: `${deleteCount} videos deleted successfully`, 
       deleted_count: deleteCount 
     });
@@ -638,7 +638,7 @@ router.get('/:id', validateNumericParam('id'), requireSession, async (req: Reque
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
@@ -647,15 +647,15 @@ router.get('/:id', validateNumericParam('id'), requireSession, async (req: Reque
     // Check if user has access to this video
     // Authenticated users can only access their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
     
     // Anonymous users can only access videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
     
-    return sendSuccess(res, video);
+    return apiSuccess(res, video);
   } catch (error) {
     console.error("Error fetching video:", error);
     return handleApiError(res, error);
@@ -673,7 +673,7 @@ router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Req
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
@@ -682,22 +682,22 @@ router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Req
     // Check if user has access to update this video
     // Authenticated users can only update their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
     // Anonymous users can only update videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
     // Update the video
     const updatedVideo = await dbStorage.updateVideo(id, req.body);
     
     if (!updatedVideo) {
-      return sendError(res, "Failed to update video", 500);
+      return handleApiError(res, new ValidationError(res, "Failed to update video", 500);
     }
     
-    return sendSuccess(res, updatedVideo);
+    return apiSuccess(res, updatedVideo);
   } catch (error) {
     console.error("Error updating video:", error);
     return handleApiError(res, error);
@@ -715,7 +715,7 @@ router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Re
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
@@ -724,12 +724,12 @@ router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Re
     // Check if user has access to delete this video
     // Authenticated users can only delete their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
     // Anonymous users can only delete videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
+      return handleApiError(res, new ValidationError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
     // Delete embeddings first
@@ -739,10 +739,10 @@ router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Re
     const success = await dbStorage.deleteVideo(id);
     
     if (!success) {
-      return sendError(res, "Failed to delete video", 500);
+      return handleApiError(res, new ValidationError(res, "Failed to delete video", 500);
     }
     
-    return sendSuccess(res, { message: "Video deleted successfully" });
+    return apiSuccess(res, { message: "Video deleted successfully" });
   } catch (error) {
     console.error("Error deleting video:", error);
     return handleApiError(res, error);
