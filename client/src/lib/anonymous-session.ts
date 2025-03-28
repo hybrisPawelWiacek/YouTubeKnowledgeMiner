@@ -29,6 +29,16 @@ export function generateSessionId(): string {
  * Get the current anonymous session ID from localStorage or create a new one
  */
 export function getOrCreateAnonymousSessionId(): string {
+  // Check if we're using a demo user account - never create anonymous sessions for demo users
+  const DEMO_SESSION_KEY = 'youtube-miner-demo-session';
+  const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+  
+  if (hasDemoSession) {
+    console.log('[Anonymous Session] Demo user detected, not creating/using anonymous session');
+    // Return a dummy session ID that won't be stored
+    return 'demo_user_no_anonymous_session';
+  }
+  
   let sessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
   
   // If no session exists, create one
@@ -57,6 +67,15 @@ export function clearAnonymousSession(): void {
  * Check if user has an anonymous session
  */
 export function hasAnonymousSession(): boolean {
+  // Check if we're using a demo user account - never use anonymous sessions for demo users
+  const DEMO_SESSION_KEY = 'youtube-miner-demo-session';
+  const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+  
+  if (hasDemoSession) {
+    // Demo users don't use anonymous sessions
+    return false;
+  }
+  
   return !!localStorage.getItem(ANONYMOUS_SESSION_KEY);
 }
 
