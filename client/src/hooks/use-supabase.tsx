@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import { updateCurrentSession } from '@/lib/api';
-import { getDemoSession, signOutDemoUser, DemoUser, DemoSession } from '@/lib/demo-auth';
+import { getStoredSession, DEMO_SESSION_KEY } from '@/lib/demo-session';
 
 // Key for storing temporary data for anonymous users
 const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
@@ -15,7 +15,6 @@ type SupabaseContextType = {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  isDemoUser: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
@@ -29,7 +28,6 @@ type SupabaseContextType = {
   // Add setters for demo auth integration
   setUser: (user: User) => void;
   setSession: (session: Session) => void;
-  setIsDemoUser: (isDemoUser: boolean) => void;
 };
 
 const SupabaseContext = createContext<SupabaseContextType>({
@@ -37,7 +35,6 @@ const SupabaseContext = createContext<SupabaseContextType>({
   user: null,
   session: null,
   loading: true,
-  isDemoUser: false,
   signIn: async () => {},
   signInWithGoogle: async () => {},
   signInWithMagicLink: async () => {},
@@ -51,7 +48,6 @@ const SupabaseContext = createContext<SupabaseContextType>({
   // Add setters for demo auth integration
   setUser: () => {},
   setSession: () => {},
-  setIsDemoUser: () => {},
 });
 
 export function SupabaseProvider({ children }: { children: ReactNode }) {
@@ -59,19 +55,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  // Track if this is a demo user
-  const [isDemoUser, setIsDemoUser] = useState(false);
   const { toast } = useToast();
-
-  // Effect to update isDemoUser whenever user changes
-  useEffect(() => {
-    // Check if the current user is a demo user
-    if (user?.user_metadata?.is_demo === true) {
-      setIsDemoUser(true);
-    } else {
-      setIsDemoUser(false);
-    }
-  }, [user]);
 
   useEffect(() => {
     const fetchSupabaseConfig = async () => {
@@ -93,94 +77,35 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           // Try to get existing session
           const { data: { session } } = await client.auth.getSession();
           
-          console.log('🔍 [Session Restore] Starting session restore...');
-          console.log('🔍 [Session Restore] Available localStorage keys:', Object.keys(localStorage));
+          // Check for a stored demo session first (they have priority)
+          const demoSession = getStoredSession();
           
-          // Check for a stored session in localStorage
-          const storedSessionStr = localStorage.getItem(SUPABASE_SESSION_KEY);
-          // Also check for a session in the default Supabase key (for backwards compatibility)
-          const supabaseAuthToken = localStorage.getItem('supabase.auth.token');
+          // If no demo session, check for a stored Supabase session in localStorage
+          const storedSessionStr = !demoSession ? localStorage.getItem(SUPABASE_SESSION_KEY) : null;
           let storedSession = null;
           
-          console.log('🔍 [Session Restore] Primary key session exists:', storedSessionStr ? 'Yes' : 'No');
-          console.log('🔍 [Session Restore] Legacy key session exists:', supabaseAuthToken ? 'Yes' : 'No');
-          
           try {
-            // First check our app's custom key
             if (storedSessionStr) {
-              console.log('🔍 [Session Restore] Found stored session in app key, parsing...');
               storedSession = JSON.parse(storedSessionStr);
-              console.log('🔍 [Session Restore] Parsed session user:', 
-                storedSession?.user?.email,
-                'Direct auth:', storedSession?.user?.user_metadata?.direct_auth ? 'Yes' : 'No',
-                'Demo user:', storedSession?.user?.user_metadata?.is_demo ? 'Yes' : 'No'
-              );
-            } 
-            // Then check if there's a session in the default Supabase key
-            else if (supabaseAuthToken) {
-              console.log('🔍 [Session Restore] Found legacy session in Supabase key, attempting to parse...');
-              
-              // The format might vary, handle both possibilities
-              const parsedToken = JSON.parse(supabaseAuthToken);
-              
-              // Check if it uses the 'currentSession' format or direct session format
-              if (parsedToken.currentSession) {
-                console.log('🔍 [Session Restore] Legacy session uses currentSession format');
-                storedSession = parsedToken.currentSession;
-              } else {
-                console.log('🔍 [Session Restore] Legacy session uses direct format');
-                storedSession = parsedToken;
-              }
-              
-              console.log('🔍 [Session Restore] Legacy session user:', 
-                storedSession?.user?.email,
-                'Direct auth:', storedSession?.user?.user_metadata?.direct_auth ? 'Yes' : 'No',
-                'Demo user:', storedSession?.user?.user_metadata?.is_demo ? 'Yes' : 'No'
-              );
-              
-              // Migrate to our custom key for consistency
-              console.log('🔍 [Session Restore] Migrating legacy session to primary key');
-              localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(storedSession));
-              
-              // Don't remove the old key yet for compatibility
-              // localStorage.removeItem('supabase.auth.token');
-            }
-            
-            if (storedSession) {
-              // Check if this is a demo user session
-              const isDemoUser = storedSession?.user?.user_metadata?.is_demo === true;
-              const isDirectAuth = storedSession?.user?.user_metadata?.direct_auth === true;
-              
-              console.log('🔍 [Session Restore] Stored session - Demo user:', isDemoUser ? 'Yes' : 'No', 
-                'Direct auth:', isDirectAuth ? 'Yes' : 'No');
-              
-              if (isDemoUser) {
-                console.log('🔍 [Session Restore] Processing demo user session');
-                
-                // Extra validation for demo users to prevent ghost sessions
-                const hasValidToken = storedSession.access_token && 
-                  storedSession.access_token.startsWith('demo_token_');
-                
-                console.log('🔍 [Session Restore] Demo token valid:', hasValidToken ? 'Yes' : 'No');
-                console.log('🔍 [Session Restore] Demo user ID present:', storedSession.user?.id ? 'Yes' : 'No');
-                
-                // If this appears to be an incomplete or invalid demo session, remove it
-                if (!hasValidToken || !storedSession.user?.id) {
-                  console.warn('❌ [Session Restore] Invalid demo user session found, removing it');
-                  localStorage.removeItem(SUPABASE_SESSION_KEY);
-                  localStorage.removeItem('supabase.auth.token'); // Also clear legacy key
-                  storedSession = null;
-                }
-              }
+              console.log('Found stored Supabase session, checking if still valid');
             }
           } catch (e) {
-            console.error('Error parsing stored session:', e);
+            console.error('Error parsing stored Supabase session:', e);
             localStorage.removeItem(SUPABASE_SESSION_KEY);
-            localStorage.removeItem('supabase.auth.token'); // Also clear legacy key
           }
           
-          // Use the active session from Supabase or try to restore from stored session
-          if (session) {
+          // Restore session in the following priority order:
+          // 1. Demo session (if exists)
+          // 2. Active Supabase session
+          // 3. Stored Supabase session
+          
+          if (demoSession) {
+            // Demo sessions take priority over other auth methods
+            console.log('[Demo Session] Restoring demo user session');
+            setSession(demoSession);
+            setUser(demoSession.user);
+            updateCurrentSession(demoSession);
+          } else if (session) {
             console.log('Active Supabase session found');
             setSession(session);
             setUser(session.user);
@@ -188,83 +113,25 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             
             // Update the stored session
             localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
-          } else if (storedSession && (storedSession.expires_at > Date.now() || storedSession?.user?.user_metadata?.is_demo === true)) {
-            console.log('🔍 [Session Restore] Attempting to restore session from storage');
+          } else if (storedSession && storedSession.expires_at > Date.now()) {
+            console.log('Restoring Supabase session from storage');
+            // Try to restore the session in Supabase
+            const { data, error } = await client.auth.setSession({
+              access_token: storedSession.access_token,
+              refresh_token: storedSession.refresh_token
+            });
             
-            // Check if this is a demo user session that we should restore directly
-            const isDemoUser = storedSession?.user?.user_metadata?.is_demo === true;
-            const isDirectAuth = storedSession?.user?.user_metadata?.direct_auth === true;
-            
-            console.log('🔍 [Session Restore] Session contains - Demo user:', isDemoUser ? 'Yes' : 'No',
-              'Direct auth:', isDirectAuth ? 'Yes' : 'No',
-              'User ID:', storedSession?.user?.id,
-              'Email:', storedSession?.user?.email);
-              
-            // For demo users, bypass expiration - they can stay logged in indefinitely
-            if (isDemoUser) {
-              console.log('🔍 [Session Restore] Handling DEMO USER session restoration');
-              
-              // Extra validation for demo users
-              const hasValidToken = storedSession.access_token && 
-                storedSession.access_token.startsWith('demo_token_');
-              
-              if (!hasValidToken) {
-                console.error('❌ [Session Restore] Invalid demo token format, regenerating token');
-                // Regenerate token instead of failing completely
-                storedSession.access_token = `demo_token_${storedSession.user.id}_${Date.now()}`;
-                storedSession.refresh_token = 'demo_refresh_token';
-                storedSession.expires_at = Date.now() + 3600000; // 1 hour from now
-              }
-              
-              // Log details of the demo session
-              console.log('🔍 [Session Restore] Restoring demo user:',
-                'ID:', storedSession.user.id,
-                'Email:', storedSession.user.email,
-                'Token:', storedSession.access_token.substring(0, 15) + '...');
-              
-              // For demo users, we don't need to validate with Supabase, just restore from localStorage
-              console.log('🔍 [Session Restore] Setting session for demo user');
-              setSession(storedSession);
-              
-              console.log('🔍 [Session Restore] Setting user for demo user');
-              setUser(storedSession.user);
-              
-              console.log('🔍 [Session Restore] Updating API session for demo user');
-              updateCurrentSession(storedSession);
-              
-              // Ensure the session is saved in both possible storage locations
-              console.log('🔍 [Session Restore] Re-saving demo session to localStorage with both keys');
-              localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(storedSession));
-              localStorage.setItem('supabase.auth.token', JSON.stringify({
-                currentSession: storedSession,
-                expiresAt: storedSession.expires_at
-              }));
-            } else {
-              // For regular Supabase users, try to restore the session with Supabase
-              console.log('🔍 [Session Restore] Restoring regular Supabase session');
-              const { data, error } = await client.auth.setSession({
-                access_token: storedSession.access_token,
-                refresh_token: storedSession.refresh_token
-              });
-              
-              if (error) {
-                console.error('❌ [Session Restore] Error restoring session:', error);
-                localStorage.removeItem(SUPABASE_SESSION_KEY);
-                localStorage.removeItem('supabase.auth.token');
-              } else if (data.session) {
-                console.log('🔍 [Session Restore] Successfully restored Supabase session for user:', 
-                  data.session.user.email);
-                setSession(data.session);
-                setUser(data.session.user);
-                updateCurrentSession(data.session);
-                
-                // Ensure it's stored properly
-                localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(data.session));
-              }
+            if (error) {
+              console.error('Error restoring Supabase session:', error);
+              localStorage.removeItem(SUPABASE_SESSION_KEY);
+            } else if (data.session) {
+              setSession(data.session);
+              setUser(data.session.user);
+              updateCurrentSession(data.session);
             }
           } else if (storedSession) {
             // Session expired, remove it
-            console.log('Stored session expired, removing');
+            console.log('Stored Supabase session expired, removing');
             localStorage.removeItem(SUPABASE_SESSION_KEY);
           }
 
@@ -595,122 +462,65 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Import here to avoid circular dependencies
+      // Import helpers to avoid circular dependencies
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-      const { clearDemoSession, signOutDemoUser } = await import('@/lib/demo-auth');
+      const { signOutDemoUser, isDemoUser } = await import('@/lib/demo-session');
       
-      // Capture user info before we start cleanup - these will be used in multiple places
-      const isDirectAuth = user?.user_metadata?.direct_auth === true;
-      const isDemoUser = user?.user_metadata?.is_demo === true;
-      const userId = user?.id;
-      const userEmail = user?.email;
+      // Check if the current user is a demo user
+      const isDemo = isDemoUser(user);
       
-      console.log(`🔑 [Logout] Signing out user ID: ${userId}, Email: ${userEmail}`);
-      console.log(`🔑 [Logout] User type - Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
-      console.log('🔑 [Logout] localStorage keys before cleanup:', Object.keys(localStorage));
+      // Check if user was authenticated with direct method (but not a demo)
+      const isDirectAuth = !isDemo && user?.user_metadata?.direct_auth === true;
       
-      // **** FORCEFUL CLEANUP APPROACH ****
-      // We'll clean up EVERYTHING in a specific order to ensure nothing is missed
-      
-      // STEP 1: Handle demo user special cleanup if needed
-      if (isDemoUser) {
-        console.log('🔑 [Logout] Using dedicated demo user logout function first');
-        signOutDemoUser();
+      if (isDemo) {
+        // For demo users, use the specialized signout that handles demo sessions
+        console.log("[SignOut] Detected demo user, using demo signout process");
+        signOutDemoUser(setUser, setSession);
+        
+        toast({
+          title: "Signed out",
+          description: "You've been successfully signed out from the demo account",
+        });
+        return;
+      } else if (isDirectAuth) {
+        // For direct auth users, just clear the user state
+        console.log("[SignOut] Detected direct auth user, clearing state");
+        setUser(null);
+        setSession(null);
+        
+        // Clear the session in our API module
+        updateCurrentSession(null);
+        
+        // Clear any anonymous session when signing out
+        console.log("Clearing anonymous session data on direct auth signout");
+        clearAnonymousSession();
+        
+        toast({
+          title: "Signed out",
+          description: "You've been successfully signed out",
+        });
+        return;
       }
       
-      // STEP 2: Clear the anonymous session
-      console.log('🔑 [Logout] Clearing anonymous session');
+      // Otherwise use standard Supabase signout
+      console.log("[SignOut] Using standard Supabase signout");
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        throw error;
+      }
+      
+      // Clear any anonymous session when signing out
+      // This ensures users who sign out completely start fresh
+      console.log("Clearing anonymous session data on supabase signout");
       clearAnonymousSession();
-      
-      // STEP 3: Clear API session state
-      console.log('🔑 [Logout] Clearing API session via updateCurrentSession(null)');
-      updateCurrentSession(null);
-      
-      // STEP 4: Clear ALL localStorage keys manually as a failsafe
-      console.log('🔑 [Logout] Clearing ALL possible localStorage auth keys');
-      
-      // Demo session (main key)
-      localStorage.removeItem('youtube-miner-demo-session'); // DEMO_SESSION_KEY
-      
-      // Supabase keys
-      localStorage.removeItem(SUPABASE_SESSION_KEY);
-      localStorage.removeItem('supabase.auth.token');
-      localStorage.removeItem('sb-access-token');
-      localStorage.removeItem('sb-refresh-token');
-      localStorage.removeItem('sb-auth-token');
-      localStorage.removeItem('sb-provider-token');
-      
-      // Anonymous session
-      localStorage.removeItem('ytk_anonymous_session_id');
-      localStorage.removeItem('ytk_anonymous_video_count');
-      
-      // Demo auth extras
-      localStorage.removeItem('demo-auth-token');
-      localStorage.removeItem('demo-refresh-token');
-      localStorage.removeItem('demo-user-data');
-      
-      // STEP 5: Clear React state AFTER localStorage cleanup
-      console.log('🔑 [Logout] Clearing React state (user, session, isDemoUser)');
-      setUser(null);
-      setSession(null);
-      setIsDemoUser(false);
-      
-      console.log('🔑 [Logout] localStorage keys after cleanup:', Object.keys(localStorage));
-      
-      // STEP 6: Handle any remaining auth-specific cleanup
-      if (isDirectAuth) {
-        console.log("🔑 [Logout] Direct auth cleanup complete");
-      } else if (supabase) {
-        // For standard Supabase users, also call the Supabase signOut method
-        console.log('🔑 [Logout] Calling Supabase auth.signOut() for standard users');
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-          console.error("🔑 [Logout] Error from Supabase signOut:", error);
-        }
-      }
-      
-      // STEP 7: Show success message
-      toast({
-        title: "Signed out",
-        description: "You've been successfully signed out",
-      });
-      
-      // FINAL STEP: Force page reload as ultimate failsafe for ALL user types
-      console.log("🔑 [Logout] Forcing page reload to ensure clean state");
-      setTimeout(() => {
-        window.location.href = '/'; // Use href instead of reload() for a cleaner experience
-      }, 300);
-      
     } catch (error: any) {
-      console.error("🔑 [Logout] Error in signOut function:", error);
-      
-      // Even if there's an error, try to clear everything as a failsafe
-      console.log('🔑 [Logout] Emergency cleanup after error');
-      
-      // Clear React state
-      setUser(null);
-      setSession(null);
-      setIsDemoUser(false);
-      
-      // Clear all storage
-      localStorage.removeItem(SUPABASE_SESSION_KEY);
-      localStorage.removeItem('youtube-miner-demo-session');
-      localStorage.removeItem('supabase.auth.token');
-      localStorage.removeItem('ytk_anonymous_session_id');
-      
-      // Clear API state
-      updateCurrentSession(null);
-      
+      console.error("[SignOut] Error during signout:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to sign out",
         variant: "destructive",
       });
-      
-      // Force reload as a last resort
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
     }
   };
 
@@ -891,7 +701,6 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
-        isDemoUser,
         signIn,
         signInWithGoogle,
         signInWithMagicLink,
@@ -905,7 +714,6 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // Export the user state setters for demo auth
         setUser,
         setSession,
-        setIsDemoUser,
       }}
     >
       {children}

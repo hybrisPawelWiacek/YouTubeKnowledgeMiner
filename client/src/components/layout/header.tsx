@@ -74,29 +74,13 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
-      console.log('🔍 [Header] Sign out button clicked');
-      console.log('🔍 [Header] User before sign out:', user?.id, 'Email:', user?.email);
-      console.log('🔍 [Header] User metadata:', user?.user_metadata);
-      console.log('🔍 [Header] isDemoUser:', user?.user_metadata?.is_demo);
-      console.log('🔍 [Header] localStorage keys before sign out:', Object.keys(localStorage));
-      
       await signOut();
-      
-      console.log('🔍 [Header] Sign out function returned');
-      console.log('🔍 [Header] localStorage keys after sign out:', Object.keys(localStorage));
-      
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
       });
-      
-      // Force page reload as a last resort if we need to
-      console.log('🔍 [Header] Forcing page reload after logout');
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
     } catch (error) {
-      console.error("🔍 [Header] Error signing out:", error);
+      console.error("Error signing out:", error);
       toast({
         title: "Sign out failed",
         description: "There was a problem signing you out",
