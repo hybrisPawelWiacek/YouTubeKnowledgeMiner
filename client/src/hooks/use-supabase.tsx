@@ -565,13 +565,49 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // This wrapper function ensures toast notifications are shown even if console logging fails
+    const showToast = (type: 'success' | 'error', message: string) => {
+      try {
+        if (type === 'success') {
+          toast({
+            title: "Signed out",
+            description: message,
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: message,
+            variant: "destructive",
+          });
+        }
+      } catch (toastError) {
+        // Last resort error handling - at least try to show something to the user
+        try {
+          console.error("[SignOut] Failed to show toast:", toastError);
+          alert(`${type === 'success' ? 'Success' : 'Error'}: ${message}`);
+        } catch (e) {
+          // Nothing more we can do
+        }
+      }
+    };
+    
+    // Initial validation
     if (!supabase) {
-      toast({
-        title: "Error",
-        description: "Supabase client not initialized",
-        variant: "destructive",
-      });
+      showToast('error', "Authentication system not initialized");
       return;
+    }
+
+    // Capture any anonymous session before we do anything else
+    // This is completely isolated from the main try/catch to ensure it runs
+    let capturedAnonymousSession: string | null = null;
+    try {
+      capturedAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+      if (capturedAnonymousSession) {
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, capturedAnonymousSession);
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_timestamp', Date.now().toString());
+      }
+    } catch (preserveError) {
+      console.error("[SignOut] Critical error preserving session:", preserveError);
     }
 
     try {
@@ -595,35 +631,71 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(ANONYMOUS_PRESERVED_KEY, anonymousSessionId);
           localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_timestamp', Date.now().toString());
           localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_source', 'signout_hook_pre');
-          localStorage.setItem(
-            ANONYMOUS_PRESERVED_KEY + '_meta',
-            JSON.stringify({
-              preserved_at: new Date().toISOString(),
-              preserved_by: 'useSupabase.signOut',
-              user_id: user?.id,
-              is_demo: user?.user_metadata?.is_demo || false
-            })
-          );
+          
+          try {
+            localStorage.setItem(
+              ANONYMOUS_PRESERVED_KEY + '_meta',
+              JSON.stringify({
+                preserved_at: new Date().toISOString(),
+                preserved_by: 'useSupabase.signOut',
+                user_id: user?.id,
+                is_demo: user?.user_metadata?.is_demo || false
+              })
+            );
+          } catch (metaError) {
+            console.error("[SignOut] Error storing metadata (non-critical):", metaError);
+          }
           
           console.log(`[SignOut] Successfully preserved anonymous session: ${anonymousSessionId}`);
         } catch (preserveError) {
           console.error("[SignOut] Error preserving anonymous session:", preserveError);
+          
+          // Direct emergency preservation
+          try {
+            localStorage.setItem(ANONYMOUS_PRESERVED_KEY, anonymousSessionId);
+          } catch (emergencyError) {
+            console.error("[SignOut] Critical failure preserving session:", emergencyError);
+          }
         }
       } else {
         console.log("[SignOut] No anonymous session found to preserve");
       }
       // ====== END CRITICAL FIX ======
       
-      // Import helpers to avoid circular dependencies
-      const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-      const { signOutDemoUser, isDemoUser, clearSession, DEMO_SESSION_KEY } = await import('@/lib/demo-session');
+      // Safely import helpers to avoid circular dependencies
+      let clearAnonymousSession: any = null;
+      let signOutDemoUser: any = null;
+      let isDemoUser: any = null;
+      let clearSession: any = null;
+      let DEMO_SESSION_KEY_VALUE: string = "";
       
-      // Check if the current user is a demo user
-      const isDemo = isDemoUser(user);
+      try {
+        // Split imports to isolate errors
+        const anonymousModule = await import('@/lib/anonymous-session');
+        clearAnonymousSession = anonymousModule.clearAnonymousSession;
+        
+        const demoModule = await import('@/lib/demo-session');
+        signOutDemoUser = demoModule.signOutDemoUser;
+        isDemoUser = demoModule.isDemoUser;
+        clearSession = demoModule.clearSession;
+        DEMO_SESSION_KEY_VALUE = demoModule.DEMO_SESSION_KEY;
+        // Store the DEMO_SESSION_KEY_VALUE for later use (don't assign to the import)
+      } catch (importError) {
+        console.error("[SignOut] Error importing helper modules:", importError);
+        // Continue with reduced functionality - we'll handle missing functions later
+      }
+      
+      // Check if the current user is a demo user - with error handling
+      let isDemo = false;
+      try {
+        isDemo = isDemoUser && isDemoUser(user);
+      } catch (demoCheckError) {
+        console.error("[SignOut] Error checking demo user status:", demoCheckError);
+      }
       console.log("Is demo user:", isDemo);
       
       // Check localStorage for demo session
-      const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+      const hasDemoSession = DEMO_SESSION_KEY_VALUE && localStorage.getItem(DEMO_SESSION_KEY_VALUE) !== null;
       console.log("Has demo session in localStorage:", hasDemoSession);
       
       // Check if user was authenticated with direct method (but not a demo)
@@ -635,37 +707,61 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         console.log("[SignOut] Detected demo user, using demo signout process");
         
         // Extra logging for diagnosis
-        console.log("Demo session before clearing:", localStorage.getItem(DEMO_SESSION_KEY));
+        try {
+          console.log("Demo session before clearing:", localStorage.getItem(DEMO_SESSION_KEY_VALUE));
+        } catch (logError) {
+          console.error("[SignOut] Error logging demo session:", logError);
+        }
         
         try {
-          // Use the proper async signout function
-          const signoutSuccess = await signOutDemoUser(setUser, setSession);
-          
-          console.log("[SignOut] Demo user signout result:", signoutSuccess);
+          // Use the proper async signout function if available
+          let signoutSuccess = false;
+          if (signOutDemoUser) {
+            signoutSuccess = await signOutDemoUser(setUser, setSession);
+            console.log("[SignOut] Demo user signout result:", signoutSuccess);
+          } else {
+            console.error("[SignOut] signOutDemoUser function not available, using fallback");
+            // Fallback implementation if the import failed
+            localStorage.removeItem(DEMO_SESSION_KEY_VALUE || 'youtube-miner-demo-session');
+            setUser(null);
+            setSession(null);
+            updateCurrentSession(null);
+            signoutSuccess = true;
+          }
           
           // Verify session was cleared directly through localStorage
-          const hasRemainingDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+          const hasRemainingDemoSession = DEMO_SESSION_KEY_VALUE && localStorage.getItem(DEMO_SESSION_KEY_VALUE) !== null;
           const hasRemainingSupabaseSession = localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
           
-          console.log("[SignOut] Session state after signout:", {
-            hasRemainingDemoSession,
-            hasRemainingSupabaseSession,
-            allKeys: Object.keys(localStorage)
-          });
+          try {
+            console.log("[SignOut] Session state after signout:", {
+              hasRemainingDemoSession,
+              hasRemainingSupabaseSession,
+              allKeys: Object.keys(localStorage)
+            });
+          } catch (logError) {
+            console.error("[SignOut] Error logging session state:", logError);
+          }
           
           if (!signoutSuccess || hasRemainingDemoSession || hasRemainingSupabaseSession) {
             console.error("[SignOut] Demo user signout failed or sessions still exist, using emergency cleanup");
             
             // Emergency cleanup - force clear everything
-            localStorage.removeItem(DEMO_SESSION_KEY);
-            localStorage.removeItem(SUPABASE_SESSION_KEY);
-            
-            // Find and clear all session-related keys
-            Object.keys(localStorage).forEach(key => {
-              if (key.includes('session') || key.includes('supabase')) {
-                localStorage.removeItem(key);
+            try {
+              if (DEMO_SESSION_KEY_VALUE) {
+                localStorage.removeItem(DEMO_SESSION_KEY_VALUE);
               }
-            });
+              localStorage.removeItem(SUPABASE_SESSION_KEY);
+              
+              // Find and clear all session-related keys
+              Object.keys(localStorage).forEach(key => {
+                if (key.includes('session') || key.includes('supabase')) {
+                  localStorage.removeItem(key);
+                }
+              });
+            } catch (cleanupError) {
+              console.error("[SignOut] Error during emergency cleanup:", cleanupError);
+            }
             
             // Force React state updates
             setUser(null);
@@ -677,13 +773,17 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         } catch (demoSignoutError) {
           console.error("[SignOut] Error during demo signout:", demoSignoutError);
           
-          // Emergency fallback for exceptions - much more thorough cleanup
-          Object.keys(localStorage).forEach(key => {
-            if (key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')) {
-              console.log(`[SignOut] Error recovery: removing key ${key}`);
-              localStorage.removeItem(key);
-            }
-          });
+          try {
+            // Emergency fallback for exceptions - much more thorough cleanup
+            Object.keys(localStorage).forEach(key => {
+              if (key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')) {
+                console.log(`[SignOut] Error recovery: removing key ${key}`);
+                localStorage.removeItem(key);
+              }
+            });
+          } catch (cleanupError) {
+            console.error("[SignOut] Critical error during localStorage cleanup:", cleanupError);
+          }
           
           // Force React state updates
           setUser(null);
@@ -691,10 +791,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           updateCurrentSession(null);
         }
         
-        toast({
-          title: "Signed out",
-          description: "You've been successfully signed out from the demo account",
-        });
+        showToast('success', "You've been successfully signed out from the demo account");
         return;
       } else if (isDirectAuth) {
         // For direct auth users, just clear the user state
@@ -706,31 +803,47 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         updateCurrentSession(null);
         
         // Trigger a global auth state refresh
-        console.log("[SignOut] Triggering global auth state refresh for direct auth user");
-        window.dispatchEvent(new Event('auth-state-refresh'));
+        try {
+          console.log("[SignOut] Triggering global auth state refresh for direct auth user");
+          window.dispatchEvent(new Event('auth-state-refresh'));
+        } catch (eventError) {
+          console.error("[SignOut] Error dispatching auth refresh event:", eventError);
+        }
         
         // Try to restore any preserved anonymous session when signing out
         console.log("[SignOut] Attempting to restore anonymous session after direct auth signout");
         try {
-          const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
-          const restoredSession = restorePreservedAnonymousSession();
-          
-          if (restoredSession) {
-            console.log("[SignOut] Successfully restored anonymous session:", restoredSession);
-          } else {
-            // If no preserved session exists, ensure we clean up properly
-            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
-            clearAnonymousSession(false); // permanent clearing
+          // Use our captured session first since it's most reliable
+          if (capturedAnonymousSession) {
+            localStorage.setItem(ANONYMOUS_SESSION_KEY, capturedAnonymousSession);
+            localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', capturedAnonymousSession);
+            localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
+            console.log("[SignOut] Restored session from captured value:", capturedAnonymousSession);
+          } else if (clearAnonymousSession) {
+            // Try the imported module
+            const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
+            const restoredSession = restorePreservedAnonymousSession();
+            
+            if (restoredSession) {
+              console.log("[SignOut] Successfully restored anonymous session:", restoredSession);
+            } else {
+              // If no preserved session exists, ensure we clean up properly
+              console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
+              clearAnonymousSession(false); // permanent clearing
+            }
           }
         } catch (restoreError) {
           console.error("[SignOut] Error restoring anonymous session:", restoreError);
-          clearAnonymousSession(false); // fallback to permanent clearing
+          
+          // Final attempt with captured session
+          if (capturedAnonymousSession) {
+            try {
+              localStorage.setItem(ANONYMOUS_SESSION_KEY, capturedAnonymousSession);
+            } catch (e) { /* silent failure */ }
+          }
         }
         
-        toast({
-          title: "Signed out",
-          description: "You've been successfully signed out",
-        });
+        showToast('success', "You've been successfully signed out");
         return;
       }
       
@@ -743,19 +856,31 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       if (currentAnonymousSession) {
         console.log(`[SignOut] Found current anonymous session before Supabase signout, preserving: ${currentAnonymousSession}`);
         
-        // Directly preserve without async operations, which can lead to race conditions
-        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
-        console.log(`[SignOut] Successfully preserved anonymous session before Supabase signout: ${currentAnonymousSession}`);
+        try {
+          // Directly preserve without async operations, which can lead to race conditions
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+          console.log(`[SignOut] Successfully preserved anonymous session before Supabase signout: ${currentAnonymousSession}`);
+        } catch (preserveError) {
+          console.error("[SignOut] Error preserving session:", preserveError);
+        }
       } else {
         console.log("[SignOut] No anonymous session found to preserve before Supabase signout");
       }
       
       // Now proceed with standard Supabase signout
       console.log("[SignOut] Using standard Supabase signout");
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        throw error;
+      let signOutError = null;
+      try {
+        const { error } = await supabase.auth.signOut();
+        signOutError = error;
+      } catch (supabaseError) {
+        console.error("[SignOut] Exception from Supabase signOut call:", supabaseError);
+        // Continue with state cleanup anyway
+      }
+      
+      if (signOutError) {
+        console.error("[SignOut] Error from Supabase signOut call:", signOutError);
+        // Continue with state cleanup anyway
       }
       
       // CRITICAL FIX: Explicitly update the React state
@@ -766,27 +891,21 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       updateCurrentSession(null);
       
       // Trigger an auth state refresh to ensure the UI updates
-      console.log("[SignOut] Triggering global auth state refresh");
-      window.dispatchEvent(new Event('auth-state-refresh'));
-      
-      // Double-check if the preserved session still exists after Supabase operations
-      const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
-      
-      if (preservedSession) {
-        console.log(`[SignOut] Found preserved anonymous session after Supabase operations: ${preservedSession}`);
-      } else if (currentAnonymousSession) {
-        // If we had a session before but lost it, recreate the preserved key
-        console.log(`[SignOut] Anonymous session was lost during Supabase operations, restoring preservation: ${currentAnonymousSession}`);
-        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+      try {
+        console.log("[SignOut] Triggering global auth state refresh");
+        window.dispatchEvent(new Event('auth-state-refresh'));
+      } catch (eventError) {
+        console.error("[SignOut] Error dispatching auth refresh event:", eventError);
       }
       
-      // Now explicitly restore the anonymous session
-      try {
-        // First check if we have a preserved session directly
-        const sessionToRestore = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
-        
-        if (sessionToRestore) {
-          console.log(`[SignOut] Directly restoring anonymous session: ${sessionToRestore}`);
+      // Use our captured session as the most reliable source
+      const sessionToRestore = capturedAnonymousSession || 
+                               localStorage.getItem(ANONYMOUS_PRESERVED_KEY) || 
+                               currentAnonymousSession;
+      
+      if (sessionToRestore) {
+        try {
+          console.log(`[SignOut] Restoring anonymous session: ${sessionToRestore}`);
           
           // Restore directly to avoid any async timing issues
           localStorage.setItem(ANONYMOUS_SESSION_KEY, sessionToRestore);
@@ -794,38 +913,43 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
           localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
           
-          // Clean up preserved session
+          // Clean up preserved session to avoid double restoration
           localStorage.removeItem(ANONYMOUS_PRESERVED_KEY);
           
-          console.log(`[SignOut] Successfully restored anonymous session directly: ${sessionToRestore}`);
-        } else {
-          // Fall back to the helper function if direct method doesn't work
-          console.log("[SignOut] No direct anonymous session found, trying helper function");
-          const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
-          const restoredSession = restorePreservedAnonymousSession();
+          console.log(`[SignOut] Successfully restored anonymous session: ${sessionToRestore}`);
+        } catch (restoreError) {
+          console.error("[SignOut] Error restoring anonymous session directly:", restoreError);
           
-          if (restoredSession) {
-            console.log("[SignOut] Successfully restored anonymous session via helper:", restoredSession);
-          } else {
-            // If no preserved session exists, ensure we clean up any stale data
-            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
-            // Import dynamically to avoid circular dependencies
-            const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-            clearAnonymousSession(false); // false means permanent clearing
-          }
+          // Final emergency attempt
+          try {
+            localStorage.setItem(ANONYMOUS_SESSION_KEY, sessionToRestore);
+          } catch (e) { /* silent failure */ }
         }
-      } catch (restoreError) {
-        console.error("[SignOut] Error restoring anonymous session:", restoreError);
+      } else {
+        console.log("[SignOut] No anonymous session found to restore");
       }
       
       console.log("===== SIGN OUT PROCESS COMPLETED =====");
+      showToast('success', "You've been successfully signed out");
     } catch (error: any) {
-      console.error("[SignOut] Error during signout:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to sign out",
-        variant: "destructive",
-      });
+      console.error("[SignOut] Critical error during signout:", error);
+      
+      // In case of catastrophic failure, do our best to clean up
+      try {
+        // Force clear authentication state
+        setUser(null);
+        setSession(null);
+        updateCurrentSession(null);
+        
+        // Restore anonymous session if we captured it earlier
+        if (capturedAnonymousSession) {
+          localStorage.setItem(ANONYMOUS_SESSION_KEY, capturedAnonymousSession);
+        }
+      } catch (e) {
+        console.error("[SignOut] Fatal error during recovery:", e);
+      }
+      
+      showToast('error', error.message || "An unexpected error occurred during sign out");
     }
   };
 
