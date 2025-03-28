@@ -217,7 +217,15 @@ export default function Library() {
   // Mutations
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids });
+      // Add anonymous session header for anonymous users
+      let headers: HeadersInit = {};
+      if (!user) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers = { 'x-anonymous-session': sessionId };
+        console.log('[bulkDeleteMutation] Adding anonymous session header:', sessionId);
+      }
+      
+      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
       return response.json();
     },
     onSuccess: () => {
@@ -241,10 +249,18 @@ export default function Library() {
 
   const bulkToggleFavoriteMutation = useMutation({
     mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
+      // Add anonymous session header for anonymous users
+      let headers: HeadersInit = {};
+      if (!user) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers = { 'x-anonymous-session': sessionId };
+        console.log('[bulkToggleFavoriteMutation] Adding anonymous session header:', sessionId);
+      }
+      
       const response = await apiRequest("PATCH", "/api/videos/bulk", { 
         ids, 
         data: { is_favorite: isFavorite } 
-      });
+      }, headers);
       return response.json();
     },
     onSuccess: (_, variables) => {
@@ -265,9 +281,17 @@ export default function Library() {
 
   const addToCollectionMutation = useMutation({
     mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
+      // Add anonymous session header for anonymous users
+      let headers: HeadersInit = {};
+      if (!user) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers = { 'x-anonymous-session': sessionId };
+        console.log('[addToCollectionMutation] Adding anonymous session header:', sessionId);
+      }
+      
       const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
         video_ids: videoIds
-      });
+      }, headers);
       return response.json();
     },
     onSuccess: (_, variables) => {
