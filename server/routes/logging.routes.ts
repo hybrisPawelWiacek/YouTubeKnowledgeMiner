@@ -6,11 +6,12 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
+import { logger, logAuthEvent } from '../utils/logger';
 import { requireAuth } from '../middleware/auth.middleware';
 import fs from 'fs';
 import path from 'path';
 import { sendSuccess, sendError } from '../utils/response.utils';
+import { z } from 'zod';
 
 const router = Router();
 const logsDir = path.join(process.cwd(), 'logs');
@@ -290,6 +291,65 @@ router.get('/:requestId', (req: Request, res: Response, next: NextFunction) => {
       searchRequestId: req.params.requestId,
     });
     return sendError(res, 'Failed to retrieve logs for request ID', 500);
+  }
+});
+
+/**
+ * @route POST /api/log/auth
+ * @description Endpoint to receive client-side auth events and log them
+ * @access Public (accessible to unauthenticated clients)
+ */
+const clientAuthEventSchema = z.object({
+  event: z.string(),
+  userId: z.union([z.number(), z.string(), z.undefined()]).optional(),
+  details: z.any().optional(),
+  clientTimestamp: z.string().optional(),
+  userAgent: z.string().optional(),
+  location: z.string().optional()
+});
+
+router.post('/auth', (req: Request, res: Response) => {
+  try {
+    // Extract request ID from headers
+    const requestId = req.headers['x-request-id'] as string || req.requestId || '';
+    
+    // Validate the request body
+    const eventData = clientAuthEventSchema.parse(req.body);
+    
+    // Log the auth event using the server-side logging function
+    logAuthEvent(
+      requestId,
+      eventData.event,
+      eventData.userId,
+      {
+        ...eventData.details,
+        clientTimestamp: eventData.clientTimestamp,
+        userAgent: eventData.userAgent,
+        location: eventData.location,
+        ip: req.ip || req.headers['x-forwarded-for'] || 'unknown'
+      }
+    );
+    
+    // Send a success response
+    return res.status(201).json({ success: true });
+  } catch (error) {
+    logger.error('Error logging auth event from client', {
+      error,
+      requestId: req.requestId,
+      body: req.body
+    });
+    
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid request format',
+        errors: error.errors
+      });
+    }
+    
+    // Still return success to avoid client-side errors
+    // The logging error has been recorded server-side
+    return res.status(201).json({ success: true });
   }
 });
 

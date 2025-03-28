@@ -67,7 +67,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);
   app.use('/api/qa', qaRoutes);
-  app.use('/api/logs', loggingRoutes); // Add the new logging routes
+  app.use('/api/logs', loggingRoutes); // Routes for accessing log data
+  app.use('/api/log', loggingRoutes); // Routes for writing logs (client-side auth logging)
   
   // Also register the qa routes under the videos path for backward compatibility
   app.use('/api/videos', qaRoutes);
