@@ -112,6 +112,15 @@ export function DemoLogin() {
       
       console.log('[Demo Login] Demo user session stored successfully');
       
+      // Temporarily preserve anonymous session for restoration on logout
+      try {
+        const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+        clearAnonymousSession(true); // true = preserve for later restoration
+        console.log('[Demo Login] Anonymous session temporarily preserved for later restoration');
+      } catch (error) {
+        console.error('[Demo Login] Failed to preserve anonymous session:', error);
+      }
+      
       toast({
         title: 'Demo Login Successful',
         description: `You are now logged in as "${data.displayName || data.username}"`,

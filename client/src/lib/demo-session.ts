@@ -139,9 +139,27 @@ export function getStoredSession(): Session | null {
 /**
  * Clear all demo user session data from localStorage
  * This is called during logout to ensure clean state
+ * 
+ * @param preserveAnonymousSession If true, attempt to preserve anonymous session for restoration after logout
  */
-export function clearSession(): void {
+export function clearSession(preserveAnonymousSession: boolean = true): void {
   try {
+    // If we want to preserve anonymous session, do that first before clearing anything
+    if (preserveAnonymousSession) {
+      try {
+        // Using dynamic import to prevent circular dependencies
+        import('./anonymous-session').then(({ clearAnonymousSession }) => {
+          // The true parameter indicates a temporary clear that preserves for restoration
+          clearAnonymousSession(true);
+          console.log('[Demo Session] Anonymous session temporarily preserved for later restoration');
+        }).catch(importError => {
+          console.error('[Demo Session] Error importing anonymous-session module:', importError);
+        });
+      } catch (anonymousError) {
+        console.error('[Demo Session] Error preserving anonymous session:', anonymousError);
+      }
+    }
+    
     // Clear our demo-specific storage
     localStorage.removeItem(DEMO_SESSION_KEY);
     
@@ -213,9 +231,18 @@ export async function signOutDemoUser(
       sessionKeys
     });
     
-    // Perform a complete cleanup of localStorage first
+    // First, preserve anonymous session if present (before any cleanup)
+    try {
+      const { clearAnonymousSession } = await import('./anonymous-session');
+      clearAnonymousSession(true); // true means preserve for later restoration
+      console.log('[Demo Session] Anonymous session temporarily preserved for later restoration during signout');
+    } catch (anonymousError) {
+      console.error('[Demo Session] Error preserving anonymous session during signout:', anonymousError);
+    }
+    
+    // Now perform a complete cleanup of localStorage
     // This ensures storage is cleared even if React state updates fail
-    clearAllSessionData();
+    clearAllSessionData(true); // true indicates to preserve anonymous session
     
     // Now update React state
     setUser(null);
@@ -264,7 +291,7 @@ export async function signOutDemoUser(
     
     // Attempt emergency cleanup even in error case
     try {
-      clearAllSessionData();
+      clearAllSessionData(false); // false = don't preserve anonymous session in error case
     } catch (e) {
       console.error('[Demo Session] Failed emergency cleanup:', e);
     }
@@ -276,18 +303,30 @@ export async function signOutDemoUser(
 /**
  * Clear all session-related data from localStorage
  * More thorough than just clearSession()
+ * 
+ * @param preserveAnonymousSession If true, don't remove anonymous session backup keys
  */
-function clearAllSessionData(): void {
+function clearAllSessionData(preserveAnonymousSession: boolean = false): void {
   try {
     // First remove our explicit keys
     localStorage.removeItem(DEMO_SESSION_KEY);
     localStorage.removeItem(SUPABASE_SESSION_KEY);
     localStorage.removeItem(DEMO_SESSION_KEY + ':timestamp');
     
-    // Then find and remove anything session-related
-    const sessionKeys = Object.keys(localStorage).filter(key => 
-      key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')
-    );
+    // Create a list of keys to clear
+    const sessionKeys = Object.keys(localStorage).filter(key => {
+      // Skip anonymous session backup keys if we're preserving
+      if (preserveAnonymousSession && 
+          (key.includes('anon_session_backup') || 
+           key === 'youtube-miner-anonymous-session-backup')) {
+        console.log(`[Demo Session] Preserving anonymous backup key: ${key}`);
+        return false;
+      }
+      
+      return key.includes('session') || 
+             key.includes('supabase') || 
+             key.includes('youtube-miner');
+    });
     
     sessionKeys.forEach(key => {
       console.log(`[Demo Session] Clearing session data: ${key}`);
@@ -295,6 +334,20 @@ function clearAllSessionData(): void {
     });
     
     console.log('[Demo Session] Cleared all session-related data');
+    
+    // If we're preserving, log the backup keys that remain
+    if (preserveAnonymousSession) {
+      const remainingBackupKeys = Object.keys(localStorage).filter(key => 
+        key.includes('anon_session_backup') || 
+        key === 'youtube-miner-anonymous-session-backup'
+      );
+      
+      if (remainingBackupKeys.length > 0) {
+        console.log('[Demo Session] Preserved anonymous session backup keys:', remainingBackupKeys);
+      } else {
+        console.log('[Demo Session] No anonymous session backup keys found to preserve');
+      }
+    }
   } catch (error) {
     console.error('[Demo Session] Error clearing all session data:', error);
   }

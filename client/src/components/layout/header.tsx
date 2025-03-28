@@ -155,16 +155,35 @@ export function Header() {
       });
       
       // IMPORTANT: Instead of checking React state (which might not be updated yet),
-      // check direct indicators of session persistence
-      if (hasDemoSessionAfter || hasAnySessionData) {
-        console.log("WARNING: Session data persists after cleanup, forcing page reload");
+      // check direct indicators of session persistence and handle gracefully
+      
+      // Try to restore anonymous session before taking drastic measures
+      try {
+        const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
+        const restoredSession = restorePreservedAnonymousSession();
+        
+        if (restoredSession) {
+          console.log("[Header] Successfully restored anonymous session after logout:", restoredSession);
+          // No need for page reload, the app will automatically update with anonymous state
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 150);
+        } else if (hasDemoSessionAfter || hasAnySessionData) {
+          console.log("WARNING: Session data persists after cleanup, forcing page reload");
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        } else {
+          // Force navigation to home page to ensure clean state
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 150);
+        }
+      } catch (error) {
+        console.error("[Header] Error in post-logout anonymous session restoration:", error);
+        // Fall back to basic page reload if restoration fails
         setTimeout(() => {
           window.location.reload();
-        }, 500);
-      } else {
-        // Force navigation to home page to ensure clean state
-        setTimeout(() => {
-          window.location.href = '/';
         }, 500);
       }
     } catch (error) {

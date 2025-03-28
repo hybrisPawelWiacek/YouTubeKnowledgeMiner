@@ -559,9 +559,23 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // Clear the session in our API module
         updateCurrentSession(null);
         
-        // Clear any anonymous session when signing out
-        console.log("Clearing anonymous session data on direct auth signout");
-        clearAnonymousSession();
+        // Try to restore any preserved anonymous session when signing out
+        console.log("[SignOut] Attempting to restore anonymous session after direct auth signout");
+        try {
+          const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
+          const restoredSession = restorePreservedAnonymousSession();
+          
+          if (restoredSession) {
+            console.log("[SignOut] Successfully restored anonymous session:", restoredSession);
+          } else {
+            // If no preserved session exists, ensure we clean up properly
+            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
+            clearAnonymousSession(false); // permanent clearing
+          }
+        } catch (restoreError) {
+          console.error("[SignOut] Error restoring anonymous session:", restoreError);
+          clearAnonymousSession(false); // fallback to permanent clearing
+        }
         
         toast({
           title: "Signed out",
@@ -578,10 +592,23 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
-      // Clear any anonymous session when signing out
-      // This ensures users who sign out completely start fresh
-      console.log("Clearing anonymous session data on supabase signout");
-      clearAnonymousSession();
+      // Attempt to restore the preserved anonymous session (if one exists)
+      try {
+        const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
+        const restoredSession = restorePreservedAnonymousSession();
+        
+        if (restoredSession) {
+          console.log("[SignOut] Successfully restored anonymous session after logout:", restoredSession);
+        } else {
+          // If no preserved session exists, ensure we clean up any stale data
+          console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
+          // Import dynamically to avoid circular dependencies
+          const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+          clearAnonymousSession(false); // false means permanent clearing
+        }
+      } catch (restoreError) {
+        console.error("[SignOut] Error restoring anonymous session:", restoreError);
+      }
       
       console.log("===== SIGN OUT PROCESS COMPLETED =====");
     } catch (error: any) {
