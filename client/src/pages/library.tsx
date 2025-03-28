@@ -30,6 +30,14 @@ import {
   Loader2,
   Plus,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export default function Library() {
   // State
@@ -133,7 +141,7 @@ export default function Library() {
       }
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
-      
+
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
@@ -141,10 +149,10 @@ export default function Library() {
         headers = { 'x-anonymous-session': sessionId };
         console.log('Library - Adding anonymous session header:', sessionId);
       }
-      
+
       // Use our API request function which handles all the auth header logic for us
       const response = await apiRequest("GET", url, undefined, headers);
-      
+
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
@@ -369,10 +377,13 @@ export default function Library() {
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
+    setShowDeleteConfirmation(true);
+  };
 
-    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
-      bulkDeleteMutation.mutate(selectedVideos);
-    }
+  // Handle confirmed deletion
+  const confirmDelete = () => {
+    bulkDeleteMutation.mutate(selectedVideos);
+    setShowDeleteConfirmation(false);
   };
 
   const handleToggleFavorite = (isFavorite: boolean) => {
@@ -441,14 +452,14 @@ export default function Library() {
           setShowedPrompt(true);
         }
       };
-      
+
       // Only execute the check once - not on initial render
       if (libraryInteractions > 0) {
         checkAnonymousLimit();
       } else {
         setShowedPrompt(true);
       }
-      
+
       // Load videos from local storage
       const localData = getLocalData();
       if (localData.videos.length > 0) {
@@ -522,6 +533,14 @@ export default function Library() {
     }
     loadSavedSearches();
   }, [user, showedPrompt]);
+
+  // State for managing collection creation
+  const [showCollectionForm, setShowCollectionForm] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [assigningVideosToCollection, setAssigningVideosToCollection] = useState(false);
+
+  // State for delete confirmation dialog
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
 
 
   return (
@@ -887,7 +906,7 @@ export default function Library() {
               if (collections.length > 0) {
                 const latestCollection = collections[collections.length - 1];
                 handleAddToCollection(latestCollection.id);
-              }
+              }              }
             });
           }
         }}
@@ -900,6 +919,24 @@ export default function Library() {
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+        <DialogHeader>
+          <DialogTitle>Delete Videos</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete {selectedVideos.length} videos? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setShowDeleteConfirmation(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirmDelete}>
+            Delete
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }
