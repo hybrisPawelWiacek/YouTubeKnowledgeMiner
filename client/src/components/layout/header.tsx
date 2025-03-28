@@ -94,55 +94,93 @@ export function Header() {
       console.log("Is demo user:", isDemo);
       console.log("All localStorage keys before signOut:", Object.keys(localStorage));
       
+      // CRITICAL FIX: Directly preserve the anonymous session before starting logout
+      // This ensures it's stored correctly regardless of any async timing issues
+      const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+      const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+      
+      // Check if there's an anonymous session to preserve
+      const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+      
+      if (anonymousSessionId) {
+        console.log(`[Header] Directly preserving anonymous session before logout: ${anonymousSessionId}`);
+        
+        // Preserve the session with metadata for better tracking
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, anonymousSessionId);
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_timestamp', Date.now().toString());
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_source', 'header_pre_signout');
+        
+        try {
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_meta', JSON.stringify({
+            preserved_at: new Date().toISOString(),
+            preserved_by: 'Header.handleSignOut',
+            user_id: user?.id,
+            is_demo: isDemo
+          }));
+        } catch (metaError) {
+          console.error("[Header] Error storing preservation metadata:", metaError);
+        }
+        
+        console.log(`[Header] Anonymous session successfully preserved: ${anonymousSessionId}`);
+      } else {
+        console.log("[Header] No anonymous session found to preserve before logout");
+      }
+      
       // Check demo session health before logout
       const { checkDemoSessionHealth } = await import('@/lib/debug-utils');
       const sessionHealth = checkDemoSessionHealth();
       
       console.log("[Header] Demo session health before signOut:", sessionHealth);
       
-      // Standard check for demo session existence
-      const hasDemoSession = localStorage.getItem('youtube-miner-demo-session') !== null;
-      console.log("[Header] Has demo session before signOut:", hasDemoSession);
-      
       // Call the signOut function
       await signOut();
       
-      // THIS IS THE CRUCIAL CHANGE: In React, state updates are asynchronous
-      // Instead of checking the React state (which won't have updated yet),
-      // we need to directly check localStorage and other indicators
+      // Wait a bit to make sure async operations complete
+      await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Wait a bit longer to make sure any async operations complete
-      await new Promise(resolve => setTimeout(resolve, 150));
+      console.log("===== HEADER: After signOut called =====");
       
-      console.log("After signOut called");
+      // Verify the preserved session still exists
+      const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
       
-      // Check again for demo session
-      const hasDemoSessionAfter = localStorage.getItem('youtube-miner-demo-session') !== null;
-      console.log("Has demo session after signOut:", hasDemoSessionAfter);
+      if (preservedSession) {
+        console.log(`[Header] Found preserved anonymous session after signOut: ${preservedSession}`);
+        
+        // Explicitly restore the anonymous session
+        console.log(`[Header] Directly restoring anonymous session: ${preservedSession}`);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', preservedSession);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_last_accessed', Date.now().toString());
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_by', 'header_post_signout');
+        
+        // Clean up preserved session to prevent double restore
+        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY);
+        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_timestamp');
+        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_source');
+        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_meta');
+        
+        console.log(`[Header] Anonymous session successfully restored: ${preservedSession}`);
+      } else if (anonymousSessionId) {
+        console.log(`[Header] WARNING: Preserved session lost during signOut, recovering from memory: ${anonymousSessionId}`);
+        
+        // Emergency recovery from memory variable
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, anonymousSessionId);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', anonymousSessionId);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_emergency_restored', 'true');
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_last_accessed', Date.now().toString());
+        
+        console.log(`[Header] Anonymous session recovered from memory: ${anonymousSessionId}`);
+      } else {
+        console.log("[Header] No anonymous session to restore after signOut");
+      }
       
-      // Use the health checker again to verify session state
-      const sessionHealthAfter = checkDemoSessionHealth();
-      console.log("[Header] Demo session health after signOut:", sessionHealthAfter);
-      
-      // Check localStorage directly for any remaining sessions
-      const hasAnySessionData = Object.keys(localStorage).some(key => 
-        key.includes('session') || key.includes('supabase')
-      );
-      
-      // Force an additional clear if session persists
-      if (hasDemoSessionAfter || hasAnySessionData) {
-        console.log("WARNING: Session data still exists after signOut, forcing cleanup");
+      // Clean up any remaining authentication sessions
+      if (localStorage.getItem('youtube-miner-demo-session') || localStorage.getItem('youtube-miner-supabase-session')) {
+        console.log("[Header] Cleaning up remaining auth sessions");
         localStorage.removeItem('youtube-miner-demo-session');
         localStorage.removeItem('youtube-miner-supabase-session');
         localStorage.removeItem('youtube-miner-demo-session:timestamp');
-        
-        // Additional cleanup for any other session-related data
-        Object.keys(localStorage).forEach(key => {
-          if (key.includes('session') || key.includes('supabase')) {
-            console.log(`Removing persistent key: ${key}`);
-            localStorage.removeItem(key);
-          }
-        });
       }
       
       // Dump state after signOut
@@ -164,17 +202,13 @@ export function Header() {
         
         if (restoredSession) {
           console.log("[Header] Successfully restored anonymous session after logout:", restoredSession);
-          // No need for page reload, the app will automatically update with anonymous state
+          // Navigate to homepage to refresh the UI state
           setTimeout(() => {
             window.location.href = '/';
           }, 150);
-        } else if (hasDemoSessionAfter || hasAnySessionData) {
-          console.log("WARNING: Session data persists after cleanup, forcing page reload");
-          setTimeout(() => {
-            window.location.reload();
-          }, 500);
         } else {
-          // Force navigation to home page to ensure clean state
+          // Navigate to homepage regardless
+          // This forces a clean state refresh with the anonymous session
           setTimeout(() => {
             window.location.href = '/';
           }, 150);

@@ -10,6 +10,10 @@ const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
 // Key for storing the last used Supabase session for persistence
 const SUPABASE_SESSION_KEY = 'youtube-miner-supabase-session';
 
+// Constants for anonymous session management
+const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+
 type SupabaseContextType = {
   supabase: SupabaseClient | null;
   user: User | null;
@@ -468,6 +472,39 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       console.log("Current session state:", session);
       console.log("All localStorage keys:", Object.keys(localStorage));
       
+      // ====== CRITICAL FIX: PRE-SIGNOUT ANONYMOUS SESSION PRESERVATION ======
+      // First preserve any anonymous session before we import any modules
+      // This is crucial as module loading could trigger other actions
+      
+      // Directly check and save any anonymous session
+      const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+      if (anonymousSessionId) {
+        console.log(`[SignOut] Preserving anonymous session before any imports: ${anonymousSessionId}`);
+        
+        try {
+          // Store the session for restoration after sign-out
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY, anonymousSessionId);
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_timestamp', Date.now().toString());
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_source', 'signout_hook_pre');
+          localStorage.setItem(
+            ANONYMOUS_PRESERVED_KEY + '_meta',
+            JSON.stringify({
+              preserved_at: new Date().toISOString(),
+              preserved_by: 'useSupabase.signOut',
+              user_id: user?.id,
+              is_demo: user?.user_metadata?.is_demo || false
+            })
+          );
+          
+          console.log(`[SignOut] Successfully preserved anonymous session: ${anonymousSessionId}`);
+        } catch (preserveError) {
+          console.error("[SignOut] Error preserving anonymous session:", preserveError);
+        }
+      } else {
+        console.log("[SignOut] No anonymous session found to preserve");
+      }
+      // ====== END CRITICAL FIX ======
+      
       // Import helpers to avoid circular dependencies
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
       const { signOutDemoUser, isDemoUser, clearSession, DEMO_SESSION_KEY } = await import('@/lib/demo-session');
@@ -585,8 +622,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       }
       
       // Before Supabase signout, directly check and preserve any anonymous session
-      const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id'; 
-      const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+      // Use the constants defined at the module level
       
       // Direct check for anonymous session before any potential logout operations
       const currentAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
