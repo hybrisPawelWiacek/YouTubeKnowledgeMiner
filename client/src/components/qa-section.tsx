@@ -84,15 +84,13 @@ export function QASection() {
     number | null
   >(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [newConversationTitle, setNewConversationTitle] = useState("");
-  const [showNewConversationDialog, setShowNewConversationDialog] =
-    useState(false);
+  // Removed dialog-related state variables
 
   // CSS classes for the sidebar based on visibility
   const sidebarClasses = showSidebar
     ? "w-1/4 min-w-[250px] border-r border-border h-[calc(100vh-12rem)] overflow-y-auto"
     : "hidden";
-    
+
   // Add event listeners for external control
   useEffect(() => {
     const handleSetActiveConversation = (event: any) => {
@@ -100,14 +98,15 @@ export function QASection() {
         setActiveConversation(event.detail.conversationId);
       }
     };
-    
+
     const handleStartNewConversation = () => {
-      setShowNewConversationDialog(true);
+      //setShowNewConversationDialog(true);
+      startNewConversation();
     };
-    
+
     window.addEventListener('setActiveConversation', handleSetActiveConversation);
     window.addEventListener('startNewConversation', handleStartNewConversation);
-    
+
     return () => {
       window.removeEventListener('setActiveConversation', handleSetActiveConversation);
       window.removeEventListener('startNewConversation', handleStartNewConversation);
@@ -141,7 +140,7 @@ export function QASection() {
         undefined,
         headers,
       );
-      
+
       console.log(`[QA Section] Fetched ${data?.length || 0} conversations for video ${videoId}:`, data);
       return data;
     },
@@ -177,7 +176,7 @@ export function QASection() {
         undefined,
         headers,
       );
-      
+
       console.log(`[QA Section] Fetched conversation data for ID ${activeConversation}:`, data);
       return data;
     },
@@ -332,9 +331,10 @@ export function QASection() {
   const handleCreateNewConversation = async () => {
     try {
       // If user has entered a title in the dialog, use it; otherwise create one from the question
-      let title = newConversationTitle.trim();
+      //let title = newConversationTitle.trim();
+      let title = question.substring(0, 25) + (question.length > 25 ? "..." : "");
       if (!title) {
-        title = `Q: ${question.substring(0, 25)}${question.length > 25 ? "..." : ""}`;
+        title = `New Conversation`;
       }
 
       // Store the current question to use after conversation is created
@@ -342,13 +342,13 @@ export function QASection() {
 
       // Clear the question input field and conversation title immediately
       setQuestion("");
-      setNewConversationTitle("");
-      
+      //setNewConversationTitle("");
+
       // Set submitting state to provide visual feedback
       setIsSubmitting(true);
 
       console.log("Creating new conversation with title:", title);
-      
+
       // Get the anonymous session ID
       const anonymousSessionId = getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
@@ -363,29 +363,29 @@ export function QASection() {
 
       // Use improved fetchAPI helper to create the conversation
       console.log(`Making API request to create conversation: POST /api/videos/${videoId}/qa with title: ${title}`);
-      
+
       const data = await fetchAPI<any>(
         "POST",
         `/api/videos/${videoId}/qa`,
         { title },
         headers
       );
-      
+
       console.log("Conversation created successfully:", data);
-      
+
       // After conversation is created successfully, force refetch conversations
       refetchConversations();
-      
+
       if (data && typeof data === "object" && "id" in data && typeof data.id === "number") {
         // Set the active conversation
         setActiveConversation(data.id);
-        
+
         // Only send the initial question if there's actual content
         if (initialQuestion.trim()) {
           try {
             // Send the initial question using improved fetchAPI helper
             console.log(`Sending initial question to conversation ${data.id}:`, initialQuestion);
-            
+
             const messageData = await fetchAPI<any>(
               "POST",
               `/api/qa/${data.id}/ask`,
@@ -395,9 +395,9 @@ export function QASection() {
               },
               headers
             );
-            
+
             console.log("Initial message sent, response:", messageData);
-            
+
             // Update messages with the new AI response
             if (messageData && messageData.conversation && Array.isArray(messageData.conversation.messages)) {
               setMessages(messageData.conversation.messages);
@@ -459,7 +459,7 @@ export function QASection() {
 
       // Send the question using our improved API helper
       console.log(`Sending question to conversation ${activeConversation}:`, currentQuestion);
-      
+
       const data = await fetchAPI<any>(
         "POST",
         `/api/qa/${activeConversation}/ask`,
@@ -469,7 +469,7 @@ export function QASection() {
         },
         headers
       );
-      
+
       console.log("Message added, response:", data);
 
       // Update messages with the new AI response
@@ -492,7 +492,7 @@ export function QASection() {
 
   const startNewConversation = () => {
     // Close the dialog (in case it's open from somewhere else)
-    setShowNewConversationDialog(false);
+    //setShowNewConversationDialog(false);
 
     // Reset the conversation state
     setActiveConversation(null);
@@ -528,7 +528,7 @@ export function QASection() {
       }
 
       console.log(`[QA Section] Deleting conversation ${id}`);
-      
+
       // The fetchAPI will handle empty responses (204 No Content)
       await fetchAPI(
         "DELETE", 
@@ -536,9 +536,9 @@ export function QASection() {
         undefined, 
         headers
       );
-      
+
       console.log(`[QA Section] Successfully deleted conversation ${id}`);
-      
+
       // Return an empty object as the mutation response
       return {};
     },
@@ -983,35 +983,7 @@ export function QASection() {
       </Dialog>
 
       {/* New conversation dialog */}
-      <Dialog
-        open={showNewConversationDialog}
-        onOpenChange={setShowNewConversationDialog}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Start a New Conversation</DialogTitle>
-            <DialogDescription>
-              Enter a title for your new conversation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2">
-            <Input
-              placeholder="Conversation title (optional)"
-              value={newConversationTitle}
-              onChange={(e) => setNewConversationTitle(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowNewConversationDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={startNewConversation}>Start New</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Removed dialog */}
     </div>
   );
 }
