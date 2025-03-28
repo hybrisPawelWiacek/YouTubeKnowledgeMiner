@@ -56,7 +56,15 @@ export function DemoLogin() {
   // Function to log in as a demo user
   const loginAsDemoUser = async (username: string) => {
     setIsLoading(true);
+    
+    // Add comprehensive DEBUG logging
+    console.log('🔍 [Demo Login] Starting login process for:', username);
+    console.log('🔍 [Demo Login] Current localStorage keys:', Object.keys(localStorage));
+    
     try {
+      // Log API call
+      console.log('🔍 [Demo Login] Calling API endpoint: /api/demo-auth/login');
+      
       const response = await fetch('/api/demo-auth/login', {
         method: 'POST',
         headers: {
@@ -65,14 +73,20 @@ export function DemoLogin() {
         body: JSON.stringify({ username }),
       });
       
+      console.log('🔍 [Demo Login] API response status:', response.status);
+      
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ [Demo Login] API error:', errorData);
         throw new Error(errorData.message || 'Failed to log in as demo user');
       }
       
       const { data } = await response.json();
       
+      console.log('🔍 [Demo Login] API data received:', JSON.stringify(data, null, 2));
+      
       if (!data || !data.id) {
+        console.error('❌ [Demo Login] Invalid data format received from API');
         throw new Error('Invalid response from server');
       }
       
@@ -94,6 +108,8 @@ export function DemoLogin() {
         },
       };
       
+      console.log('🔍 [Demo Login] Demo user object created:', JSON.stringify(demoUser, null, 2));
+      
       const mockSession = {
         user: demoUser,
         access_token: `demo_token_${data.id}`,
@@ -102,19 +118,43 @@ export function DemoLogin() {
         expires_at: Date.now() + 3600000
       };
       
+      console.log('🔍 [Demo Login] Mock session created with token:', mockSession.access_token);
+      
       // Import the updateCurrentSession function to keep all auth states in sync
       const { updateCurrentSession } = await import('@/lib/api');
       
       // Update the user context
+      console.log('🔍 [Demo Login] Setting user in context');
       setUser(demoUser as any);
+      
+      console.log('🔍 [Demo Login] Setting session in context');
       setSession(mockSession as any);
       
       // Also update the API module's session state
+      console.log('🔍 [Demo Login] Updating current session in API module');
       updateCurrentSession(mockSession);
       
-      // Explicitly save to localStorage to ensure persistence
-      // IMPORTANT: Must use the same key that use-supabase.tsx uses (youtube-miner-supabase-session)
-      localStorage.setItem('youtube-miner-supabase-session', JSON.stringify(mockSession));
+      // Store using BOTH possible keys for maximum compatibility
+      const STORAGE_KEY = 'youtube-miner-supabase-session';
+      
+      console.log('🔍 [Demo Login] Saving to localStorage with key:', STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockSession));
+      
+      // Also save with alternate key format that might be used
+      console.log('🔍 [Demo Login] Also saving with alternate key for compatibility');
+      localStorage.setItem('supabase.auth.token', JSON.stringify({ 
+        currentSession: mockSession,
+        expiresAt: Date.now() + 3600000
+      }));
+      
+      // Verify data was saved properly
+      const savedSession = localStorage.getItem(STORAGE_KEY);
+      console.log('🔍 [Demo Login] Verification - Session in localStorage:', 
+        savedSession ? 'Present' : 'Missing', 
+        'Length:', savedSession?.length);
+      
+      // Log all localStorage keys after setting
+      console.log('🔍 [Demo Login] All localStorage keys after login:', Object.keys(localStorage)); 
       
       toast({
         title: 'Demo Login Successful',
@@ -122,6 +162,7 @@ export function DemoLogin() {
       });
       
       // Redirect to home page
+      console.log('🔍 [Demo Login] Redirecting to home page');
       setLocation('/');
       
     } catch (error: any) {
