@@ -102,9 +102,18 @@ export function DemoLogin() {
         expires_at: Date.now() + 3600000
       };
       
+      // Import the updateCurrentSession function to keep all auth states in sync
+      const { updateCurrentSession } = await import('@/lib/api');
+      
       // Update the user context
       setUser(demoUser as any);
       setSession(mockSession as any);
+      
+      // Also update the API module's session state
+      updateCurrentSession(mockSession);
+      
+      // Explicitly save to localStorage to ensure persistence
+      localStorage.setItem('supabase.auth.token', JSON.stringify(mockSession));
       
       toast({
         title: 'Demo Login Successful',

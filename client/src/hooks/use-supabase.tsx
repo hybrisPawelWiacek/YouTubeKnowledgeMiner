@@ -84,6 +84,23 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             if (storedSessionStr) {
               storedSession = JSON.parse(storedSessionStr);
               console.log('Found stored session, checking if still valid');
+              
+              // Check if this is a demo user session
+              const isDemoUser = storedSession?.user?.user_metadata?.is_demo === true;
+              if (isDemoUser) {
+                console.log('Found demo user stored session - verifying validity');
+                
+                // Extra validation for demo users to prevent ghost sessions
+                const hasValidToken = storedSession.access_token && 
+                  storedSession.access_token.startsWith('demo_token_');
+                
+                // If this appears to be an incomplete or invalid demo session, remove it
+                if (!hasValidToken || !storedSession.user?.id) {
+                  console.warn('Invalid demo user session found, removing it');
+                  localStorage.removeItem(SUPABASE_SESSION_KEY);
+                  storedSession = null;
+                }
+              }
             }
           } catch (e) {
             console.error('Error parsing stored session:', e);
@@ -101,19 +118,32 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
           } else if (storedSession && storedSession.expires_at > Date.now()) {
             console.log('Restoring session from storage');
-            // Try to restore the session in Supabase
-            const { data, error } = await client.auth.setSession({
-              access_token: storedSession.access_token,
-              refresh_token: storedSession.refresh_token
-            });
             
-            if (error) {
-              console.error('Error restoring session:', error);
-              localStorage.removeItem(SUPABASE_SESSION_KEY);
-            } else if (data.session) {
-              setSession(data.session);
-              setUser(data.session.user);
-              updateCurrentSession(data.session);
+            // Check if this is a demo user session that we should restore directly
+            const isDemoUser = storedSession?.user?.user_metadata?.is_demo === true;
+            
+            if (isDemoUser) {
+              console.log('Restoring demo user session directly');
+              // For demo users, we don't need to validate with Supabase, just restore from localStorage
+              setSession(storedSession);
+              setUser(storedSession.user);
+              updateCurrentSession(storedSession);
+            } else {
+              // For regular Supabase users, try to restore the session with Supabase
+              console.log('Restoring regular Supabase session');
+              const { data, error } = await client.auth.setSession({
+                access_token: storedSession.access_token,
+                refresh_token: storedSession.refresh_token
+              });
+              
+              if (error) {
+                console.error('Error restoring session:', error);
+                localStorage.removeItem(SUPABASE_SESSION_KEY);
+              } else if (data.session) {
+                setSession(data.session);
+                setUser(data.session.user);
+                updateCurrentSession(data.session);
+              }
             }
           } else if (storedSession) {
             // Session expired, remove it
