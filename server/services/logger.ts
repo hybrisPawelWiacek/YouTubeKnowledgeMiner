@@ -132,3 +132,9 @@ export const authLogger = createLogger('auth');
 
 // Create a debug logger
 export const debugLogger = createLogger('debug');
+
+// Create a UI logger for client-side issues
+export const uiLogger = createLogger('ui');
+
+// Create a QA logger for conversation issues
+export const qaLogger = createLogger('qa');

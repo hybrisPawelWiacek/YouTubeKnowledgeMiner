@@ -142,6 +142,18 @@ export function QASection() {
       );
 
       console.log(`[QA Section] Fetched ${data?.length || 0} conversations for video ${videoId}:`, data);
+      
+      // Log if no conversations or empty array returned
+      if (!data || data.length === 0) {
+        console.warn(`[QA Section] No conversations found for video ${videoId}`);
+      } else {
+        // Check if any conversations have empty messages arrays
+        const emptyMessageConvos = data.filter(conv => !conv.messages || conv.messages.length === 0);
+        if (emptyMessageConvos.length > 0) {
+          console.warn(`[QA Section] Found ${emptyMessageConvos.length} conversations with empty messages arrays`);
+        }
+      }
+      
       return data;
     },
     enabled: videoId > 0,
@@ -297,8 +309,19 @@ export function QASection() {
 
   // Update messages when conversation data changes
   useEffect(() => {
-    if (conversationData && Array.isArray(conversationData.messages)) {
-      setMessages(conversationData.messages);
+    if (conversationData) {
+      console.log(`[QA Section] Updating messages from conversation data:`, conversationData);
+      
+      if (Array.isArray(conversationData.messages)) {
+        console.log(`[QA Section] Setting ${conversationData.messages.length} messages`);
+        setMessages(conversationData.messages);
+      } else {
+        console.warn(`[QA Section] Conversation messages is not an array:`, conversationData.messages);
+        // Set empty array as fallback
+        setMessages([]);
+      }
+    } else {
+      console.log(`[QA Section] No conversation data available`);
     }
   }, [conversationData]);
 
@@ -789,77 +812,83 @@ export function QASection() {
                 <div className="flex-grow flex flex-col">
                   <ScrollArea className="flex-grow pr-4">
                     <div className="space-y-6">
-                      {messages.map((message, index) => (
-                        <div
-                          key={index}
-                          className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                        >
+                      {messages && messages.length > 0 ? (
+                        messages.map((message, index) => (
                           <div
-                            className={`max-w-[80%] rounded-lg p-4 ${
-                              message.role === "user"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
+                            key={index}
+                            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                           >
-                            {searchTerm ? (
-                              <div
-                                className="whitespace-pre-wrap"
-                                dangerouslySetInnerHTML={{
-                                  __html: highlightText({
-                                    text: message.content,
-                                    searchTerm,
-                                    showFullTextWithHighlights: true,
-                                  }),
-                                }}
-                              />
-                            ) : (
-                              <div className="whitespace-pre-wrap">
-                                {message.content}
-                              </div>
-                            )}
-
-                            {/* Citation section */}
-                            {message.role === "assistant" &&
-                              message.citations &&
-                              message.citations.length > 0 && (
-                                <div className="mt-3 pt-2 border-t border-border">
-                                  <div className="text-xs font-medium mb-1.5">
-                                    Sources cited:
-                                  </div>
-                                  <div className="flex flex-col gap-2">
-                                    {message.citations.map((citation, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="text-xs bg-background/50 p-2 rounded"
-                                      >
-                                        <div className="font-medium text-primary">
-                                          {citation.content_type === "transcript"
-                                            ? "Transcript"
-                                            : citation.content_type === "summary"
-                                            ? "Summary"
-                                            : citation.content_type === "note"
-                                            ? "Note"
-                                            : citation.content_type}
-                                          {citation.timestamp && (
-                                            <span className="ml-1 font-normal">
-                                              ({citation.timestamp})
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="mt-0.5 text-muted-foreground">
-                                          {citation.content.length > 150
-                                            ? citation.content.substring(0, 150) +
-                                              "..."
-                                            : citation.content}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                            <div
+                              className={`max-w-[80%] rounded-lg p-4 ${
+                                message.role === "user"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {searchTerm ? (
+                                <div
+                                  className="whitespace-pre-wrap"
+                                  dangerouslySetInnerHTML={{
+                                    __html: highlightText({
+                                      text: message.content,
+                                      searchTerm,
+                                      showFullTextWithHighlights: true,
+                                    }),
+                                  }}
+                                />
+                              ) : (
+                                <div className="whitespace-pre-wrap">
+                                  {message.content}
                                 </div>
                               )}
+
+                              {/* Citation section */}
+                              {message.role === "assistant" &&
+                                message.citations &&
+                                message.citations.length > 0 && (
+                                  <div className="mt-3 pt-2 border-t border-border">
+                                    <div className="text-xs font-medium mb-1.5">
+                                      Sources cited:
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                      {message.citations.map((citation, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="text-xs bg-background/50 p-2 rounded"
+                                        >
+                                          <div className="font-medium text-primary">
+                                            {citation.content_type === "transcript"
+                                              ? "Transcript"
+                                              : citation.content_type === "summary"
+                                              ? "Summary"
+                                              : citation.content_type === "note"
+                                              ? "Note"
+                                              : citation.content_type}
+                                            {citation.timestamp && (
+                                              <span className="ml-1 font-normal">
+                                                ({citation.timestamp})
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="mt-0.5 text-muted-foreground">
+                                            {citation.content.length > 150
+                                              ? citation.content.substring(0, 150) +
+                                                "..."
+                                              : citation.content}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-sm text-muted-foreground">
+                          No messages yet. Start a conversation by asking a question below.
                         </div>
-                      ))}
+                      )}
                       <div ref={messagesEndRef} />
                     </div>
                   </ScrollArea>
