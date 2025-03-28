@@ -544,7 +544,7 @@ export default function Library() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setIsFilterSidebarOpen(true);
+                  setIsFilterSidebarOpen(!isFilterSidebarOpen);
                   trackEngagement();
                 }}
                 className="flex items-center gap-1"
@@ -727,8 +727,8 @@ export default function Library() {
 
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Sidebar for filters (desktop) */}
-            <div className="hidden lg:block">
+            {/* Unified Sidebar for filters (toggled by the Filters button) */}
+            <div className={`${isFilterSidebarOpen ? "block" : "hidden"}`}>
               <FilterSidebar
                 categories={categoriesQuery.data || []}
                 collections={collectionsQuery.data || []}
@@ -745,31 +745,10 @@ export default function Library() {
                 sortOrder={sortOrder}
                 setSortOrder={setSortOrder}
                 isVisible={true}
-                onClose={() => {}}
+                onClose={() => setIsFilterSidebarOpen(false)}
                 onCreateCollection={() => setIsCreateCollectionOpen(true)}
               />
             </div>
-
-            {/* Sidebar for filters (mobile) */}
-            <FilterSidebar
-              categories={categoriesQuery.data || []}
-              collections={collectionsQuery.data || []}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              selectedCollection={selectedCollection}
-              setSelectedCollection={setSelectedCollection}
-              selectedRating={selectedRating}
-              setSelectedRating={setSelectedRating}
-              showFavoritesOnly={showFavoritesOnly}
-              setShowFavoritesOnly={setShowFavoritesOnly}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              sortOrder={sortOrder}
-              setSortOrder={setSortOrder}
-              isVisible={isFilterSidebarOpen}
-              onClose={() => setIsFilterSidebarOpen(false)}
-              onCreateCollection={() => setIsCreateCollectionOpen(true)}
-            />
 
             {/* Main Content Area */}
             <div className="flex-grow">
