@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronsUp, BadgePlus, Beaker, Loader2 } from 'lucide-react';
 import { loginAsDemoUser as demoAuth } from '@/lib/demo-auth';
+import { clearAnonymousSession } from '@/lib/anonymous-session';
 
 // Define the demo user types for consistent typing
 interface DemoUser {
@@ -61,6 +62,10 @@ export function DemoLogin() {
     try {
       // Log the process
       console.log('🔍 [Demo Login] Starting login process for:', username);
+      
+      // Clear any existing anonymous session
+      console.log('🔍 [Demo Login] Clearing anonymous session');
+      clearAnonymousSession();
       
       // Use our dedicated demo auth system
       const demoSession = await demoAuth(username);

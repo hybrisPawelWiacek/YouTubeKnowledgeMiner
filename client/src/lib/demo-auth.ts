@@ -243,4 +243,10 @@ export function signOutDemoUser(): void {
   localStorage.removeItem('demo-auth-token');
   localStorage.removeItem('demo-refresh-token');
   localStorage.removeItem('demo-user-data');
+  
+  // 4. Import and use anonymous session clearing here would create a circular dependency
+  // So we directly remove the anonymous session key instead
+  const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+  localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+  console.log('🔑 [Demo Auth] Anonymous session cleared during sign out');
 }

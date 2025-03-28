@@ -607,6 +607,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // **** FORCEFUL CLEANUP APPROACH ****
       // Clear ALL possible authentication-related states regardless of user type
       
+      // Clear the anonymous session
+      console.log('Clearing anonymous session during sign out');
+      clearAnonymousSession();
+      
       // 1. Clear React state
       setUser(null);
       setSession(null);
@@ -622,10 +626,6 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       
       // 3. Clear the session in our API module
       updateCurrentSession(null);
-      
-      // 4. Clear any anonymous session
-      console.log("Clearing anonymous session data");
-      clearAnonymousSession();
       
       // Handle demo/direct auth users differently
       if (isDirectAuth) {
