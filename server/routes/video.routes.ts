@@ -1,16 +1,17 @@
 import { Router, Request, Response } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
 import { dbStorage } from '../database-storage';
-import { validateRequest, validateNumericParam } from '../middleware/validation.middleware';
-import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { validateParams } from '../middleware/validation.middleware';
+import { authenticateUser, requireAuth, requireSession } from '../middleware/auth.middleware';
 import { 
   youtubeUrlSchema,
   videoMetadataSchema,
   searchParamsSchema,
   SearchParams
 } from '../../shared/schema';
-import { sendSuccess, sendError, handleApiError } from '../utils/response.utils';
-import { AnonymousLimitError, ErrorCode } from '../utils/error.utils';
+import { apiSuccess as sendSuccess, apiError as sendError } from '../utils/response.utils';
+import errorUtils from '../utils/error.utils';
+const { AnonymousLimitError, ErrorCode } = errorUtils;
 // No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
   getYoutubeTranscript, 
@@ -28,7 +29,7 @@ import {
 const router = Router();
 
 // Apply user info middleware to all routes
-router.use(getUserInfo);
+router.use(authenticateUser);
 
 /**
  * Get the count of videos for an anonymous session
@@ -577,7 +578,7 @@ router.delete('/bulk', async (req: Request, res: Response) => {
  * This route MUST be placed after all other GET routes with specific paths
  * as Express will match '/:id' for ANY path segment if placed earlier
  */
-router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.get('/:id', validateParams(z.object({ id: z.string().regex(/^\d+$/) })), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.id);
     
@@ -596,7 +597,7 @@ router.get('/:id', validateNumericParam('id'), async (req: Request, res: Respons
 /**
  * Update a video
  */
-router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.patch('/:id', validateParams(z.object({ id: z.string().regex(/^\d+$/) })), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.id);
     const metadata = videoMetadataSchema.parse(req.body);
@@ -633,7 +634,7 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
 /**
  * Delete a video
  */
-router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.delete('/:id', validateParams(z.object({ id: z.string().regex(/^\d+$/) })), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.id);
     

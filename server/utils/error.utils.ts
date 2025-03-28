@@ -1,82 +1,89 @@
 /**
- * Custom error types and error handling utilities
+ * Error handling utilities
+ * 
+ * This module provides error handling utilities for the application.
+ * It includes:
+ * - Base ApplicationError class that extends Error
+ * - Specialized error types for different scenarios
+ * - Error wrapping and formatting functions
  */
 
+import { createLogger } from '../services/logger';
+
+const logger = createLogger('error-utils');
+
 /**
- * Error codes enumeration for better categorization and handling
+ * Standard error codes for consistent error reporting
  */
 export enum ErrorCode {
   // Authentication errors
-  AUTH_REQUIRED = 'AUTH_REQUIRED',
+  UNAUTHORIZED = 'UNAUTHORIZED',
   INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
-  USER_NOT_FOUND = 'USER_NOT_FOUND',
-  USER_EXISTS = 'USER_EXISTS',
-  EMAIL_EXISTS = 'EMAIL_EXISTS',
-  USERNAME_EXISTS = 'USERNAME_EXISTS',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  INVALID_TOKEN = 'INVALID_TOKEN',
   EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
   
-  // Session errors
-  SESSION_REQUIRED = 'SESSION_REQUIRED',
-  SESSION_EXPIRED = 'SESSION_EXPIRED',
-  SESSION_INVALID = 'SESSION_INVALID',
-  
-  // Request validation errors
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  // Authorization errors
+  FORBIDDEN = 'FORBIDDEN',
+  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
   
   // Resource errors
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
+  RESOURCE_ALREADY_EXISTS = 'RESOURCE_ALREADY_EXISTS',
   RESOURCE_CONFLICT = 'RESOURCE_CONFLICT',
   
-  // Permission errors
-  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  // Validation errors
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_INPUT = 'INVALID_INPUT',
+  MISSING_REQUIRED_FIELD = 'MISSING_REQUIRED_FIELD',
   
-  // Server errors
-  SERVER_ERROR = 'SERVER_ERROR',
+  // Service errors
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   DATABASE_ERROR = 'DATABASE_ERROR',
   EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
   
-  // Rate limiting
+  // Rate limiting and quotas
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+  ANONYMOUS_LIMIT_REACHED = 'ANONYMOUS_LIMIT_REACHED',
   
-  // Validation errors
-  INVALID_INPUT = 'INVALID_INPUT',
-  
-  // Generic errors
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  // General errors
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  NOT_IMPLEMENTED = 'NOT_IMPLEMENTED',
+  BAD_REQUEST = 'BAD_REQUEST'
 }
 
 /**
- * Base API error class with standard properties
+ * Base application error class
+ * Extends the built-in Error class with additional properties
  */
-export class ApiError extends Error {
-  public readonly code: ErrorCode;
-  public readonly statusCode: number;
-  public readonly details?: Record<string, any>;
+export class ApplicationError extends Error {
+  status: number;
+  code: string;
+  details?: any;
   
-  constructor(
-    message: string, 
-    code: ErrorCode = ErrorCode.UNKNOWN_ERROR,
-    statusCode: number = 500,
-    details?: Record<string, any>
-  ) {
+  constructor(message: string, code = 'APPLICATION_ERROR', status = 500, details?: any) {
     super(message);
     this.name = this.constructor.name;
     this.code = code;
-    this.statusCode = statusCode;
+    this.status = status;
     this.details = details;
     
-    // Required for instanceof to work correctly when extending Error
-    Object.setPrototypeOf(this, ApiError.prototype);
+    // This is needed to make instanceof work correctly with ES5
+    Object.setPrototypeOf(this, ApplicationError.prototype);
   }
   
   /**
-   * Convert error to a JSON-friendly object for API responses
+   * Convert the error to a plain object for JSON serialization
    */
-  public toJSON(): Record<string, any> {
+  toJSON() {
     return {
       error: {
         message: this.message,
         code: this.code,
+        status: this.status,
         ...(this.details && { details: this.details })
       }
     };
@@ -84,153 +91,178 @@ export class ApiError extends Error {
 }
 
 /**
- * Authentication error for auth-related issues
+ * Error when a required resource is not found
  */
-export class AuthenticationError extends ApiError {
-  constructor(
-    message: string, 
-    code: ErrorCode = ErrorCode.AUTH_REQUIRED,
-    details?: Record<string, any>
-  ) {
-    super(message, code, 401, details);
-    Object.setPrototypeOf(this, AuthenticationError.prototype);
-  }
-}
-
-/**
- * Session error for session-related issues
- */
-export class SessionError extends ApiError {
-  constructor(
-    message: string, 
-    code: ErrorCode = ErrorCode.SESSION_REQUIRED,
-    details?: Record<string, any>
-  ) {
-    super(message, code, 401, details);
-    Object.setPrototypeOf(this, SessionError.prototype);
-  }
-}
-
-/**
- * Validation error for invalid input
- */
-export class ValidationError extends ApiError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.VALIDATION_ERROR, 400, details);
-    Object.setPrototypeOf(this, ValidationError.prototype);
-  }
-}
-
-/**
- * Not found error for missing resources
- */
-export class NotFoundError extends ApiError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.RESOURCE_NOT_FOUND, 404, details);
+export class NotFoundError extends ApplicationError {
+  constructor(message = 'Resource not found', details?: any) {
+    super(message, 'RESOURCE_NOT_FOUND', 404, details);
     Object.setPrototypeOf(this, NotFoundError.prototype);
   }
 }
 
 /**
- * Permission error for access control issues
+ * Error for validation failures
  */
-export class PermissionError extends ApiError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.PERMISSION_DENIED, 403, details);
-    Object.setPrototypeOf(this, PermissionError.prototype);
+export class ValidationError extends ApplicationError {
+  constructor(message = 'Validation error', details?: any) {
+    super(message, 'VALIDATION_ERROR', 400, details);
+    Object.setPrototypeOf(this, ValidationError.prototype);
   }
 }
 
 /**
- * Conflict error for resource conflicts
+ * Error for authorization failures
  */
-export class ConflictError extends ApiError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.RESOURCE_CONFLICT, 409, details);
-    Object.setPrototypeOf(this, ConflictError.prototype);
+export class AuthorizationError extends ApplicationError {
+  constructor(message = 'Authorization error', details?: any) {
+    super(message, 'AUTHORIZATION_ERROR', 403, details);
+    Object.setPrototypeOf(this, AuthorizationError.prototype);
   }
 }
 
 /**
- * Rate limit error for rate limiting
+ * Error for database failures
  */
-export class RateLimitError extends ApiError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.RATE_LIMIT_EXCEEDED, 429, details);
-    Object.setPrototypeOf(this, RateLimitError.prototype);
-  }
-}
-
-/**
- * Anonymous user limit error
- * Used when anonymous users reach their usage limits
- */
-export class AnonymousLimitError extends ApiError {
-  constructor(
-    message: string = 'Anonymous user limit reached. Please register to continue.', 
-    details?: string | Record<string, any>
-  ) {
-    // If details is a string, convert it to an object
-    const detailsObj = typeof details === 'string' 
-      ? { description: details } 
-      : details;
-    
-    super(message, ErrorCode.RATE_LIMIT_EXCEEDED, 429, detailsObj);
-    Object.setPrototypeOf(this, AnonymousLimitError.prototype);
-  }
-}
-
-/**
- * Server error for internal server issues
- */
-export class ServerError extends ApiError {
-  constructor(
-    message: string, 
-    code: ErrorCode = ErrorCode.SERVER_ERROR,
-    details?: Record<string, any>
-  ) {
-    super(message, code, 500, details);
-    Object.setPrototypeOf(this, ServerError.prototype);
-  }
-}
-
-/**
- * Database error for database-related issues
- */
-export class DatabaseError extends ServerError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.DATABASE_ERROR, details);
+export class DatabaseError extends ApplicationError {
+  constructor(message = 'Database error', details?: any) {
+    super(message, 'DATABASE_ERROR', 500, details);
     Object.setPrototypeOf(this, DatabaseError.prototype);
   }
 }
 
 /**
- * External service error for issues with external services
+ * Error for external service failures
  */
-export class ExternalServiceError extends ServerError {
-  constructor(
-    message: string, 
-    details?: Record<string, any>
-  ) {
-    super(message, ErrorCode.EXTERNAL_SERVICE_ERROR, details);
+export class ExternalServiceError extends ApplicationError {
+  constructor(message = 'External service error', details?: any) {
+    super(message, 'EXTERNAL_SERVICE_ERROR', 502, details);
     Object.setPrototypeOf(this, ExternalServiceError.prototype);
   }
 }
+
+/**
+ * Error for rate limiting
+ */
+export class RateLimitError extends ApplicationError {
+  constructor(message = 'Rate limit exceeded', details?: any) {
+    super(message, 'RATE_LIMIT_EXCEEDED', 429, details);
+    Object.setPrototypeOf(this, RateLimitError.prototype);
+  }
+}
+
+/**
+ * Error for anonymous users reaching their resource limits
+ */
+export class AnonymousLimitError extends ApplicationError {
+  constructor(message = 'Anonymous user limit reached', details?: any) {
+    super(message, 'ANONYMOUS_LIMIT_REACHED', 403, details);
+    Object.setPrototypeOf(this, AnonymousLimitError.prototype);
+  }
+}
+
+/**
+ * Wrap an unknown error in an ApplicationError
+ * @param error The original error
+ * @param defaultMessage Optional default message if the error doesn't have one
+ * @returns An ApplicationError instance
+ */
+export function wrapError(error: any, defaultMessage = 'An unexpected error occurred'): ApplicationError {
+  // If it's already an ApplicationError, return it
+  if (error instanceof ApplicationError) {
+    return error;
+  }
+  
+  // Handle other known error types
+  if (error instanceof Error) {
+    // Extract the message
+    const message = error.message || defaultMessage;
+    
+    // Log the original error stack
+    logger.error('Error wrapped', {
+      originalError: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    return new ApplicationError(message);
+  }
+  
+  // For non-Error objects or primitive values
+  const message = error?.toString() || defaultMessage;
+  logger.error('Non-error wrapped', { original: error });
+  
+  return new ApplicationError(message);
+}
+
+/**
+ * Create a validation error with formatted field errors
+ * @param fieldErrors Object with field names as keys and error messages as values
+ * @param message Optional custom overall message
+ * @returns A ValidationError instance
+ */
+export function createValidationError(fieldErrors: Record<string, string>, message?: string): ValidationError {
+  return new ValidationError(
+    message || 'Validation failed',
+    { fields: fieldErrors }
+  );
+}
+
+/**
+ * Format an error for logging or API responses
+ * @param error The error to format
+ * @returns Formatted error object
+ */
+export function formatError(error: any): Record<string, any> {
+  if (error instanceof ApplicationError) {
+    return error.toJSON();
+  }
+  
+  if (error instanceof Error) {
+    return {
+      error: {
+        message: error.message || 'Unknown error',
+        code: 'INTERNAL_ERROR',
+        status: 500
+      }
+    };
+  }
+  
+  return {
+    error: {
+      message: String(error) || 'Unknown error',
+      code: 'INTERNAL_ERROR',
+      status: 500
+    }
+  };
+}
+
+/**
+ * Higher-order function that wraps an async route handler to catch errors
+ * @param fn The async route handler function
+ * @returns A route handler that catches and processes errors
+ */
+export function asyncHandler(fn: Function) {
+  return async function(req: any, res: any, next: any) {
+    try {
+      await fn(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+export default {
+  ApplicationError,
+  NotFoundError,
+  ValidationError,
+  AuthorizationError,
+  DatabaseError,
+  ExternalServiceError,
+  RateLimitError,
+  AnonymousLimitError,
+  ErrorCode,
+  wrapError,
+  createValidationError,
+  formatError,
+  asyncHandler
+};

@@ -389,3 +389,65 @@ export type LoginRequest = z.infer<typeof loginSchema>;
 export type RegisterRequest = z.infer<typeof registerSchema>;
 export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirmRequest = z.infer<typeof passwordResetSchema>;
+
+// Additional authentication schemas
+export const anonymousSessionSchema = z.object({
+  sessionId: z.string().optional(),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string(),
+});
+
+export const updateProfileSchema = z.object({
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/, {
+    message: "Username must contain only letters, numbers, and underscores"
+  }).optional(),
+  email: z.string().email().optional(),
+  currentPassword: z.string().min(6).optional(),
+  newPassword: z.string().min(6).max(100).optional(),
+  confirmNewPassword: z.string().min(6).max(100).optional(),
+}).refine(data => {
+  // If changing password, require all password fields
+  if (data.newPassword || data.confirmNewPassword || data.currentPassword) {
+    return !!data.newPassword && !!data.confirmNewPassword && !!data.currentPassword;
+  }
+  return true;
+}, {
+  message: "All password fields are required when changing password",
+  path: ["newPassword"],
+}).refine(data => {
+  // Check password match if updating password
+  if (data.newPassword && data.confirmNewPassword) {
+    return data.newPassword === data.confirmNewPassword;
+  }
+  return true;
+}, {
+  message: "New passwords do not match",
+  path: ["confirmNewPassword"],
+});
+
+// Types for authentication
+export type AnonymousSessionRequest = z.infer<typeof anonymousSessionSchema>;
+export type VerifyEmailRequest = z.infer<typeof verifyEmailSchema>;
+export type UpdateProfileRequest = z.infer<typeof updateProfileSchema>;
+
+// Interface for auth responses
+export interface AuthResponse {
+  user: Omit<User, 'password_hash' | 'password_salt' | 'verification_token' | 'reset_token' | 'reset_token_expires'>;
+  message: string;
+  token?: string;
+}
+
+// Rate limiting schemas
+export const rateLimitConfig = z.object({
+  windowMs: z.number().int().positive(),
+  maxRequests: z.number().int().positive(),
+  message: z.string().optional(),
+  standardHeaders: z.boolean().optional(),
+  legacyHeaders: z.boolean().optional(),
+  skipSuccessfulRequests: z.boolean().optional(),
+  keyGenerator: z.function().args(z.any()).returns(z.string()).optional(),
+});
+
+export type RateLimitConfig = z.infer<typeof rateLimitConfig>;

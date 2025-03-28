@@ -1,12 +1,14 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
 import { createLogger } from "./services/logger";
 import { httpLoggerMiddleware } from "./middleware/http-logger-new";
-import { errorHandlerMiddleware } from "./middleware/error-handler";
+import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 import { performanceMonitorMiddleware, setupSystemMetricsLogging } from "./middleware/performance-monitor";
+import { authenticateUser } from "./middleware/auth.middleware";
 import logsRouter from "./routes/logs";
 import { info, warn, error, debug } from "./utils/logger";
 
@@ -19,12 +21,17 @@ const app = express();
 // JSON middleware with increased size limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Cookie parser middleware (needed for authentication)
+app.use(cookieParser());
 
 // Apply our custom HTTP request logger middleware
 app.use(httpLoggerMiddleware);
 
 // Apply performance monitoring middleware
 app.use(performanceMonitorMiddleware);
+
+// Apply authentication middleware (doesn't block requests, just attaches user info if available)
+app.use(authenticateUser);
 
 // Ensure API routes are not intercepted by Vite
 app.use('/api', (req, res, next) => {
@@ -41,7 +48,10 @@ app.use('/api/logs', logsRouter);
   const server = await registerRoutes(app);
 
   // Apply our custom error handler middleware as the last middleware
-  app.use(errorHandlerMiddleware);
+  app.use(errorHandler);
+  
+  // Add 404 handler for routes that don't match any handlers
+  app.use(notFoundHandler);
 
   // Special route to check the API status - for debugging
   app.get('/api/status', (req, res) => {
