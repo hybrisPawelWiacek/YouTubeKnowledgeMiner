@@ -1,239 +1,174 @@
 /**
- * Client-side logging service
+ * Client-side Logger Module
  * 
- * This module provides a unified interface for logging in the browser,
- * with batched sending of logs to the server and fallback to console.
+ * This module provides browser-compatible logging with level filtering
+ * and the ability to send logs to the server for centralized storage.
  */
 
-import axios from 'axios';
-
-// Configuration
-const LOG_ENDPOINT = '/api/logs';
-const FLUSH_INTERVAL = 10000; // 10 seconds
-const MAX_BATCH_SIZE = 50;
-const MAX_QUEUE_SIZE = 100;
-
-// Log levels
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-// Log entry structure
-interface LogEntry {
-  level: LogLevel;
-  message: string;
-  component?: string;
-  metadata?: Record<string, any>;
-  timestamp: number;
-}
-
-// Queue for batching logs
-let logQueue: LogEntry[] = [];
-let flushTimeout: ReturnType<typeof setTimeout> | null = null;
-let isSending = false;
-
-/**
- * Send log entries to the server
- */
-async function sendLogs(entries: LogEntry[]): Promise<void> {
-  if (entries.length === 0) return;
-  
-  try {
-    isSending = true;
-    await axios.post(LOG_ENDPOINT, entries);
-  } catch (error) {
-    // If sending to server fails, log to console as fallback
-    console.error('Failed to send logs to server:', error);
-    entries.forEach(entry => {
-      const { level, message, component, metadata } = entry;
-      console[level](`[${component || 'app'}] ${message}`, metadata);
-    });
-  } finally {
-    isSending = false;
-  }
-}
-
-/**
- * Flush the log queue to the server
- */
-function flushLogs(): void {
-  if (logQueue.length === 0 || isSending) return;
-  
-  // Take a copy of the current queue and clear it
-  const entries = [...logQueue];
-  logQueue = [];
-  
-  // Send the entries
-  sendLogs(entries);
-  
-  // Clear the timeout
-  if (flushTimeout) {
-    clearTimeout(flushTimeout);
-    flushTimeout = null;
-  }
-}
-
-/**
- * Schedule a flush of the log queue
- */
-function scheduleFlush(): void {
-  if (flushTimeout) return;
-  flushTimeout = setTimeout(() => {
-    flushLogs();
-    flushTimeout = null;
-  }, FLUSH_INTERVAL);
-}
-
-/**
- * Queue a log entry for sending to the server
- * If the queue reaches the batch size, flush immediately
- */
-const queueLog = (entry: LogEntry): void => {
-  // Add to queue, limiting the queue size
-  if (logQueue.length >= MAX_QUEUE_SIZE) {
-    logQueue.shift(); // Remove oldest entry if queue is full
-  }
-  logQueue.push(entry);
-  
-  // Flush immediately if we reach batch size
-  if (logQueue.length >= MAX_BATCH_SIZE) {
-    flushLogs();
-  } else {
-    scheduleFlush();
-  }
-  
-  // Also log to console for immediate feedback during development
-  if (import.meta.env.DEV) {
-    const { level, message, component, metadata } = entry;
-    console[level](`[${component || 'app'}] ${message}`, metadata);
-  }
+// Log levels and their priority
+const LOG_LEVELS = {
+  debug: 0,
+  info: 1,
+  warn: 2, 
+  error: 3
 };
 
+// Set minimum log level based on environment
+const MIN_LOG_LEVEL = process.env.NODE_ENV === 'production' ? LOG_LEVELS.info : LOG_LEVELS.debug;
+
+// Default meta information attached to all logs
+const DEFAULT_META = {
+  client: true,
+  userAgent: navigator.userAgent,
+  url: window.location.href
+};
+
+// Batch size for server sync
+const BATCH_SIZE = 10;
+
+// Queue of logs waiting to be sent to server
+let logQueue: any[] = [];
+
+// Generate unique session ID for correlating logs
+const sessionId = `client_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+// Track if a sync is in progress
+let isSyncing = false;
+
 /**
- * Component-specific logger
+ * Main logger object with methods for each log level
  */
-class ComponentLogger {
-  private component: string;
+export const logger = {
+  debug: (message: string, meta: Record<string, any> = {}) => log('debug', message, meta),
+  info: (message: string, meta: Record<string, any> = {}) => log('info', message, meta),
+  warn: (message: string, meta: Record<string, any> = {}) => log('warn', message, meta),
+  error: (message: string, meta: Record<string, any> = {}) => log('error', message, meta),
   
-  constructor(component: string) {
-    this.component = component;
-  }
-  
-  /**
-   * Log at debug level
-   */
-  debug(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'debug',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at info level
-   */
-  info(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'info',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at warn level
-   */
-  warn(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'warn',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at error level
-   */
-  error(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'error',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log an Error object
-   */
-  logError(message: string, error: Error, metadata: Record<string, any> = {}): void {
-    this.error(message, {
-      ...metadata,
+  // Log error with stack trace
+  logError: (message: string, error: Error, meta: Record<string, any> = {}) => {
+    return log('error', message, {
+      ...meta,
       error: {
-        name: error.name,
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
+        name: error.name
       }
     });
   }
+};
+
+/**
+ * Core logging function
+ */
+function log(level: keyof typeof LOG_LEVELS, message: string, meta: Record<string, any> = {}): void {
+  // Skip if below minimum level
+  if (LOG_LEVELS[level] < MIN_LOG_LEVEL) return;
   
-  /**
-   * Track a user event (such as button click, form submission, etc.)
-   */
-  trackEvent(eventName: string, metadata: Record<string, any> = {}): void {
-    this.info(`Event: ${eventName}`, {
-      ...metadata,
-      eventType: 'user_event',
-      eventName
-    });
-  }
+  // Create log entry
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    level,
+    message,
+    timestamp,
+    sessionId,
+    ...DEFAULT_META,
+    ...meta
+  };
   
-  /**
-   * Track feature usage (such as search, filter, etc.)
-   */
-  trackFeature(featureName: string, metadata: Record<string, any> = {}): void {
-    this.info(`Feature: ${featureName}`, {
-      ...metadata,
-      eventType: 'feature_usage',
-      featureName
-    });
-  }
+  // Console output
+  consoleOutput(level, message, logEntry);
   
-  /**
-   * Track performance metrics
-   */
-  trackPerformance(operation: string, durationMs: number, metadata: Record<string, any> = {}): void {
-    this.info(`Performance: ${operation} (${durationMs.toFixed(2)}ms)`, {
-      ...metadata,
-      eventType: 'performance',
-      operation,
-      durationMs
-    });
+  // Add to queue for server sync
+  logQueue.push(logEntry);
+  
+  // Trigger sync if queue reaches batch size or is an error
+  if (logQueue.length >= BATCH_SIZE || level === 'error') {
+    syncLogsToServer();
   }
 }
 
 /**
- * Create a logger for a specific component
+ * Output log to console with appropriate styling
  */
-export const createComponentLogger = (component: string): ComponentLogger => {
-  return new ComponentLogger(component);
-};
-
-// Global logger instance
-export const logger = new ComponentLogger('app');
-
-// Flush logs when page is about to unload
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    flushLogs();
-  });
+function consoleOutput(level: string, message: string, data: any): void {
+  // Do nothing in production unless explicitly enabled
+  if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_PRODUCTION_LOGS) {
+    return;
+  }
+  
+  const consoleMethod = (console as any)[level] || console.log;
+  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+  
+  switch(level) {
+    case 'debug':
+      consoleMethod(`%c${timestamp} [DEBUG]`, 'color: gray', message, data);
+      break;
+    case 'info':
+      consoleMethod(`%c${timestamp} [INFO]`, 'color: blue', message, data);
+      break;
+    case 'warn':
+      consoleMethod(`%c${timestamp} [WARN]`, 'color: orange', message, data);
+      break;
+    case 'error':
+      consoleMethod(`%c${timestamp} [ERROR]`, 'color: red; font-weight: bold', message, data);
+      break;
+    default:
+      consoleMethod(`${timestamp} [${level.toUpperCase()}]`, message, data);
+  }
 }
 
-// Export types for external use
-export type { LogLevel, LogEntry };
+/**
+ * Send collected logs to server
+ */
+async function syncLogsToServer(): Promise<void> {
+  // Skip if empty queue or sync in progress
+  if (logQueue.length === 0 || isSyncing) return;
+  
+  // Mark sync in progress
+  isSyncing = true;
+  
+  // Take logs from queue up to batch size
+  const logsToSend = logQueue.slice(0, BATCH_SIZE);
+  
+  try {
+    // Send logs to server endpoint
+    const response = await fetch('/api/logs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ logs: logsToSend })
+    });
+    
+    if (response.ok) {
+      // Remove sent logs from queue
+      logQueue = logQueue.slice(logsToSend.length);
+    } else {
+      console.error('Failed to sync logs to server:', await response.text());
+    }
+  } catch (error) {
+    console.error('Error syncing logs to server:', error);
+  } finally {
+    // Reset sync flag
+    isSyncing = false;
+    
+    // If more logs in queue, schedule another sync
+    if (logQueue.length > 0) {
+      setTimeout(syncLogsToServer, 1000);
+    }
+  }
+}
+
+// Set up periodic sync
+setInterval(syncLogsToServer, 30000);
+
+// Sync logs on page unload
+window.addEventListener('beforeunload', () => {
+  // Use synchronous approach for unload
+  if (logQueue.length > 0) {
+    navigator.sendBeacon('/api/logs', JSON.stringify({ logs: logQueue }));
+  }
+});
+
+// Default export
+export default logger;

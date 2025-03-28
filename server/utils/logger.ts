@@ -1,40 +1,71 @@
 /**
- * Logger adapter for migrating from old logging system
+ * Logger Utility
  * 
- * This utility module provides a bridge between the old console.log-based
- * logging system and the new structured logger. It allows for a gradual
- * migration by mapping old log calls to the new logger.
+ * This module provides simplified access to the logger service,
+ * with convenience functions for common logging operations.
  */
 
-import { createLogger } from '../services/logger';
+import { logger, createLogger } from '../services/logger';
 
-// Create a legacy logger to capture old logging patterns
-const legacyLogger = createLogger('legacy');
+// Re-export the main logger instance
+export { logger };
+
+// Convenience function for logging at different levels
+export const debug = (message: string, meta = {}) => logger.debug(message, meta);
+export const info = (message: string, meta = {}) => logger.info(message, meta);
+export const warn = (message: string, meta = {}) => logger.warn(message, meta);
+export const error = (message: string, meta = {}) => logger.error(message, meta);
+
+// Special function for logging errors with stack traces
+export const logError = (message: string, error: Error, meta = {}) => {
+  logger.logError(message, error, meta);
+};
 
 /**
- * Helper to transform old logging patterns to the new system
- * This function maps console.log/info/warn/error to the appropriate
- * method in the new logger, preserving context and metadata.
+ * Create a component-specific logger with a fluent API
  */
-export function log(message: string, ...args: any[]): void {
-  legacyLogger.info(message, { args });
+export function createComponentLogger(component: string) {
+  const componentLogger = createLogger(component);
+  
+  return {
+    // Standard log levels
+    debug: (message: string, meta = {}) => componentLogger.debug(message, meta),
+    info: (message: string, meta = {}) => componentLogger.info(message, meta),
+    warn: (message: string, meta = {}) => componentLogger.warn(message, meta),
+    error: (message: string, meta = {}) => componentLogger.error(message, meta),
+    
+    // Special method for logging errors with stack traces
+    logError: (message: string, error: Error, meta = {}) => {
+      componentLogger.logError(message, error, meta);
+    },
+    
+    // Method to log with a child context
+    withContext: (context: Record<string, any>) => {
+      return {
+        debug: (message: string, meta = {}) => componentLogger.debug(message, { ...context, ...meta }),
+        info: (message: string, meta = {}) => componentLogger.info(message, { ...context, ...meta }),
+        warn: (message: string, meta = {}) => componentLogger.warn(message, { ...context, ...meta }),
+        error: (message: string, meta = {}) => componentLogger.error(message, { ...context, ...meta }),
+        logError: (message: string, error: Error, meta = {}) => {
+          componentLogger.logError(message, error, { ...context, ...meta });
+        }
+      };
+    }
+  };
 }
 
-export function info(message: string, ...args: any[]): void {
-  legacyLogger.info(message, { args });
+/**
+ * Safely stringify objects for logging, handling circular references
+ */
+export function safeStringify(obj: any): string {
+  const cache = new Set();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (cache.has(value)) {
+        return '[Circular Reference]';
+      }
+      cache.add(value);
+    }
+    return value;
+  }, 2);
 }
-
-export function warn(message: string, ...args: any[]): void {
-  legacyLogger.warn(message, { args });
-}
-
-export function error(message: string, ...args: any[]): void {
-  legacyLogger.error(message, { args });
-}
-
-export function debug(message: string, ...args: any[]): void {
-  legacyLogger.debug(message, { args });
-}
-
-// Export a default function for backward compatibility
-export default log;

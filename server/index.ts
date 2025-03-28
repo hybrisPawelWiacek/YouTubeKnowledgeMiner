@@ -4,11 +4,11 @@ import { setupVite, serveStatic } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
 import { createLogger } from "./services/logger";
-import { httpLoggerMiddleware } from "./middleware/http-logger";
+import { httpLoggerMiddleware } from "./middleware/http-logger-new";
 import { errorHandlerMiddleware } from "./middleware/error-handler";
-import performanceMonitorMiddleware, { startSystemMetricsCollection } from "./middleware/performance-monitor";
+import { performanceMonitorMiddleware, setupSystemMetricsLogging } from "./middleware/performance-monitor";
 import logsRouter from "./routes/logs";
-import { log } from "./utils/logger";
+import { info, warn, error, debug } from "./utils/logger";
 
 config();
 
@@ -84,10 +84,23 @@ app.use('/api/logs', logsRouter);
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    log(`✅ Server running on http://0.0.0.0:${port}`);
-    log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    // Log with the new logger
+    appLogger.info(`Server running on http://0.0.0.0:${port}`);
+    appLogger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Add test logs at various levels
+    info('Application started successfully', { port, environment: process.env.NODE_ENV || 'development' });
+    debug('Debug configuration loaded', { debug: process.env.NODE_ENV !== 'production' });
+    warn('Using default configuration', { reason: 'No custom config file found' });
+    
+    // Log error example (non-critical)
+    try {
+      throw new Error('Test error for logging system');
+    } catch (err) {
+      error('Caught non-critical error', { error: err instanceof Error ? err.message : String(err) });
+    }
     
     // Start system metrics logging (every 5 minutes)
-    startSystemMetricsCollection();
+    setupSystemMetricsLogging();
   });
 })();

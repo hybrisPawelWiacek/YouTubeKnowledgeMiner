@@ -1,179 +1,139 @@
-# Logging Guidelines
-
-This document outlines the logging system implemented in the application and provides guidelines for its usage.
+# Logging System Guidelines
 
 ## Overview
 
-The logging system is designed to provide comprehensive, standardized logging across the entire application, both on the server and client sides. It uses Winston on the server side and a custom implementation on the client side that sends logs to the server.
+This document provides guidelines and best practices for using the application's logging system. The logging infrastructure is built on Winston for server-side logging and a custom implementation for client-side logging that supports sending logs to the server.
 
 ## Log Levels
 
-The system supports four log levels, listed in order of increasing severity:
+The system supports the following log levels (in order of increasing severity):
 
-1. **debug** - Detailed information, typically of interest only when diagnosing problems
+1. **debug** - Detailed information for debugging purposes
 2. **info** - Confirmation that things are working as expected
-3. **warn** - An indication that something unexpected happened, or may happen in the near future
-4. **error** - A serious problem that requires immediate attention
+3. **warn** - Indication that something unexpected happened, or may happen in the future
+4. **error** - Runtime errors that don't require immediate action but should be monitored
 
-## Log Files
-
-Server logs are stored in the `/logs` directory, with separate files for different concerns:
-
-- `combined.log` - All logs
-- `error.log` - Error-level logs only
-- `http.log` - HTTP request/response logs
-- `auth.log` - Authentication-related logs
-- `api.log` - API-related logs
-- `client.log` - Logs received from the client
-- `performance.log` - Performance metrics
-- `exceptions.log` - Uncaught exceptions
-- `rejections.log` - Unhandled promise rejections
-
-## Server-Side Usage
+## Server-Side Logging
 
 ### Basic Usage
 
 ```typescript
-import { createLogger } from '../services/logger';
+import { log, info, warn, error, debug } from "./utils/logger";
 
-// Create a logger for a specific component
-const logger = createLogger('my-component');
+// Standard log levels
+info('User signed in successfully', { userId: 123 });
+warn('Rate limit approaching', { userId: 123, currentRate: '80%' });
+error('Payment processing failed', { orderId: 'ORD-123', reason: 'Insufficient funds' });
+debug('Processing step completed', { step: 2, duration: '45ms' });
 
-// Log at different levels
-logger.debug('Detailed debugging information');
-logger.info('Normal operational message');
-logger.warn('Warning: something might be wrong');
-logger.error('Error: something is definitely wrong');
-
-// Log with additional metadata
-logger.info('User registered', { userId: 123, email: 'user@example.com' });
-
-// Log errors with stack traces
+// Logging errors with stack traces
 try {
-  // Some code that might throw
-} catch (error) {
-  logger.logError('Failed to process request', error, { requestId: '123' });
+  // Some operation that might throw
+} catch (err) {
+  if (err instanceof Error) {
+    logError('Operation failed', err, { additionalContext: 'value' });
+  }
 }
 ```
 
-### Specialized Loggers
+### Component-Specific Loggers
 
-The system includes specialized loggers for specific concerns:
-
-```typescript
-// HTTP logger (for request/response logging)
-const httpLogger = createLogger('http');
-httpLogger.logHttpRequest(req, { requestId: '123' });
-httpLogger.logHttpResponse(req, res, durationMs, { requestId: '123' });
-
-// Auth logger (for authentication events)
-const authLogger = createLogger('auth');
-authLogger.logAuth('login', { userId: 123, method: 'password' });
-
-// API logger (for API operations)
-const apiLogger = createLogger('api');
-apiLogger.logApi('getVideos', { userId: 123, filters: { category: 'tech' } });
-```
-
-## Client-Side Usage
-
-The client-side logger provides a similar interface, but batches logs and sends them to the server:
+For better organization, create component-specific loggers:
 
 ```typescript
-import { createComponentLogger } from '@/lib/logger';
+import { createLogger } from "../services/logger";
 
 // Create a logger for a specific component
-const logger = createComponentLogger('my-component');
+const paymentLogger = createLogger('payment');
 
-// Basic logging
-logger.debug('Detailed debugging information');
-logger.info('Normal operational message');
-logger.warn('Warning: something might be wrong');
-logger.error('Error: something is definitely wrong');
-
-// Log with metadata
-logger.info('User interaction', { action: 'button_click', elementId: 'submit-btn' });
-
-// Log errors with stack traces
-try {
-  // Some code that might throw
-} catch (error) {
-  logger.logError('Failed to load data', error, { source: 'API' });
-}
-
-// Specialized logging methods
-logger.trackEvent('button_click', { elementId: 'submit-btn' });
-logger.trackFeature('search', { query: 'example' });
-logger.trackPerformance('api_request', 150, { endpoint: '/api/videos' });
+paymentLogger.info('Processing payment', { amount: 99.99 });
+paymentLogger.error('Transaction declined', { reason: 'Invalid card' });
 ```
 
-## Middleware
+### HTTP Request Logging
 
-The system includes several middleware components:
+HTTP requests and responses are automatically logged by the `httpLoggerMiddleware`. Each request receives a unique request ID that is included in all related logs.
 
-1. **HTTP Logger** - Logs all HTTP requests and responses
-2. **Error Handler** - Centralizes error handling and logging
-3. **Performance Monitor** - Tracks request performance and system metrics
+## Client-Side Logging
+
+### Basic Usage
+
+```typescript
+import { logger } from "@/lib/logger";
+
+// Standard log levels
+logger.info('Page loaded', { page: 'home' });
+logger.warn('Form submission slow', { duration: '2.5s' });
+logger.error('API request failed', { endpoint: '/api/data', status: 404 });
+
+// Logging errors with stack traces
+try {
+  // Some operation that might throw
+} catch (err) {
+  if (err instanceof Error) {
+    logger.logError('Operation failed', err, { additionalContext: 'value' });
+  }
+}
+```
+
+### Log Synchronization
+
+Client logs are automatically sent to the server in batches. Logs are synced:
+
+1. When the batch size (default: 10) is reached
+2. Immediately for error-level logs
+3. Every 30 seconds
+4. When the user navigates away from the page
+
+## Log Structure
+
+All logs include:
+
+- **timestamp** - When the log was created
+- **level** - The log level
+- **message** - The main log message
+- **component** - Which component/module generated the log
+- **metadata** - Additional contextual information
+
+## Performance and Error Monitoring
+
+The system automatically logs:
+
+1. Request performance metrics (duration, memory usage)
+2. System metrics (CPU, memory, load averages)
+3. Unhandled exceptions and promise rejections
+4. HTTP error responses
 
 ## Best Practices
 
-1. **Use the Right Level**
-   - `debug` for information useful for debugging
-   - `info` for normal operations
-   - `warn` for potential issues
-   - `error` for actual errors
+1. **Be Descriptive** - Log messages should be clear and descriptive
+2. **Include Context** - Add relevant metadata to facilitate troubleshooting
+3. **Choose Appropriate Levels**:
+   - `debug` - For development details
+   - `info` - For operational events
+   - `warn` - For potential issues
+   - `error` - For definite problems
+4. **Sensitive Data** - Never log sensitive information like passwords, tokens, or personal data
+5. **Performance Impact** - Be mindful of excessive logging in performance-critical sections
 
-2. **Provide Context**
-   - Always include relevant metadata (e.g., user IDs, request IDs, etc.)
-   - For errors, include the full error object to capture stack traces
+## Log Storage and Rotation
 
-3. **Be Concise**
-   - Log messages should be clear and concise
-   - Avoid logging sensitive information (passwords, tokens, etc.)
+Logs are stored in the `logs` directory and are categorized by:
 
-4. **Use Component Loggers**
-   - Create a specific logger for each component or module
-   - This helps with filtering and organization
+1. Component-specific logs (e.g., `http.log`, `auth.log`)
+2. Severity-based logs (e.g., `errors.log`)
+3. Daily combined logs (e.g., `combined-2025-03-28.log`)
 
-5. **Track Important Events**
-   - Authentication events (login, logout, registration)
-   - Critical business operations
-   - Performance metrics for key operations
+## Viewing Logs
 
-## Development vs. Production
+### Development Environment
 
-- In development, logs are sent to both the console and log files
-- In production, console logging is disabled, and only file logging is active
-- The default log level is `debug` in development and `info` in production
+In development, logs are displayed in the console with color-coding by level.
 
-## Troubleshooting
+### Production Environment
 
-If you're investigating an issue:
+In production, logs are stored in files. For real-time monitoring of production logs, additional tools like log aggregation services would be required.
 
-1. Check the `error.log` file first
-2. Look at `http.log` for request/response details
-3. Check `client.log` for client-side issues
-4. Examine `performance.log` for slow operations
+---
 
-## Extending the System
-
-To extend the logging system:
-
-1. Add new log file destinations in `services/logger.ts`
-2. Add new specialized logging methods as needed
-3. Ensure consistent formatting and metadata across all logs
-
-## Log Rotation and Maintenance
-
-In production environments, implement log rotation to manage log file sizes and retention:
-
-1. Use a tool like `logrotate` to rotate logs
-2. Archive older logs
-3. Set up monitoring for log disk usage
-
-## Security Considerations
-
-1. Logs might contain sensitive information
-2. Ensure log files have appropriate permissions
-3. Implement log scrubbing for sensitive fields
-4. Be cautious about what is logged at what level
+For questions or improvements to the logging system, contact the development team.

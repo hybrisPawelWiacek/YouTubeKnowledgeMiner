@@ -1,127 +1,76 @@
 /**
  * Performance Monitoring Middleware
  * 
- * This middleware tracks performance metrics for each request
- * and periodically logs system-wide metrics.
+ * This middleware tracks and logs performance metrics for HTTP requests,
+ * including response time and memory usage. It also periodically logs
+ * system-wide metrics like CPU and memory usage.
  */
 
-import os from 'os';
 import { Request, Response, NextFunction } from 'express';
+import os from 'os';
 import { createLogger } from '../services/logger';
-import { v4 as uuidv4 } from 'uuid';
 
+// Create performance-specific logger
 const perfLogger = createLogger('performance');
-let metricIntervalId: NodeJS.Timeout | null = null;
 
-// Configuration
-const SLOW_REQUEST_THRESHOLD = 1000; // 1 second
-const HIGH_MEMORY_USAGE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
-const SYSTEM_METRICS_INTERVAL = 5 * 60 * 1000; // 5 minutes
+// Define thresholds for slow requests
+const SLOW_REQUEST_THRESHOLD_MS = 1000;
+const HIGH_MEMORY_USAGE_MB = 10;
 
 /**
- * Start collecting system-wide metrics periodically
+ * Express middleware to monitor request performance
  */
-export function startSystemMetricsCollection() {
-  if (metricIntervalId) {
-    clearInterval(metricIntervalId);
+export function performanceMonitorMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  // Skip monitoring for static assets and health checks
+  if (
+    req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/) ||
+    req.path === '/health' ||
+    req.path === '/ping'
+  ) {
+    return next();
   }
-  
-  // Log initial metrics
-  logSystemMetrics();
-  
-  // Schedule periodic logging
-  metricIntervalId = setInterval(logSystemMetrics, SYSTEM_METRICS_INTERVAL);
-}
 
-/**
- * Log current system metrics
- */
-function logSystemMetrics() {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  const percentUsed = (usedMem / totalMem * 100).toFixed(2);
-  
-  perfLogger.info('System metrics', {
-    system: {
-      memory: {
-        total: formatBytes(totalMem),
-        free: formatBytes(freeMem),
-        used: formatBytes(usedMem),
-        percentUsed: `${percentUsed}%`
-      },
-      cpu: {
-        loadAvg: os.loadavg(),
-        cpus: os.cpus().length
-      },
-      uptime: formatUptime(os.uptime())
-    }
-  });
-}
-
-/**
- * Format bytes to a human-readable string
- */
-function formatBytes(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let size = bytes;
-  let unitIndex = 0;
-  
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
-  
-  return `${size.toFixed(2)} ${units[unitIndex]}`;
-}
-
-/**
- * Format seconds to a human-readable uptime string
- */
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  
-  const parts = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0 || days > 0) parts.push(`${hours}h`);
-  parts.push(`${minutes}m`);
-  parts.push(`${Math.floor(seconds % 60)}s`);
-  
-  return parts.join(' ');
-}
-
-/**
- * Performance monitoring middleware
- */
-export function performanceMonitorMiddleware(req: Request, res: Response, next: NextFunction) {
-  // Generate unique ID for this request if not already present
-  const requestId = (req as any).id || uuidv4();
-  (req as any).id = requestId;
-  
-  // Capture memory usage at start
-  const startMem = process.memoryUsage();
-  
-  // Capture start time
+  // Record start time and memory usage
   const startTime = process.hrtime();
+  const startMemory = process.memoryUsage();
   
-  // Track response
+  // Process the request
+  next();
+  
+  // When response is finished, calculate and log metrics
   res.on('finish', () => {
     // Calculate duration
-    const hrTime = process.hrtime(startTime);
-    const durationMs = hrTime[0] * 1000 + hrTime[1] / 1000000;
+    const hrDuration = process.hrtime(startTime);
+    const durationMs = (hrDuration[0] * 1000) + (hrDuration[1] / 1000000);
+    
+    // Get current memory usage
+    const endMemory = process.memoryUsage();
     
     // Calculate memory difference
-    const endMem = process.memoryUsage();
-    const memDiff = endMem.heapUsed - startMem.heapUsed;
+    const memoryDiff = endMemory.heapUsed - startMemory.heapUsed;
     
-    // Prepare performance data
-    const perfData = {
+    // Format memory values for logging
+    const formatMemory = (bytes: number) => {
+      return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    };
+    
+    // Determine if this was a slow request
+    const isSlow = durationMs > SLOW_REQUEST_THRESHOLD_MS;
+    const hasHighMemoryUsage = memoryDiff > (HIGH_MEMORY_USAGE_MB * 1024 * 1024);
+    
+    // Log at appropriate level
+    const logLevel = isSlow || hasHighMemoryUsage ? 'warn' : 'debug';
+    
+    // Log request performance
+    perfLogger[logLevel](`Request completed: ${durationMs.toFixed(2)}ms`, {
       request: {
         method: req.method,
         path: req.path,
-        query: Object.keys(req.query).length > 0
+        query: Object.keys(req.query).length > 0 || false
       },
       response: {
         statusCode: res.statusCode
@@ -130,29 +79,95 @@ export function performanceMonitorMiddleware(req: Request, res: Response, next: 
         duration: `${durationMs.toFixed(2)}ms`,
         durationRaw: durationMs,
         memory: {
-          start: formatBytes(startMem.heapUsed),
-          end: formatBytes(endMem.heapUsed),
-          diff: formatBytes(memDiff),
-          diffRaw: memDiff
+          start: formatMemory(startMemory.heapUsed),
+          end: formatMemory(endMemory.heapUsed),
+          diff: formatMemory(memoryDiff),
+          diffRaw: memoryDiff
         }
       }
-    };
-    
-    // Log slow requests with a warning
-    if (durationMs > SLOW_REQUEST_THRESHOLD) {
-      perfLogger.warn(`Slow response: ${durationMs.toFixed(2)}ms`, perfData);
-    }
-    
-    // Log high memory usage with a warning
-    if (memDiff > HIGH_MEMORY_USAGE_THRESHOLD) {
-      perfLogger.warn(`High memory usage: ${formatBytes(memDiff)}`, perfData);
-    }
-    
-    // Always log performance data at debug level
-    perfLogger.debug(`Request completed: ${durationMs.toFixed(2)}ms`, perfData);
+    });
   });
-  
-  next();
 }
 
-export default performanceMonitorMiddleware;
+/**
+ * Collect and log system metrics periodically
+ */
+export function setupSystemMetricsLogging(intervalMinutes = 5) {
+  // Log initial metrics
+  logSystemMetrics();
+  
+  // Set up periodic logging
+  const intervalMs = intervalMinutes * 60 * 1000;
+  setInterval(logSystemMetrics, intervalMs);
+}
+
+/**
+ * Log current system metrics
+ */
+function logSystemMetrics() {
+  // Get CPU info
+  const cpus = os.cpus();
+  const cpuCount = cpus.length;
+  const cpuModel = cpus[0].model;
+  
+  // Get memory info
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const usedMemory = totalMemory - freeMemory;
+  const memoryUsagePercent = ((usedMemory / totalMemory) * 100).toFixed(2) + '%';
+  
+  // Get load averages
+  const loadAvg = os.loadavg();
+  
+  // Get system uptime
+  const uptimeHours = (os.uptime() / 3600).toFixed(2);
+  
+  // Get process memory
+  const processMemory = process.memoryUsage();
+  
+  // Get process uptime
+  const processUptimeHours = (process.uptime() / 3600).toFixed(2);
+  
+  // Format memory values
+  const formatMemory = (bytes: number) => {
+    return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  };
+  
+  const formatProcessMemory = (bytes: number) => {
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  };
+  
+  // Log system metrics
+  perfLogger.info('System metrics collected', {
+    system: {
+      platform: os.platform(),
+      arch: os.arch(),
+      cpus: {
+        count: cpuCount,
+        model: cpuModel,
+        speed: (cpus[0].speed / 1000) + ' GHz'
+      },
+      memory: {
+        total: formatMemory(totalMemory),
+        free: formatMemory(freeMemory),
+        used: formatMemory(usedMemory),
+        usagePercent: memoryUsagePercent
+      },
+      load: {
+        '1m': loadAvg[0].toFixed(2),
+        '5m': loadAvg[1].toFixed(2),
+        '15m': loadAvg[2].toFixed(2)
+      },
+      uptime: uptimeHours + ' hours'
+    },
+    process: {
+      memory: {
+        rss: formatProcessMemory(processMemory.rss),
+        heapTotal: formatProcessMemory(processMemory.heapTotal),
+        heapUsed: formatProcessMemory(processMemory.heapUsed),
+        external: formatProcessMemory(processMemory.external || 0)
+      },
+      uptime: processUptimeHours + ' hours'
+    }
+  });
+}

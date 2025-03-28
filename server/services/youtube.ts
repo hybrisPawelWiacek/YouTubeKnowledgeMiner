@@ -4,6 +4,10 @@ import { fileURLToPath } from 'url';
 import { generateSummary, isOpenAIConfigured } from './openai';
 import { log } from '../vite';
 import * as cheerio from 'cheerio';
+import { createLogger } from '../services/logger';
+
+// Create a dedicated logger for YouTube service
+const youtubeLogger = createLogger('youtube');
 
 // Get directory name
 const __filename = fileURLToPath(import.meta.url);
