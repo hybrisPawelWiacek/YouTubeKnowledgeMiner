@@ -37,6 +37,7 @@ export default function Library() {
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
   const [isGridView, setIsGridView] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // State to control both desktop and mobile filter visibility
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
@@ -571,10 +572,10 @@ export default function Library() {
 
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant={isFilterSidebarOpen ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
-                  setIsFilterSidebarOpen(true);
+                  setIsFilterSidebarOpen(!isFilterSidebarOpen);
                   trackEngagement();
                 }}
                 className="flex items-center gap-1"
@@ -758,27 +759,29 @@ export default function Library() {
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Sidebar for filters (desktop) */}
-            <div className="hidden lg:block">
-              <FilterSidebar
-                categories={categoriesQuery.data || []}
-                collections={collectionsQuery.data || []}
-                selectedCategory={selectedCategory}
-                setSelectedCategory={setSelectedCategory}
-                selectedCollection={selectedCollection}
-                setSelectedCollection={setSelectedCollection}
-                selectedRating={selectedRating}
-                setSelectedRating={setSelectedRating}
-                showFavoritesOnly={showFavoritesOnly}
-                setShowFavoritesOnly={setShowFavoritesOnly}
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                sortOrder={sortOrder}
-                setSortOrder={setSortOrder}
-                isVisible={true}
-                onClose={() => {}}
-                onCreateCollection={() => setIsCreateCollectionOpen(true)}
-              />
-            </div>
+            {isFilterSidebarOpen && (
+              <div className="hidden lg:block">
+                <FilterSidebar
+                  categories={categoriesQuery.data || []}
+                  collections={collectionsQuery.data || []}
+                  selectedCategory={selectedCategory}
+                  setSelectedCategory={setSelectedCategory}
+                  selectedCollection={selectedCollection}
+                  setSelectedCollection={setSelectedCollection}
+                  selectedRating={selectedRating}
+                  setSelectedRating={setSelectedRating}
+                  showFavoritesOnly={showFavoritesOnly}
+                  setShowFavoritesOnly={setShowFavoritesOnly}
+                  sortBy={sortBy}
+                  setSortBy={setSortBy}
+                  sortOrder={sortOrder}
+                  setSortOrder={setSortOrder}
+                  isVisible={true}
+                  onClose={() => {}}
+                  onCreateCollection={() => setIsCreateCollectionOpen(true)}
+                />
+              </div>
+            )}
 
             {/* Sidebar for filters (mobile) */}
             <FilterSidebar
