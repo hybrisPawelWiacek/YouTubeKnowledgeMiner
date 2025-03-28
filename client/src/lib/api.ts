@@ -90,22 +90,28 @@ export async function apiRequest(
   } else {
     console.log('[API] No current session or user available for API call');
     
-    // Handle anonymous user sessions
-    if (!currentSession?.user) {
-      // Get or create an anonymous session ID
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      
-      if (hasAnonymousSession()) {
-        console.log('[API] Using anonymous session:', anonymousSessionId);
-      } else {
-        console.log('[API] Created new anonymous session:', anonymousSessionId);
+    // Check if we have a demo user session in localStorage
+    const hasDemoSession = localStorage.getItem('demo-session') !== null;
+    if (hasDemoSession) {
+      console.log('[API] Demo user session found in localStorage, not using anonymous session');
+    } else {
+      // Handle anonymous user sessions only if not a demo user
+      if (!currentSession?.user) {
+        // Get or create an anonymous session ID
+        const anonymousSessionId = getOrCreateAnonymousSessionId();
+        
+        if (hasAnonymousSession()) {
+          console.log('[API] Using anonymous session:', anonymousSessionId);
+        } else {
+          console.log('[API] Created new anonymous session:', anonymousSessionId);
+        }
+        
+        // Add anonymous session header
+        (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
+        
+        // Log the headers being sent
+        console.log('[API] Request headers for anonymous user:', options.headers);
       }
-      
-      // Add anonymous session header
-      (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
-      
-      // Log the headers being sent
-      console.log('[API] Request headers for anonymous user:', options.headers);
     }
   }
 

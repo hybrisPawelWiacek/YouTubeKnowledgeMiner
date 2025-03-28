@@ -28,11 +28,20 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   const [anonymousCount, setAnonymousCount] = useState(0);
   const { error, handleAnonymousError, clearError } = useError();
 
+  // Check if we're using a demo user account
+  const hasDemoSession = () => localStorage.getItem('demo-session') !== null;
+
   // Keep anonymous count updated
   useEffect(() => {
     if (!user) {
-      async function fetchAnonymousVideoCount() {
+      const fetchAnonymousVideoCount = async () => {
         try {
+          // Skip for demo users
+          if (hasDemoSession()) {
+            console.log('[VideoInput] Demo user account detected, skipping anonymous video count');
+            return;
+          }
+          
           // Import here to avoid circular dependencies
           const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
           const sessionId = getOrCreateAnonymousSessionId();
@@ -59,7 +68,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           const localData = getLocalData();
           setAnonymousCount(localData.videos?.length || 0);
         }
-      }
+      };
       
       fetchAnonymousVideoCount();
     }
@@ -85,6 +94,12 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           
           // Refresh count to get latest from server
           try {
+            // Skip for demo users
+            if (hasDemoSession()) {
+              console.log('[VideoInput] Demo user account detected, skipping anonymous video count refresh');
+              return;
+            }
+            
             const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
             const sessionId = getOrCreateAnonymousSessionId();
             const headers = { 'x-anonymous-session': sessionId };
@@ -179,7 +194,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     }
 
     // Check if anonymous user has reached the limit before even making the API call
-    if (!user) {
+    if (!user && !hasDemoSession()) {
       console.log("[VideoInput] Checking anonymous limit before analyzing");
       try {
         const limitReached = await hasReachedAnonymousLimit();
