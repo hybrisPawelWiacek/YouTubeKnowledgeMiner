@@ -9,7 +9,7 @@ import {
   searchParamsSchema,
   SearchParams
 } from '../../shared/schema';
-import { apiSuccess, handleApiError, sendSuccess, sendError } from '../utils/response.utils';
+import { sendSuccess, sendError, handleApiError } from '../utils/response.utils';
 import { AnonymousLimitError, ErrorCode } from '../utils/error.utils';
 // No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
@@ -43,7 +43,7 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
     
     if (!sessionHeader) {
       console.log('[video routes] No anonymous session header found');
-      return apiSuccess(res, { count: 0 });
+      return sendSuccess(res, { count: 0 });
     }
     
     const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
@@ -61,21 +61,21 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
           ip_address: req.ip || null
         });
         console.log('[video routes] Created new anonymous session:', newSession);
-        return apiSuccess(res, { count: 0 });
+        return sendSuccess(res, { count: 0 });
       } catch (err) {
         console.error('[video routes] Error creating anonymous session:', err);
-        return apiSuccess(res, { count: 0 });
+        return sendSuccess(res, { count: 0 });
       }
     }
     
     console.log('[video routes] Found session with video count:', session.video_count);
-    return apiSuccess(res, { 
+    return sendSuccess(res, { 
       count: session.video_count || 0,
       max_allowed: 3 
     });
   } catch (error) {
     console.error("Error getting anonymous video count:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to get video count", 500);
   }
 });
 
@@ -113,11 +113,11 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       
       // Check if session has video count attribute
       if (session && session.video_count && session.video_count >= 3) {
-        const error = new AnonymousLimitError(
-          "Anonymous users can only save up to 3 videos. Please sign in to save more.",
-          "To save additional videos, you'll need to create an account. This allows you to access all your videos from any device and unlock more features."
+        return sendError(res, 
+          "Anonymous users can only save up to 3 videos. Please sign in to save more.", 
+          403, 
+          "ANONYMOUS_LIMIT_REACHED"
         );
-        return handleApiError(res, error);
       }
     }
     
@@ -190,21 +190,16 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     }
     
     // Return the processed video data
-    return apiSuccess(res, { 
+    return sendSuccess(res, { 
       message: "Video processed successfully", 
       video 
     }, 201);
   } catch (error) {
     if (error instanceof ZodError) {
-      const validationError = {
-        message: error.errors[0].message,
-        code: ErrorCode.VALIDATION_ERROR,
-        details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
-      };
-      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
     }
     console.error("Error processing video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to process video", 500);
   }
 });
 
@@ -261,14 +256,14 @@ router.get('/', async (req: Request, res: Response) => {
       if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
         // For anonymous users with session, return count of their videos
         const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
-        return apiSuccess(res, { count: videos.length });
+        return sendSuccess(res, { count: videos.length });
       } else if (userInfo.user_id !== null) {
         // For authenticated users, get count of their videos
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        return apiSuccess(res, { count: videos.length });
+        return sendSuccess(res, { count: videos.length });
       } else {
         // No user ID and no anonymous session
-        return apiSuccess(res, { count: 0 });
+        return sendSuccess(res, { count: 0 });
       }
     }
     
@@ -326,24 +321,24 @@ router.get('/', async (req: Request, res: Response) => {
         });
         
         console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
-        return apiSuccess(res, {
+        return sendSuccess(res, {
           videos: filteredVideos,
           totalCount: filteredVideos.length,
           hasMore: false
         });
       } catch (error) {
         console.error("[video routes] Error processing anonymous videos:", error);
-        return handleApiError(res, error);
+        return sendError(res, "Failed to process videos for anonymous user", 500);
       }
     } 
     // Handle authenticated users
     else if (userInfo.user_id !== null) {
       if (Object.keys(req.query).length > 0) {
         const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
-        return apiSuccess(res, result);
+        return sendSuccess(res, result);
       } else {
         const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
-        return apiSuccess(res, {
+        return sendSuccess(res, {
           videos,
           totalCount: videos.length,
           hasMore: false
@@ -352,7 +347,7 @@ router.get('/', async (req: Request, res: Response) => {
     } 
     // No user ID and no anonymous session
     else {
-      return apiSuccess(res, {
+      return sendSuccess(res, {
         videos: [],
         totalCount: 0,
         hasMore: false
@@ -360,15 +355,10 @@ router.get('/', async (req: Request, res: Response) => {
     }
   } catch (error) {
     if (error instanceof ZodError) {
-      const validationError = {
-        message: error.errors[0].message,
-        code: ErrorCode.VALIDATION_ERROR,
-        details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
-      };
-      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
     }
     console.error("Error fetching videos:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to fetch videos", 500);
   }
 });
 
@@ -383,25 +373,20 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // Extract video ID from URL
     const videoId = extractYoutubeId(url);
     if (!videoId) {
-      return handleApiError(res, new ValidationError(res, "Invalid YouTube URL format", 400, "VALIDATION_ERROR");
+      return sendError(res, "Invalid YouTube URL format", 400, "VALIDATION_ERROR");
     }
     
     // Process the YouTube video without saving
     const videoData = await processYoutubeVideo(videoId);
     
     // Return the processed video data
-    return apiSuccess(res, videoData);
+    return sendSuccess(res, videoData);
   } catch (error) {
     if (error instanceof ZodError) {
-      const validationError = {
-        message: error.errors[0].message,
-        code: ErrorCode.VALIDATION_ERROR,
-        details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
-      };
-      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
     }
     console.error("Error analyzing video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to analyze video", 500);
   }
 });
 
@@ -431,11 +416,11 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
       
       // Check if session has video count attribute
       if (session && session.video_count && session.video_count >= 3) {
-        const error = new AnonymousLimitError(
-          "Anonymous users can only save up to 3 videos. Please sign in to save more.",
-          "To save additional videos, you'll need to create an account. This allows you to access all your videos from any device and unlock more features."
+        return sendError(res, 
+          "Anonymous users can only save up to 3 videos. Please sign in to save more.", 
+          403, 
+          "ANONYMOUS_LIMIT_REACHED"
         );
-        return handleApiError(res, error);
       }
     }
     
@@ -459,12 +444,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
       description: videoData.description,
       tags: videoData.tags,
       user_id: userInfo.is_anonymous ? 1 : (userInfo.user_id as number), // Use user_id=1 for anonymous users
-      anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null,
-      // These are optional fields
-      notes: '',
-      category_id: null,
-      rating: null,
-      is_favorite: false
+      anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null
     });
     
     console.log("🔍 Saved with user_id:", video.user_id);
@@ -492,136 +472,103 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     }
     
     // Return the processed video data
-    return apiSuccess(res, { 
+    return sendSuccess(res, { 
       message: "Video processed successfully", 
       video 
     }, 201);
   } catch (error) {
     if (error instanceof ZodError) {
-      const validationError = {
-        message: error.errors[0].message,
-        code: ErrorCode.VALIDATION_ERROR,
-        details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
-      };
-      return handleApiError(res, new ValidationError(res, validationError.message, 400, validationError.code, validationError.details);
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
     }
     console.error("Error processing video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to process video", 500);
   }
 });
 
 /**
  * Bulk update videos
  */
-router.patch('/', requireSession, async (req: Request, res: Response) => {
+router.patch('/', async (req: Request, res: Response) => {
   try {
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Validate required fields
-    const { ids, data } = req.body;
-    
+    const { ids, ...updates } = req.body;
+
     if (!Array.isArray(ids) || ids.length === 0) {
-      return handleApiError(res, new ValidationError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return sendError(res, "Video IDs array is required", 400, "VALIDATION_ERROR");
     }
-    
-    if (!data || typeof data !== 'object') {
-      return handleApiError(res, new ValidationError(res, "You must provide update data object", 400, "VALIDATION_ERROR");
-    }
-    
-    // For security, we need to make sure users can only update their own videos
-    // First, get all videos by ID
-    const promises = ids.map(id => dbStorage.getVideo(id));
-    const videos = await Promise.all(promises);
-    
-    // Filter videos that don't exist or don't belong to the user
-    const validIds = videos
-      .filter(video => video !== undefined)  // Filter out undefined (videos not found)
-      .filter(video => {
-        if (!video) return false;
-        
-        // For authenticated users, check user_id
-        if (!userInfo.is_anonymous) {
-          return video.user_id === userInfo.user_id;
-        }
-        
-        // For anonymous users, check anonymous_session_id
-        return video.anonymous_session_id === userInfo.anonymous_session_id;
-      })
-      .map(video => video!.id);  // Extract just the IDs
-    
-    if (validIds.length === 0) {
-      return handleApiError(res, new ValidationError(res, "No valid videos found to update", 404, "RESOURCE_NOT_FOUND");
-    }
-    
-    // Perform the update with validated IDs
-    const updateCount = await dbStorage.bulkUpdateVideos(validIds, data);
-    
-    return apiSuccess(res, { 
-      message: `${updateCount} videos updated successfully`, 
-      updated_count: updateCount 
+
+    const metadata = videoMetadataSchema.parse(updates);
+
+    const updateData: any = {
+      notes: metadata.notes,
+      category_id: metadata.category_id,
+      rating: metadata.rating,
+      is_favorite: metadata.is_favorite,
+      timestamps: metadata.timestamps
+    };
+
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
     });
+
+    // Bulk update videos
+    const updatedCount = await dbStorage.bulkUpdateVideos(ids, updateData);
+
+    // If collections were specified, add all videos to those collections
+    if (metadata.collection_ids && metadata.collection_ids.length > 0) {
+      await dbStorage.bulkAddVideosToCollection(metadata.collection_ids[0], ids);
+    }
+
+    return sendSuccess(res, { count: updatedCount });
   } catch (error) {
-    console.error("Error updating videos:", error);
-    return handleApiError(res, error);
+    if (error instanceof ZodError) {
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
+    }
+    console.error("Error bulk updating videos:", error);
+    return sendError(res, "Failed to update videos", 500);
   }
 });
 
 /**
  * Bulk delete videos
  */
-router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
+router.delete('/bulk', async (req: Request, res: Response) => {
   try {
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Validate required fields
     const { ids } = req.body;
-    
+
     if (!Array.isArray(ids) || ids.length === 0) {
-      return handleApiError(res, new ValidationError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return sendError(res, "Video IDs array is required", 400, "VALIDATION_ERROR");
     }
+
+    // Convert IDs to numbers (in case they're passed as strings)
+    const numericIds = ids.map(id => Number(id));
     
-    // For security, we need to make sure users can only delete their own videos
-    // First, get all videos by ID
-    const promises = ids.map(id => dbStorage.getVideo(id));
-    const videos = await Promise.all(promises);
-    
-    // Filter videos that don't exist or don't belong to the user
-    const validIds = videos
-      .filter(video => video !== undefined)  // Filter out undefined (videos not found)
-      .filter(video => {
-        if (!video) return false;
-        
-        // For authenticated users, check user_id
-        if (!userInfo.is_anonymous) {
-          return video.user_id === userInfo.user_id;
-        }
-        
-        // For anonymous users, check anonymous_session_id
-        return video.anonymous_session_id === userInfo.anonymous_session_id;
-      })
-      .map(video => video!.id);  // Extract just the IDs
-    
-    if (validIds.length === 0) {
-      return handleApiError(res, new ValidationError(res, "No valid videos found to delete", 404, "RESOURCE_NOT_FOUND");
+    // Validate that all IDs are valid numbers
+    if (numericIds.some(id => isNaN(id) || id <= 0)) {
+      return sendError(res, "Invalid video IDs. All IDs must be positive numbers.", 400, "VALIDATION_ERROR");
     }
-    
+
     // Delete embeddings first
-    for (const id of validIds) {
-      await deleteVideoEmbeddings(id);
+    for (const id of numericIds) {
+      try {
+        // Try to delete video embeddings, but continue even if this fails
+        // This ensures the video deletion can still proceed
+        await deleteVideoEmbeddings(id);
+      } catch (error) {
+        console.error(`Error deleting embeddings for video ${id}:`, error);
+        // We continue with the deletion even if embeddings deletion fails
+      }
     }
-    
-    // Perform the delete with validated IDs
-    const deleteCount = await dbStorage.bulkDeleteVideos(validIds);
-    
-    return apiSuccess(res, { 
-      message: `${deleteCount} videos deleted successfully`, 
-      deleted_count: deleteCount 
-    });
+
+    // Bulk delete videos
+    const deletedCount = await dbStorage.bulkDeleteVideos(numericIds);
+
+    return sendSuccess(res, { count: deletedCount });
   } catch (error) {
-    console.error("Error deleting videos:", error);
-    return handleApiError(res, error);
+    console.error("Error bulk deleting videos:", error);
+    return sendError(res, "Failed to delete videos", 500);
   }
 });
 
@@ -630,122 +577,75 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
  * This route MUST be placed after all other GET routes with specific paths
  * as Express will match '/:id' for ANY path segment if placed earlier
  */
-router.get('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const videoId = parseInt(req.params.id);
     
-    // Get video from database
-    const video = await dbStorage.getVideo(id);
-    
+    const video = await dbStorage.getVideo(videoId);
     if (!video) {
-      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
-    
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to this video
-    // Authenticated users can only access their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
-    }
-    
-    // Anonymous users can only access videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
-    }
-    
-    return apiSuccess(res, video);
+
+    return sendSuccess(res, video);
   } catch (error) {
     console.error("Error fetching video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to fetch video", 500);
   }
 });
 
 /**
  * Update a video
  */
-router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    
-    // Get video from database to verify ownership
-    const video = await dbStorage.getVideo(id);
-    
-    if (!video) {
-      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
-    }
-    
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to update this video
-    // Authenticated users can only update their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
-    }
-    
-    // Anonymous users can only update videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
-    }
-    
-    // Update the video
-    const updatedVideo = await dbStorage.updateVideo(id, req.body);
-    
+    const videoId = parseInt(req.params.id);
+    const metadata = videoMetadataSchema.parse(req.body);
+
+    const updatedVideo = await dbStorage.updateVideo(videoId, {
+      notes: metadata.notes,
+      category_id: metadata.category_id,
+      rating: metadata.rating,
+      is_favorite: metadata.is_favorite,
+      timestamps: metadata.timestamps
+    });
+
     if (!updatedVideo) {
-      return handleApiError(res, new ValidationError(res, "Failed to update video", 500);
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
-    
-    return apiSuccess(res, updatedVideo);
+
+    // If collections were specified, handle collection membership changes
+    if (metadata.collection_ids && metadata.collection_ids.length > 0) {
+      // For now, just add to the first collection specified
+      // In a full implementation, we'd handle removing from other collections
+      await dbStorage.bulkAddVideosToCollection(metadata.collection_ids[0], [videoId]);
+    }
+
+    return sendSuccess(res, updatedVideo);
   } catch (error) {
+    if (error instanceof ZodError) {
+      return sendError(res, error.errors[0].message, 400, "VALIDATION_ERROR");
+    }
     console.error("Error updating video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to update video", 500);
   }
 });
 
 /**
  * Delete a video
  */
-router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const videoId = parseInt(req.params.id);
     
-    // Get video from database to verify ownership
-    const video = await dbStorage.getVideo(id);
-    
-    if (!video) {
-      return handleApiError(res, new ValidationError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+    const deleted = await dbStorage.deleteVideo(videoId);
+    if (!deleted) {
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
-    
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to delete this video
-    // Authenticated users can only delete their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
-    }
-    
-    // Anonymous users can only delete videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return handleApiError(res, new ValidationError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
-    }
-    
-    // Delete embeddings first
-    await deleteVideoEmbeddings(id);
-    
-    // Delete the video
-    const success = await dbStorage.deleteVideo(id);
-    
-    if (!success) {
-      return handleApiError(res, new ValidationError(res, "Failed to delete video", 500);
-    }
-    
-    return apiSuccess(res, { message: "Video deleted successfully" });
+
+    return res.status(204).end();
   } catch (error) {
     console.error("Error deleting video:", error);
-    return handleApiError(res, error);
+    return sendError(res, "Failed to delete video", 500);
   }
 });
 
