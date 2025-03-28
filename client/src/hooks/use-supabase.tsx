@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import { updateCurrentSession } from '@/lib/api';
 import { getStoredSession, DEMO_SESSION_KEY } from '@/lib/demo-session';
+import { registerRefreshCallback } from './use-supabase-internal';
 
 // Key for storing temporary data for anonymous users
 const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
@@ -61,6 +62,52 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [demoSessionInitialized, setDemoSessionInitialized] = useState(false);
   const { toast } = useToast();
+  
+  // Callback to manually refresh the auth state
+  const refreshAuthState = useCallback(() => {
+    console.log('[Auth Refresh] Manual refresh requested');
+    
+    // Check for demo session first
+    const demoSession = getStoredSession();
+    if (demoSession) {
+      console.log('[Auth Refresh] Restoring demo session', {
+        id: demoSession.user.id,
+        username: demoSession.user.user_metadata?.username
+      });
+      setUser(demoSession.user);
+      setSession(demoSession);
+      updateCurrentSession(demoSession);
+      return;
+    }
+    
+    // Check for anonymous session next
+    const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+    if (anonymousSessionId && !user) {
+      console.log('[Auth Refresh] Restoring anonymous session', { anonymousSessionId });
+      // For anonymous users, we don't have a user object, just ensure we have no user set
+      setUser(null);
+      setSession(null);
+      // No need to update current session as the API handles anonymous sessions via cookies
+    }
+    
+    // If Supabase client exists, try to refresh the session
+    if (supabase) {
+      console.log('[Auth Refresh] Checking Supabase session');
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          console.log('[Auth Refresh] Setting Supabase session', { 
+            id: session.user.id, 
+            email: session.user.email 
+          });
+          setUser(session.user);
+          setSession(session);
+          updateCurrentSession(session);
+        } else {
+          console.log('[Auth Refresh] No Supabase session found');
+        }
+      });
+    }
+  }, [supabase]);
 
   // First useEffect - specifically for demo session initialization 
   // This needs to run before any async fetches
@@ -658,6 +705,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // Clear the session in our API module
         updateCurrentSession(null);
         
+        // Trigger a global auth state refresh
+        console.log("[SignOut] Triggering global auth state refresh for direct auth user");
+        window.dispatchEvent(new Event('auth-state-refresh'));
+        
         // Try to restore any preserved anonymous session when signing out
         console.log("[SignOut] Attempting to restore anonymous session after direct auth signout");
         try {
@@ -713,6 +764,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setSession(null);
       updateCurrentSession(null);
+      
+      // Trigger an auth state refresh to ensure the UI updates
+      console.log("[SignOut] Triggering global auth state refresh");
+      window.dispatchEvent(new Event('auth-state-refresh'));
       
       // Double-check if the preserved session still exists after Supabase operations
       const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
@@ -943,6 +998,24 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       return hasReachedAnonymousLimitSync();
     }
   };
+  
+  // Register the refresh callback so it can be called from anywhere in the application
+  useEffect(() => {
+    console.log('[Auth] Registering auth refresh callback');
+    registerRefreshCallback(refreshAuthState);
+    
+    // Listen for auth state refresh events
+    const handleAuthStateRefresh = () => {
+      console.log('[Auth] Received auth state refresh event');
+      refreshAuthState();
+    };
+    
+    window.addEventListener('auth-state-refresh', handleAuthStateRefresh);
+    
+    return () => {
+      window.removeEventListener('auth-state-refresh', handleAuthStateRefresh);
+    };
+  }, [refreshAuthState]);
 
   return (
     <SupabaseContext.Provider

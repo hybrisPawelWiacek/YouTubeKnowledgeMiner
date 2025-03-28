@@ -2,6 +2,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { refreshAuthState } from "./lib/auth-refresh";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
@@ -143,15 +144,27 @@ function Router() {
   useEffect(() => {
     const handleAppNavigation = (event: Event) => {
       // Type assertion to access custom event details
-      const customEvent = event as CustomEvent<{path: string, source: string}>;
+      const customEvent = event as CustomEvent<{path: string, source: string, forceRefresh?: boolean}>;
       const path = customEvent.detail?.path;
       const source = customEvent.detail?.source;
+      const forceRefresh = customEvent.detail?.forceRefresh;
       
-      console.log(`[Router] Custom navigation event: path=${path}, source=${source}`);
+      console.log(`[Router] Custom navigation event: path=${path}, source=${source}, forceRefresh=${forceRefresh}`);
       
       if (path) {
         // Update the router location
         setLocation(path);
+        
+        // Force a state update in Supabase context if coming from logout
+        if (source?.includes('signout') || forceRefresh) {
+          try {
+            // Use the imported refresh function
+            console.log(`[Router] Force refreshing auth state after navigation from ${source}`);
+            refreshAuthState();
+          } catch (error) {
+            console.error('[Router] Error refreshing auth state:', error);
+          }
+        }
       }
     };
     

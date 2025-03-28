@@ -346,7 +346,10 @@ export async function signOutDemoUser(
     
     // Also clear API module session immediately
     updateCurrentSession(null);
-    console.log('[Demo Session] React and API state cleared immediately');
+    
+    // Trigger global auth state refresh to ensure all components update
+    window.dispatchEvent(new Event('auth-state-refresh'));
+    console.log('[Demo Session] React and API state cleared immediately, auth refresh event dispatched');
 
     // Now handle preservation of anonymous session if present
     if (hasAnonSession) {
