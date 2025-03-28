@@ -195,30 +195,38 @@ export function Header() {
       // IMPORTANT: Instead of checking React state (which might not be updated yet),
       // check direct indicators of session persistence and handle gracefully
       
-      // Try to restore anonymous session before taking drastic measures
+      // Try to restore anonymous session without page reload
       try {
         const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
         const restoredSession = restorePreservedAnonymousSession();
         
         if (restoredSession) {
           console.log("[Header] Successfully restored anonymous session after logout:", restoredSession);
-          // Navigate to homepage to refresh the UI state
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 150);
+          
+          // Use history API to navigate to home without full page reload
+          window.history.pushState({}, '', '/');
+          // Dispatch a custom event to notify components about the navigation
+          window.dispatchEvent(new CustomEvent('app-navigation', { 
+            detail: { path: '/', source: 'header-signout' } 
+          }));
         } else {
-          // Navigate to homepage regardless
-          // This forces a clean state refresh with the anonymous session
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 150);
+          console.log("[Header] No anonymous session restored, navigating to home");
+          
+          // Use history API to navigate to home without full page reload
+          window.history.pushState({}, '', '/');
+          // Dispatch a custom event to notify components about the navigation
+          window.dispatchEvent(new CustomEvent('app-navigation', { 
+            detail: { path: '/', source: 'header-signout-no-session' } 
+          }));
         }
       } catch (error) {
         console.error("[Header] Error in post-logout anonymous session restoration:", error);
-        // Fall back to basic page reload if restoration fails
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        
+        // Even on error, try to navigate without a page reload
+        window.history.pushState({}, '', '/');
+        window.dispatchEvent(new CustomEvent('app-navigation', { 
+          detail: { path: '/', source: 'header-signout-error' } 
+        }));
       }
     } catch (error) {
       console.error("Error signing out:", error);

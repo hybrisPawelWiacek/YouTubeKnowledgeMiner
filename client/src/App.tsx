@@ -137,6 +137,33 @@ function SessionManager() {
 }
 
 function Router() {
+  const [, setLocation] = useLocation();
+  
+  // Listen for custom navigation events to update the router location
+  useEffect(() => {
+    const handleAppNavigation = (event: Event) => {
+      // Type assertion to access custom event details
+      const customEvent = event as CustomEvent<{path: string, source: string}>;
+      const path = customEvent.detail?.path;
+      const source = customEvent.detail?.source;
+      
+      console.log(`[Router] Custom navigation event: path=${path}, source=${source}`);
+      
+      if (path) {
+        // Update the router location
+        setLocation(path);
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('app-navigation', handleAppNavigation);
+    
+    // Cleanup function
+    return () => {
+      window.removeEventListener('app-navigation', handleAppNavigation);
+    };
+  }, [setLocation]);
+  
   return (
     <ErrorBoundary>
       <Switch>

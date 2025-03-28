@@ -239,14 +239,13 @@ export function restorePreservedAnonymousSession(): string | null {
     if (preservedSession) {
       console.log('[Anonymous Session] Found preserved session to restore:', preservedSession);
       
-      // Force a clean slate by removing any existing session keys first
-      localStorage.removeItem(ANONYMOUS_SESSION_KEY);
-      localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_backup');
-      localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_timestamp');
-      
-      // Small delay to ensure removal operations complete
-      setTimeout(() => {
-        // Store the session ID in multiple places for redundancy
+      try {
+        // Force a clean slate by removing any existing session keys first
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_backup');
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_timestamp');
+        
+        // Store the session ID in multiple places for redundancy - do this synchronously
         localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
         localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', preservedSession);
         
@@ -258,16 +257,28 @@ export function restorePreservedAnonymousSession(): string | null {
         // Add a refresh timestamp for tracking when the session was last restored
         localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', now.toString());
         
-        // Clear the preserved backup once it's been restored to prevent duplicate restores
+        // Verify the session was properly restored
+        const verifiedSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+        if (verifiedSession !== preservedSession) {
+          console.error('[Anonymous Session] Failed to restore session correctly! Expected:', preservedSession, 'Got:', verifiedSession);
+          // Emergency recovery
+          localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
+        }
+        
+        // Clear the preserved backup only after successful verification
         localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_preserved');
         
         console.log('[Anonymous Session] Session restored successfully:', {
           session: preservedSession,
           timestamp: new Date(now).toISOString()
         });
-      }, 50);
+      } catch (restoreError) {
+        console.error('[Anonymous Session] Error during synchronized restoration:', restoreError);
+        // Even if there's an error, still try to ensure the session exists
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
+      }
       
-      // Immediately return the session ID even though async operations are still happening
+      // Return the session ID
       return preservedSession;
     } else {
       console.log('[Anonymous Session] No preserved session found to restore');
