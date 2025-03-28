@@ -18,6 +18,11 @@ import {
 } from '../middleware/auth.middleware';
 
 import { validateBody } from '../middleware/validation.middleware';
+import { 
+  strictAuthLimiter,
+  sensitiveOperationLimiter,
+  standardLimiter
+} from '../middleware/rate-limit.middleware';
 
 import {
   loginSchema, 
@@ -58,6 +63,7 @@ const logger = createLogger('auth-routes');
  * @access Public
  */
 router.post('/register', 
+  strictAuthLimiter,
   validateBody(registerSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -127,6 +133,7 @@ router.post('/register',
  * @access Public
  */
 router.post('/login',
+  strictAuthLimiter,
   validateBody(loginSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -245,6 +252,7 @@ router.get('/me',
  * @access Public
  */
 router.post('/anonymous-session',
+  standardLimiter,
   validateBody(anonymousSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -341,6 +349,7 @@ router.get('/anonymous-session',
  * @access Public
  */
 router.post('/verify-email',
+  standardLimiter,
   validateBody(verifyEmailSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -378,6 +387,7 @@ router.post('/verify-email',
  * @access Public
  */
 router.post('/request-password-reset',
+  sensitiveOperationLimiter,
   validateBody(passwordResetRequestSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -405,6 +415,7 @@ router.post('/request-password-reset',
  * @access Public
  */
 router.post('/reset-password',
+  sensitiveOperationLimiter,
   validateBody(passwordResetSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -440,6 +451,7 @@ router.post('/reset-password',
  */
 router.put('/profile',
   requireAuth,
+  standardLimiter,
   validateBody(updateProfileSchema),
   asyncHandler(async (req: Request, res: Response) => {
     try {

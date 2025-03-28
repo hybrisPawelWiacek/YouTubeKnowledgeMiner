@@ -9,6 +9,7 @@ import { httpLoggerMiddleware } from "./middleware/http-logger-new";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 import { performanceMonitorMiddleware, setupSystemMetricsLogging } from "./middleware/performance-monitor";
 import { authenticateUser } from "./middleware/auth.middleware";
+import { standardLimiter } from "./middleware/rate-limit.middleware";
 import logsRouter from "./routes/logs";
 import { info, warn, error, debug } from "./utils/logger";
 
@@ -39,6 +40,10 @@ app.use('/api', (req, res, next) => {
   res.setHeader('X-API-Route', 'true'); // Add marker header for API routes
   next();
 });
+
+// Apply global rate limiting for all API routes
+// Route-specific rate limiters can override this as needed
+app.use('/api', standardLimiter);
 
 // Register client logs endpoint
 app.use('/api/logs', logsRouter);

@@ -6,9 +6,9 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema, ZodError } from 'zod';
+import { z, ZodSchema, ZodError } from 'zod';
 import { createLogger } from '../services/logger';
-import { apiValidationError } from '../utils/response.utils';
+import { apiValidationError, apiError } from '../utils/response.utils';
 
 const logger = createLogger('validation');
 
@@ -162,10 +162,135 @@ export function validateFiles(allowedTypes: string[], maxSize: number = 5 * 1024
   };
 }
 
+/**
+ * Middleware to validate numeric parameters
+ * Ensures URL parameters that should be numbers are valid
+ * @param paramName Name of the parameter to validate
+ */
+export function validateNumericParam(paramName: string = 'id') {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const value = req.params[paramName];
+    
+    if (!value || isNaN(parseInt(value, 10))) {
+      logger.warn(`Invalid numeric parameter: ${paramName}`, {
+        path: req.path,
+        paramValue: value
+      });
+      
+      return apiError(
+        res,
+        `Invalid ${paramName} parameter. Expected a number.`,
+        'INVALID_PARAMETER',
+        400
+      );
+    }
+    
+    // Convert to number in params
+    req.params[paramName] = parseInt(value, 10).toString();
+    
+    next();
+  };
+}
+
+/**
+ * Generic request validation middleware
+ * Works with any combination of body, query, or params validation
+ * @param options Validation options including schemas for different parts of the request
+ */
+export function validateRequest(options: {
+  body?: ZodSchema<any>;
+  query?: ZodSchema<any>;
+  params?: ZodSchema<any>;
+}) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Validate each part of the request that has a schema
+      const validationResults: Record<string, any> = {};
+      const errors: Record<string, Record<string, string>> = {};
+      
+      // Validate request body if schema provided
+      if (options.body) {
+        try {
+          validationResults.body = options.body.parse(req.body);
+        } catch (error) {
+          if (error instanceof ZodError) {
+            errors.body = formatZodErrors(error);
+          } else {
+            next(error);
+            return;
+          }
+        }
+      }
+      
+      // Validate query params if schema provided
+      if (options.query) {
+        try {
+          validationResults.query = options.query.parse(req.query);
+        } catch (error) {
+          if (error instanceof ZodError) {
+            errors.query = formatZodErrors(error);
+          } else {
+            next(error);
+            return;
+          }
+        }
+      }
+      
+      // Validate route params if schema provided
+      if (options.params) {
+        try {
+          validationResults.params = options.params.parse(req.params);
+        } catch (error) {
+          if (error instanceof ZodError) {
+            errors.params = formatZodErrors(error);
+          } else {
+            next(error);
+            return;
+          }
+        }
+      }
+      
+      // If there are any validation errors, return them
+      if (Object.keys(errors).length > 0) {
+        logger.warn('Request validation failed', {
+          path: req.path,
+          errors
+        });
+        
+        return apiValidationError(res, errors, 'Request validation failed');
+      }
+      
+      // Update request objects with validated data
+      if (validationResults.body) {
+        req.body = validationResults.body;
+      }
+      
+      if (validationResults.query) {
+        req.query = validationResults.query;
+      }
+      
+      if (validationResults.params) {
+        req.params = validationResults.params;
+      }
+      
+      next();
+    } catch (error) {
+      // Handle any unexpected errors
+      logger.error('Unexpected error in request validation', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      next(error);
+    }
+  };
+}
+
 export default {
   validateBody,
   validateQuery,
   validateParams,
   validateFiles,
-  formatZodErrors
+  formatZodErrors,
+  validateNumericParam,
+  validateRequest
 };

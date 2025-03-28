@@ -34,6 +34,23 @@ declare global {
       anonymousSessionId?: string;
       videoCount?: number;
     }
+    
+    interface Response {
+      locals: {
+        userInfo?: {
+          user_id: number | null;
+          is_anonymous: boolean;
+          anonymous_session_id: string | null;
+          video_count: number;
+          username?: string;
+          email?: string;
+          is_verified?: boolean;
+          role?: string;
+          [key: string]: any;
+        };
+        [key: string]: any;
+      }
+    }
   }
 }
 
@@ -275,11 +292,68 @@ export function requireRole(roles: string[]) {
   };
 }
 
-// Export middleware functions
-export default {
-  authenticateUser,
-  requireAuth,
-  requireSession,
-  checkAnonymousLimit,
-  requireRole
-};
+/**
+ * Middleware that extracts user information and stores it in res.locals.userInfo
+ * This provides a consistent way to access user data in route handlers
+ */
+export function getUserInfo(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Initialize userInfo object
+    res.locals.userInfo = {
+      user_id: null,
+      is_anonymous: true,
+      anonymous_session_id: null,
+      video_count: 0
+    };
+    
+    // If user is authenticated, add user data
+    if (req.isAuthenticated && req.user) {
+      res.locals.userInfo = {
+        user_id: req.user.id,
+        is_anonymous: false,
+        anonymous_session_id: null,
+        video_count: 0,
+        username: req.user.username,
+        email: req.user.email,
+        is_verified: req.user.is_verified,
+        role: req.user.role
+      };
+    } 
+    // Otherwise check for anonymous session
+    else if (req.anonymousSessionId) {
+      res.locals.userInfo = {
+        user_id: null,
+        is_anonymous: true,
+        anonymous_session_id: req.anonymousSessionId,
+        video_count: req.videoCount || 0
+      };
+    }
+    
+    // Continue to next middleware
+    next();
+  } catch (error) {
+    logger.error('Error in getUserInfo middleware', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    next(error);
+  }
+}
+
+/**
+ * Helper function to get user ID from request
+ * Returns the user ID for authenticated users or null for anonymous users
+ * 
+ * @param req Express request object
+ * @returns The user ID for authenticated users or null for anonymous users
+ */
+export async function getUserIdFromRequest(req: Request): Promise<number | null> {
+  // For authenticated users, return the user ID
+  if (req.isAuthenticated && req.user) {
+    return req.user.id;
+  }
+  
+  // For anonymous users or no session, return null
+  return null;
+}
+
+// No default export, only named exports

@@ -52,6 +52,9 @@ export function apiSuccess<T = any>(
   return res.status(statusCode).json(response);
 }
 
+// Alias for backward compatibility
+export const sendSuccess = apiSuccess;
+
 /**
  * Send a standardized error response
  * 
@@ -97,6 +100,9 @@ export function apiError(
 
   return res.status(statusCode).json(response);
 }
+
+// Alias for backward compatibility
+export const sendError = apiError;
 
 /**
  * Send a not found response
@@ -228,5 +234,8 @@ export default {
   apiServerError,
   apiRedirect,
   apiCreated,
-  apiNoContent
+  apiNoContent,
+  // Include aliases for backward compatibility
+  sendSuccess,
+  sendError
 };
