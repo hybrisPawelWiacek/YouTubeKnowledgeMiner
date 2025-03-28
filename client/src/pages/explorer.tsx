@@ -369,7 +369,7 @@ export default function ExplorerPage() {
       <Header />
       
       <main className="flex-grow">
-        <div className="container py-6 md:py-12">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-12">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold tracking-tight mb-2">Content Explorer</h1>
             <p className="text-muted-foreground">
@@ -378,7 +378,7 @@ export default function ExplorerPage() {
           </div>
           
           {/* Search Bar */}
-          <div className="max-w-2xl mx-auto mb-8">
+          <div className="max-w-2xl mx-auto mb-8 px-4">
             <div className="flex gap-2">
               <div className="relative flex-grow">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -474,7 +474,7 @@ export default function ExplorerPage() {
           </div>
           
           {/* Main Content Area with filters sidebar */}
-          <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex flex-col md:flex-row gap-6 px-4">
             {/* Filters sidebar (desktop) with animation */}
             <div 
               className={`md:w-64 flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
