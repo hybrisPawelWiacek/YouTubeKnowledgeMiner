@@ -503,60 +503,79 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       
       console.log(`Signing out user. Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
       
+      // **** FORCEFUL CLEANUP APPROACH ****
+      // Clear ALL possible authentication-related states regardless of user type
+      
+      // 1. Clear React state
+      setUser(null);
+      setSession(null);
+      
+      // 2. Clear ALL possible localStorage keys
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
+      localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('sb-access-token');
+      localStorage.removeItem('sb-refresh-token');
+      localStorage.removeItem('sb-auth-token');
+      localStorage.removeItem('sb-provider-token');
+      
+      // 3. Clear the session in our API module
+      updateCurrentSession(null);
+      
+      // 4. Clear any anonymous session
+      console.log("Clearing anonymous session data");
+      clearAnonymousSession();
+      
+      // Handle demo/direct auth users differently
       if (isDirectAuth) {
-        // For direct auth users (including demo users), clear the user state and localStorage
-        setUser(null);
-        setSession(null);
-        
-        // IMPORTANT: Always remove session from localStorage for all user types
-        // Clear both session storage keys
-        localStorage.removeItem(SUPABASE_SESSION_KEY);
-        localStorage.removeItem('supabase.auth.token');
-        
-        // Clear the session in our API module
-        updateCurrentSession(null);
-        
-        // Clear any anonymous session when signing out
-        console.log("Clearing anonymous session data on direct auth signout");
-        clearAnonymousSession();
-        
         toast({
           title: "Signed out",
           description: "You've been successfully signed out",
         });
+        
+        // Force a complete page refresh for demo users as a failsafe
+        if (isDemoUser) {
+          console.log("Forcing page reload for demo user logout");
+          // Small delay to allow toast to display
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        }
+        
         return;
       }
       
-      // Otherwise use standard Supabase signout
+      // For standard Supabase users, also call the Supabase signOut method
       const { error } = await supabase.auth.signOut();
-
       if (error) {
-        throw error;
+        console.error("Error from Supabase signOut:", error);
+        // Continue anyway since we've already cleared all local state
       }
       
-      // Ensure we also clear local state when using Supabase signout
-      // This is a safety measure in case the Supabase auth state change event doesn't fire properly
+      toast({
+        title: "Signed out",
+        description: "You've been successfully signed out",
+      });
+      
+    } catch (error: any) {
+      console.error("Error in signOut function:", error);
+      
+      // Even if there's an error, try to clear the state as a failsafe
       setUser(null);
       setSession(null);
-      
-      // IMPORTANT: Always remove session from localStorage for all user types
-      // Clear both session storage keys
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       localStorage.removeItem('supabase.auth.token');
-      
-      // Clear the session in our API module
       updateCurrentSession(null);
       
-      // Clear any anonymous session when signing out
-      // This ensures users who sign out completely start fresh
-      console.log("Clearing anonymous session data on supabase signout");
-      clearAnonymousSession();
-    } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to sign out",
         variant: "destructive",
       });
+      
+      // Force reload as a last resort
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     }
   };
 
