@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { ZodError, z } from 'zod';
 import { dbStorage } from '../database-storage';
 import { validateParams } from '../middleware/validation.middleware';
-import { authenticateUser, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { authenticateUser, requireAuth, requireSession, getUserInfo } from '../middleware/auth.middleware';
 import { 
   youtubeUrlSchema,
   videoMetadataSchema,
@@ -28,8 +28,9 @@ import {
 // Create router
 const router = Router();
 
-// Apply user info middleware to all routes
+// Apply authentication and user info middleware to all routes
 router.use(authenticateUser);
+router.use(getUserInfo); // This middleware sets res.locals.userInfo
 
 /**
  * Get the count of videos for an anonymous session
