@@ -1,0 +1,81 @@
+[Demo Login] Cleared active anonymous session after preservation
+header.tsx:58 [Header] Anonymous video count from server: 1
+auth-prompt-dialog.tsx:159 [AuthPromptDialog] Dialog open state changed: false
+anonymous-session.ts:54 [Anonymous Session] Initial state - Main: null, Backup: anon_1743060549450_mdqeeg5t8, Preserved: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:60 [Anonymous Session] Restored session from backup: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:75 [Anonymous Session] Using existing session: anon_1743060549450_mdqeeg5t8
+video-input.tsx:42 [VideoInput] Fetching video count with session: anon_1743060549450_mdqeeg5t8
+debug-utils.ts:141 [DEBUG] Header - signOut-start 
+{userId: 9, isDemo: true, isDirect: true}
+debug-utils.ts:249 [DEBUG] Storage snapshot: 
+{availableKeys: Array(10), youtube-miner-demo-session: {…}, youtube-miner-demo-session:timestamp: 1743178934333, youtube-miner-supabase-session: {…}, youtube-miner-anonymous-session: null, …}
+header.tsx:96 ===== HEADER: SIGN OUT BUTTON CLICKED =====
+header.tsx:97 Current user before signOut: 
+{id: 9, email: 'demo_power@example.com', user_metadata: {…}, role: 'authenticated', aud: 'authenticated', …}
+header.tsx:98 Is demo user: true
+header.tsx:99 All localStorage keys before signOut: 
+(10) ['ytk_anonymous_session_id_last_accessed', 'debug-state-change-log', 'youtube-miner-supabase-session', 'ytk_anonymous_session_id', 'ytk_anonymous_session_id_restored_at', 'ytk_anonymous_session_id_backup', 'youtube-miner-demo-session', 'youtube-miner-demo-session:timestamp', 'ytk_anonymous_session_id_preserved', 'ytk_anonymous_session_id_restored_by']
+header.tsx:110 [Header] Directly preserving anonymous session before logout: anon_1743060549450_mdqeeg5t8
+header.tsx:128 [Header] Anonymous session successfully preserved: anon_1743060549450_mdqeeg5t8
+header.tsx:138 [Header] Demo session health before signOut: 
+{exists: true, valid: true, issues: Array(0), data: {…}}
+header.tsx:149 ===== HEADER: After signOut called =====
+header.tsx:155 [Header] Found preserved anonymous session after signOut: anon_1743060549450_mdqeeg5t8
+header.tsx:158 [Header] Directly restoring anonymous session: anon_1743060549450_mdqeeg5t8
+header.tsx:171 [Header] Anonymous session successfully restored: anon_1743060549450_mdqeeg5t8
+header.tsx:188 [Header] Cleaning up remaining auth sessions
+debug-utils.ts:249 [DEBUG] Storage snapshot: 
+{availableKeys: Array(6), youtube-miner-demo-session: null, youtube-miner-demo-session:timestamp: null, youtube-miner-supabase-session: null, youtube-miner-anonymous-session: null, …}
+header.tsx:200 ===== HEADER: SIGN OUT PROCESS COMPLETED =====
+anonymous-session.ts:224 [Anonymous Session] Starting session restoration process
+anonymous-session.ts:234 [Anonymous Session] Current storage state: 
+{main: 'anon_1743060549450_mdqeeg5t8', backup: 'anon_1743060549450_mdqeeg5t8', preserved: null, timestamp: null}
+anonymous-session.ts:284 [Anonymous Session] No preserved session found to restore
+header.tsx:225 [Header] No anonymous session restored, navigating to home
+App.tsx:152 [Router] Custom navigation event: path=/, source=header-signout-no-session, forceRefresh=undefined
+App.tsx:162 [Router] Force refreshing auth state after navigation from header-signout-no-session
+auth-refresh.ts:16 [Auth Refresh] Forcing refresh of authentication state
+use-supabase-internal.ts:27 [Supabase Internal] Refreshing Supabase state
+use-supabase-internal.ts:30 [Supabase Internal] Calling registered refresh callback
+use-supabase.tsx:68 [Auth Refresh] Manual refresh requested
+demo-session.ts:112 [Demo Session] Attempting to retrieve stored session
+demo-session.ts:117 [Demo Session] Available session-related storage keys: 
+(5) ['ytk_anonymous_session_id_last_accessed', 'ytk_anonymous_session_id', 'ytk_anonymous_session_id_restored_at', 'ytk_anonymous_session_id_backup', 'ytk_anonymous_session_id_restored_by']
+demo-session.ts:125 [Demo Session] Demo session not found in primary storage, checking Supabase session storage
+demo-session.ts:153 [Demo Session] No stored session found in any storage location
+use-supabase.tsx:86 [Auth Refresh] Restoring anonymous session 
+{anonymousSessionId: 'anon_1743060549450_mdqeeg5t8'}
+use-supabase.tsx:1133 [Auth] Received auth state refresh event
+use-supabase.tsx:68 [Auth Refresh] Manual refresh requested
+demo-session.ts:112 [Demo Session] Attempting to retrieve stored session
+demo-session.ts:117 [Demo Session] Available session-related storage keys: 
+(5) ['ytk_anonymous_session_id_last_accessed', 'ytk_anonymous_session_id', 'ytk_anonymous_session_id_restored_at', 'ytk_anonymous_session_id_backup', 'ytk_anonymous_session_id_restored_by']
+demo-session.ts:125 [Demo Session] Demo session not found in primary storage, checking Supabase session storage
+demo-session.ts:153 [Demo Session] No stored session found in any storage location
+use-supabase.tsx:86 [Auth Refresh] Restoring anonymous session 
+{anonymousSessionId: 'anon_1743060549450_mdqeeg5t8'}
+auth-refresh.ts:24 [Auth Refresh] Auth state refresh complete
+header.tsx:58 [Header] Anonymous video count from server: 1
+anonymous-session.ts:54 [Anonymous Session] Initial state - Main: anon_1743060549450_mdqeeg5t8, Backup: anon_1743060549450_mdqeeg5t8, Preserved: null
+anonymous-session.ts:75 [Anonymous Session] Using existing session: anon_1743060549450_mdqeeg5t8
+video-input.tsx:42 [VideoInput] Fetching video count with session: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:54 [Anonymous Session] Initial state - Main: anon_1743060549450_mdqeeg5t8, Backup: anon_1743060549450_mdqeeg5t8, Preserved: null
+anonymous-session.ts:75 [Anonymous Session] Using existing session: anon_1743060549450_mdqeeg5t8
+video-input.tsx:42 [VideoInput] Fetching video count with session: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:54 [Anonymous Session] Initial state - Main: anon_1743060549450_mdqeeg5t8, Backup: anon_1743060549450_mdqeeg5t8, Preserved: null
+anonymous-session.ts:75 [Anonymous Session] Using existing session: anon_1743060549450_mdqeeg5t8
+video-input.tsx:42 [VideoInput] Fetching video count with session: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:54 [Anonymous Session] Initial state - Main: anon_1743060549450_mdqeeg5t8, Backup: anon_1743060549450_mdqeeg5t8, Preserved: null
+anonymous-session.ts:75 [Anonymous Session] Using existing session: anon_1743060549450_mdqeeg5t8
+anonymous-session.ts:380 [Anonymous Session] Video count info from server: 
+{count: 1, maxAllowed: 3}
+﻿
+
+Privacy and security panel
+Test how a website behaves with limited third-party cookies and find relevant issues in the new 'Privacy' section of the evolved 'Privacy and security' panel.
+
+Calibrated CPU throttling presets
+Based on your users' experience, automatically calibrate and use more accurate CPU throttling presets for low- and mid-tier mobile devices.
+
+First- and third-party highlighting in Performance
+Reduce the noise of third-party data and hover over entries in a new table in Summary to distinguish between first- and third-party data in performance traces.

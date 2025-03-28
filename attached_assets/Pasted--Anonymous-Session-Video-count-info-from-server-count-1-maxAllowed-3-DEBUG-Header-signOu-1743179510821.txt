@@ -1,0 +1,44 @@
+[Anonymous Session] Video count info from server: {count: 1, maxAllowed: 3}
+ [DEBUG] Header - signOut-start {userId: 9, isDemo: true, isDirect: true}
+ [DEBUG] Storage snapshot: {availableKeys: Array(17), youtube-miner-demo-session: {…}, youtube-miner-demo-session:timestamp: 1743179456440, youtube-miner-supabase-session: {…}, youtube-miner-anonymous-session: null, …}
+ ===== HEADER: SIGN OUT BUTTON CLICKED =====
+ Current user before signOut: {id: 9, email: 'demo_power@example.com', user_metadata: {…}, role: 'authenticated', aud: 'authenticated', …}
+ Is demo user: true
+ All localStorage keys before signOut: (17) ['ytk_anonymous_session_id_last_accessed', 'youtube-miner-supabase-session', 'eruda-dev-tools', 'ytk_anonymous_session_id_restored_at', 'eruda-resources', 'eruda-elements', 'youtube-miner-demo-session', 'youtube-miner-demo-session:timestamp', 'ytk_anonymous_session_id_timestamp', 'ytk_anonymous_session_id_restored_by', 'debug-state-change-log', 'eruda-entry-button', 'ytk_anonymous_session_id', 'eruda-console', 'ytk_anonymous_session_id_backup', 'youtube-miner-anonymous-data', 'ytk_anonymous_session_id_preserved']
+ [Header] Directly preserving anonymous session before logout: anon_1743156070346_4bw2br1lc
+ [Header] Anonymous session successfully preserved: anon_1743156070346_4bw2br1lc
+ [Header] Demo session health before signOut: {exists: true, valid: true, issues: Array(0), data: {…}}
+ ===== HEADER: After signOut called =====
+ [Header] Found preserved anonymous session after signOut: anon_1743156070346_4bw2br1lc
+ [Header] Directly restoring anonymous session: anon_1743156070346_4bw2br1lc
+ [Header] Anonymous session successfully restored: anon_1743156070346_4bw2br1lc
+ [Header] Cleaning up remaining auth sessions
+ [DEBUG] Storage snapshot: {availableKeys: Array(13), youtube-miner-demo-session: null, youtube-miner-demo-session:timestamp: null, youtube-miner-supabase-session: null, youtube-miner-anonymous-session: null, …}
+ ===== HEADER: SIGN OUT PROCESS COMPLETED =====
+ [Anonymous Session] Starting session restoration process
+ [Anonymous Session] Current storage state: {main: 'anon_1743156070346_4bw2br1lc', backup: 'anon_1743156070346_4bw2br1lc', preserved: null, timestamp: '1743156070346'}
+ [Anonymous Session] No preserved session found to restore
+ [Header] No anonymous session restored, navigating to home
+ [Router] Custom navigation event: path=/, source=header-signout-no-session, forceRefresh=undefined
+ [Router] Force refreshing auth state after navigation from header-signout-no-session
+ [Auth Refresh] Forcing refresh of authentication state
+ [Supabase Internal] Refreshing Supabase state
+ [Supabase Internal] Calling registered refresh callback
+ [Auth Refresh] Manual refresh requested
+ [Demo Session] Attempting to retrieve stored session
+ [Demo Session] Available session-related storage keys: (6) ['ytk_anonymous_session_id_last_accessed', 'ytk_anonymous_session_id_restored_at', 'ytk_anonymous_session_id_timestamp', 'ytk_anonymous_session_id_restored_by', 'ytk_anonymous_session_id', 'ytk_anonymous_session_id_backup']
+ [Demo Session] Demo session not found in primary storage, checking Supabase session storage
+ [Demo Session] No stored session found in any storage location
+ [Auth Refresh] Restoring anonymous session {anonymousSessionId: 'anon_1743156070346_4bw2br1lc'}
+ [Auth] Received auth state refresh event
+ [Auth Refresh] Manual refresh requested
+ [Demo Session] Attempting to retrieve stored session
+ [Demo Session] Available session-related storage keys: (6) ['ytk_anonymous_session_id_last_accessed', 'ytk_anonymous_session_id_restored_at', 'ytk_anonymous_session_id_timestamp', 'ytk_anonymous_session_id_restored_by', 'ytk_anonymous_session_id', 'ytk_anonymous_session_id_backup']
+ [Demo Session] Demo session not found in primary storage, checking Supabase session storage
+ [Demo Session] No stored session found in any storage location
+ [Auth Refresh] Restoring anonymous session {anonymousSessionId: 'anon_1743156070346_4bw2br1lc'}
+ [Auth Refresh] Auth state refresh complete
+ [Header] Anonymous video count from server: 1
+ [Anonymous Session] Initial state - Main: anon_1743156070346_4bw2br1lc, Backup: anon_1743156070346_4bw2br1lc, Preserved: null
+ [Anonymous Session] Using existing session: anon_1743156070346_4bw2br1lc
+ [VideoInput] Fetching video count with session: anon_1743156070346_4bw2br1lc
