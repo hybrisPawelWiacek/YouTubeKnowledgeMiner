@@ -14,7 +14,6 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { useQuery } from "@tanstack/react-query";
-import { logStateChange, dumpStorageSnapshot } from "@/lib/debug-utils";
 
 // Define maximum videos allowed for anonymous users
 const MAX_ANONYMOUS_VIDEOS = 3;
@@ -75,183 +74,13 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
-      // Store the initial user state before logout for comparison
-      const initialUserId = user?.id;
-      const isDemo = user?.user_metadata?.is_demo === true;
-      const isDirect = user?.user_metadata?.direct_auth === true;
-      
-      logStateChange('Header', 'signOut-start', { 
-        userId: initialUserId,
-        isDemo,
-        isDirect
-      });
-      
-      // Dump state before signOut
-      try {
-        dumpStorageSnapshot();
-      } catch (dumpError) {
-        console.error("[Header] Error dumping storage snapshot before signOut:", dumpError);
-      }
-      
-      console.log("===== HEADER: SIGN OUT BUTTON CLICKED =====");
-      console.log("Current user before signOut:", user);
-      console.log("Is demo user:", isDemo);
-      console.log("All localStorage keys before signOut:", Object.keys(localStorage));
-      
-      // CRITICAL FIX: Directly preserve the anonymous session before starting logout
-      // This ensures it's stored correctly regardless of any async timing issues
-      const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
-      const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
-      
-      // Check if there's an anonymous session to preserve
-      const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
-      
-      if (anonymousSessionId) {
-        console.log(`[Header] Directly preserving anonymous session before logout: ${anonymousSessionId}`);
-        
-        // Preserve the session with metadata for better tracking
-        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, anonymousSessionId);
-        localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_timestamp', Date.now().toString());
-        localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_source', 'header_pre_signout');
-        
-        try {
-          localStorage.setItem(ANONYMOUS_PRESERVED_KEY + '_meta', JSON.stringify({
-            preserved_at: new Date().toISOString(),
-            preserved_by: 'Header.handleSignOut',
-            user_id: user?.id,
-            is_demo: isDemo
-          }));
-        } catch (metaError) {
-          console.error("[Header] Error storing preservation metadata:", metaError);
-        }
-        
-        console.log(`[Header] Anonymous session successfully preserved: ${anonymousSessionId}`);
-      } else {
-        console.log("[Header] No anonymous session found to preserve before logout");
-      }
-      
-      // Check demo session health before logout
-      try {
-        const { checkDemoSessionHealth } = await import('@/lib/debug-utils');
-        const sessionHealth = checkDemoSessionHealth();
-        
-        console.log("[Header] Demo session health before signOut:", sessionHealth);
-      } catch (healthError) {
-        console.error("[Header] Error checking demo session health:", healthError);
-      }
-      
-      // Call the signOut function
       await signOut();
-      
-      // Wait a bit to make sure async operations complete
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      console.log("===== HEADER: After signOut called =====");
-      
-      // Verify the preserved session still exists
-      const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
-      
-      if (preservedSession) {
-        console.log(`[Header] Found preserved anonymous session after signOut: ${preservedSession}`);
-        
-        // Explicitly restore the anonymous session
-        console.log(`[Header] Directly restoring anonymous session: ${preservedSession}`);
-        localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', preservedSession);
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_last_accessed', Date.now().toString());
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_by', 'header_post_signout');
-        
-        // Clean up preserved session to prevent double restore
-        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY);
-        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_timestamp');
-        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_source');
-        localStorage.removeItem(ANONYMOUS_PRESERVED_KEY + '_meta');
-        
-        console.log(`[Header] Anonymous session successfully restored: ${preservedSession}`);
-      } else if (anonymousSessionId) {
-        console.log(`[Header] WARNING: Preserved session lost during signOut, recovering from memory: ${anonymousSessionId}`);
-        
-        // Emergency recovery from memory variable
-        localStorage.setItem(ANONYMOUS_SESSION_KEY, anonymousSessionId);
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', anonymousSessionId);
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_emergency_restored', 'true');
-        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_last_accessed', Date.now().toString());
-        
-        console.log(`[Header] Anonymous session recovered from memory: ${anonymousSessionId}`);
-      } else {
-        console.log("[Header] No anonymous session to restore after signOut");
-      }
-      
-      // Clean up any remaining authentication sessions
-      if (localStorage.getItem('youtube-miner-demo-session') || localStorage.getItem('youtube-miner-supabase-session')) {
-        console.log("[Header] Cleaning up remaining auth sessions");
-        localStorage.removeItem('youtube-miner-demo-session');
-        localStorage.removeItem('youtube-miner-supabase-session');
-        localStorage.removeItem('youtube-miner-demo-session:timestamp');
-      }
-      
-      // Dump state after signOut
-      try {
-        dumpStorageSnapshot();
-      } catch (dumpError) {
-        console.error("[Header] Error dumping storage snapshot after signOut:", dumpError);
-      }
-      console.log("===== HEADER: SIGN OUT PROCESS COMPLETED =====");
-      
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
       });
-      
-      // IMPORTANT: Instead of checking React state (which might not be updated yet),
-      // check direct indicators of session persistence and handle gracefully
-      
-      // Try to restore anonymous session without page reload
-      try {
-        const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
-        const restoredSession = restorePreservedAnonymousSession();
-        
-        if (restoredSession) {
-          console.log("[Header] Successfully restored anonymous session after logout:", restoredSession);
-          
-          // Use history API to navigate to home without full page reload
-          window.history.pushState({}, '', '/');
-          // Dispatch a custom event to notify components about the navigation
-          window.dispatchEvent(new CustomEvent('app-navigation', { 
-            detail: { path: '/', source: 'header-signout' } 
-          }));
-        } else {
-          console.log("[Header] No anonymous session restored, navigating to home");
-          
-          // Use history API to navigate to home without full page reload
-          window.history.pushState({}, '', '/');
-          // Dispatch a custom event to notify components about the navigation
-          window.dispatchEvent(new CustomEvent('app-navigation', { 
-            detail: { path: '/', source: 'header-signout-no-session' } 
-          }));
-        }
-      } catch (error) {
-        console.error("[Header] Error in post-logout anonymous session restoration:", error);
-        
-        // Even on error, try to navigate without a page reload
-        window.history.pushState({}, '', '/');
-        window.dispatchEvent(new CustomEvent('app-navigation', { 
-          detail: { path: '/', source: 'header-signout-error' } 
-        }));
-      }
     } catch (error) {
       console.error("Error signing out:", error);
-      
-      try {
-        // Try to log the error state safely
-        logStateChange('Header', 'signOut-error', { 
-          errorMessage: error instanceof Error ? error.message : String(error)
-        });
-      } catch (logError) {
-        console.error("Error logging sign out error:", logError);
-      }
-      
       toast({
         title: "Sign out failed",
         description: "There was a problem signing you out",

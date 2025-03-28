@@ -1,4 +1,4 @@
-import { eq, and, or, like, ilike, sql, desc, asc, inArray, lt, gt, lte, gte, SQL } from 'drizzle-orm';
+import { eq, and, or, like, ilike, sql, desc, asc, inArray, lt, gt } from 'drizzle-orm';
 import { 
   User, InsertUser, Category, InsertCategory, Video, InsertVideo,
   Collection, InsertCollection, CollectionVideo, InsertCollectionVideo,
@@ -86,221 +86,140 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(videos).where(eq(videos.user_id, userId));
   }
 
-  /**
-   * Search videos for a user with filtering and pagination
-   * This method works for both authenticated users (via user_id) and anonymous users (via session_id)
-   * 
-   * @param userInfo Object with either user_id or anonymous_session_id
-   * @param params Search parameters
-   * @returns Filtered videos with pagination info
-   */
-  async searchVideos(
-    userInfo: { user_id?: number | null, anonymous_session_id?: string | null },
-    params: SearchParams
-  ): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
-    try {
-      console.log('[DB] Search videos for:', userInfo);
-      
-      // Build the base query - we'll start by selecting everything
-      let query = db.select().from(videos);
-      
-      // Build filter conditions
-      let conditions: SQL<unknown>[] = [];
-      
-      // User ownership condition - either user_id or anonymous_session_id
-      if (userInfo.user_id) {
-        console.log('[DB] Filtering by user_id:', userInfo.user_id);
-        conditions.push(eq(videos.user_id, userInfo.user_id));
-      } else if (userInfo.anonymous_session_id) {
-        console.log('[DB] Filtering by anonymous_session_id:', userInfo.anonymous_session_id);
-        conditions.push(eq(videos.anonymous_session_id, userInfo.anonymous_session_id));
-      } else {
-        // No user identifier - return empty result
-        console.log('[DB] No user identifier provided, returning empty results');
-        return { videos: [], totalCount: 0, hasMore: false };
-      }
-      
-      // Text search condition
-      if (params.query) {
-        // Create different OR conditions based on deep_search flag
-        if (params.deep_search === true) {
-          conditions.push(
-            or(
-              ilike(videos.title, `%${params.query}%`),
-              ilike(videos.description || '', `%${params.query}%`),
-              ilike(videos.transcript || '', `%${params.query}%`)
-            )
-          );
-        } else {
-          conditions.push(
-            or(
-              ilike(videos.title, `%${params.query}%`),
-              ilike(videos.description || '', `%${params.query}%`)
-            )
-          );
-        }
-      }
-      
-      // Category filter
-      if (params.category_id !== undefined) {
-        conditions.push(eq(videos.category_id, params.category_id));
-      }
-      
-      // Rating filters
-      if (params.rating_min !== undefined) {
-        conditions.push(gte(videos.rating, params.rating_min));
-      }
-      
-      if (params.rating_max !== undefined) {
-        conditions.push(lte(videos.rating, params.rating_max));
-      }
-      
-      // Date range filters
-      if (params.date_from) {
-        const fromDate = new Date(params.date_from);
-        conditions.push(gte(videos.created_at, fromDate));
-      }
-      
-      if (params.date_to) {
-        const toDate = new Date(params.date_to);
-        conditions.push(lte(videos.created_at, toDate));
-      }
-      
-      // Favorite filter
-      if (params.is_favorite !== undefined) {
-        conditions.push(eq(videos.is_favorite, params.is_favorite));
-      }
-      
-      // Apply all conditions to the query
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions));
-      }
-      
-      // Add collection filter if specified
-      if (params.collection_id !== undefined) {
-        const collectionVideosQuery = db
-          .select({ video_id: collection_videos.video_id })
-          .from(collection_videos)
-          .where(eq(collection_videos.collection_id, params.collection_id));
-        
-        // Execute the subquery to get collection video IDs
-        const collectionVideosResult = await collectionVideosQuery;
-        const videoIds = collectionVideosResult.map(v => v.video_id);
-        
-        if (videoIds.length === 0) {
-          // Collection exists but has no videos
-          return { videos: [], totalCount: 0, hasMore: false };
-        }
-        
-        // Add the video ID filter
-        query = query.where(inArray(videos.id, videoIds));
-      }
-      
-      // Get total count first - separate query for accurate count without pagination
-      const countQuery = db.select({ count: sql`count(*)` }).from(videos);
-      
-      // Apply the same conditions to the count query
-      if (conditions.length > 0) {
-        countQuery.where(and(...conditions));
-      }
-      
-      // Execute count query
-      const countResult = await countQuery;
-      const totalCount = Number(countResult[0]?.count || 0);
-      
-      console.log(`[DB] Total matching records: ${totalCount}`);
-      
-      // If no results, return early
-      if (totalCount === 0) {
-        return { videos: [], totalCount: 0, hasMore: false };
-      }
-      
-      // Apply sorting
-      const sortDir = params.sort_order === 'desc' ? desc : asc;
-      
-      switch (params.sort_by) {
-        case 'title':
-          query = query.orderBy(sortDir(videos.title));
-          break;
-        case 'rating':
-          query = query.orderBy(sortDir(videos.rating));
-          break;
-        case 'date':
-        default:
-          query = query.orderBy(sortDir(videos.created_at));
-          break;
-      }
-      
-      // Apply pagination - using both offset/limit and cursor pagination
-      const limit = Number(params.limit) || 20;
-      
-      if (params.cursor !== undefined) {
-        // Cursor-based pagination
-        const cursorId = Number(params.cursor);
-        if (!isNaN(cursorId)) {
-          const cursorRow = await db
-            .select()
-            .from(videos)
-            .where(eq(videos.id, cursorId))
-            .limit(1);
-          
-          if (cursorRow.length > 0) {
-            // Add cursor filtering based on sort field and direction
-            if (params.sort_by === 'title') {
-              const cursorValue = cursorRow[0].title;
-              query = params.sort_order === 'desc'
-                ? query.where(lt(videos.title, cursorValue))
-                : query.where(gt(videos.title, cursorValue));
-            } else if (params.sort_by === 'rating') {
-              const cursorValue = cursorRow[0].rating;
-              if (cursorValue !== null) {
-                query = params.sort_order === 'desc'
-                  ? query.where(lt(videos.rating, cursorValue))
-                  : query.where(gt(videos.rating, cursorValue));
-              }
-            } else {
-              // Default to date sorting
-              const cursorValue = cursorRow[0].created_at;
-              query = params.sort_order === 'desc'
-                ? query.where(lt(videos.created_at, cursorValue))
-                : query.where(gt(videos.created_at, cursorValue));
-            }
-          }
-        }
-      } else {
-        // Offset-based pagination
-        const page = Number(params.page) || 1;
-        const offset = (page - 1) * limit;
-        query = query.offset(offset);
-      }
-      
-      // Apply the limit with +1 to check if there are more results
-      query = query.limit(limit + 1);
-      
-      // Execute the final query
-      const results = await query;
-      
-      // Check if there are more results beyond the requested limit
-      const hasMore = results.length > limit;
-      const limitedResults = hasMore ? results.slice(0, limit) : results;
-      
-      // Determine next cursor (last item's ID if there are more results)
-      const nextCursor = hasMore && limitedResults.length > 0 
-        ? limitedResults[limitedResults.length - 1].id 
-        : undefined;
-      
-      console.log(`[DB] Returning ${limitedResults.length} filtered videos of ${totalCount} total`);
-      
-      return {
-        videos: limitedResults,
-        totalCount,
-        hasMore,
-        nextCursor
-      };
-    } catch (error) {
-      console.error('[DB] Error in searchVideos:', error);
-      throw error;
+  async searchVideos(userId: number, params: SearchParams): Promise<{ videos: Video[], totalCount: number, hasMore: boolean, nextCursor?: number }> {
+    // Build query conditions
+    let conditions = [eq(videos.user_id, userId)];
+
+    // Add text search condition
+    if (params.query) {
+      conditions.push(
+        or(
+          ilike(videos.title, `%${params.query}%`),
+          ilike(videos.description || '', `%${params.query}%`),
+          ilike(videos.transcript || '', `%${params.query}%`)
+        )
+      );
     }
+
+    // Add category filter
+    if (params.category_id !== undefined) {
+      conditions.push(eq(videos.category_id, params.category_id));
+    }
+
+    // Add rating filters
+    if (params.rating_min !== undefined) {
+      conditions.push(sql`${videos.rating} >= ${params.rating_min}`);
+    }
+
+    if (params.rating_max !== undefined) {
+      conditions.push(sql`${videos.rating} <= ${params.rating_max}`);
+    }
+
+    // Add date range filters
+    if (params.date_from) {
+      conditions.push(sql`${videos.created_at} >= ${params.date_from}`);
+    }
+
+    if (params.date_to) {
+      conditions.push(sql`${videos.created_at} <= ${params.date_to}`);
+    }
+
+    // Add favorite filter
+    if (params.is_favorite !== undefined) {
+      conditions.push(eq(videos.is_favorite, params.is_favorite));
+    }
+
+    // Start with basic query
+    let query = db.select().from(videos).where(and(...conditions));
+
+    // Add collection filter if specified (requires a join)
+    if (params.collection_id !== undefined) {
+      // First get all video IDs in the collection
+      const collectionVideosResult = await db
+        .select({ video_id: collection_videos.video_id })
+        .from(collection_videos)
+        .where(eq(collection_videos.collection_id, params.collection_id));
+
+      const videoIds = collectionVideosResult.map(v => v.video_id);
+
+      // Filter the results to only include these videos
+      if (videoIds.length > 0) {
+        query = query.where(inArray(videos.id, videoIds));
+      } else {
+        // If no videos in collection, return empty array
+        return { videos: [], totalCount: 0, hasMore: false };
+      }
+    }
+
+    // Add sorting
+    let sortOrder = params.sort_order === 'desc' ? desc : asc;
+    let sortColumn;
+
+    switch (params.sort_by) {
+      case 'title':
+        sortColumn = videos.title;
+        query = query.orderBy(sortOrder(videos.title));
+        break;
+      case 'rating':
+        sortColumn = videos.rating;
+        query = query.orderBy(sortOrder(videos.rating));
+        break;
+      case 'date':
+      default:
+        sortColumn = videos.created_at;
+        query = query.orderBy(sortOrder(videos.created_at));
+        break;
+    }
+
+    // Get total count of matching records (without pagination)
+    const countQuery = query.toSQL();
+    const totalCountResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM (${sql.raw(countQuery.sql)}) as count_query
+    `, countQuery.params);
+
+    const totalCount = parseInt(totalCountResult.rows[0].count, 10);
+
+    // Cursor-based pagination
+    if (params.cursor !== undefined) {
+      // Add cursor condition based on the sort column and sort order
+      const cursorOp = params.sort_order === 'desc' ? lt : gt;
+
+      // We need to get the cursor row to compare against
+      const cursorRow = await db.select().from(videos).where(eq(videos.id, params.cursor)).limit(1);
+
+      if (cursorRow.length > 0) {
+        const cursorValue = cursorRow[0][sortColumn.name];
+        if (cursorValue !== undefined) {
+          query = query.where(cursorOp(sortColumn, cursorValue));
+        }
+      }
+    } else {
+      // Offset-based pagination as a fallback
+      const page = params.page || 1;
+      const offset = (page - 1) * (params.limit || 20);
+      query = query.offset(offset);
+    }
+
+    // Apply limit
+    const limit = params.limit || 20;
+    query = query.limit(limit + 1); // Get one extra to determine if there are more pages
+
+    // Execute the query
+    const results = await query;
+
+    // Check if there are more results beyond the requested limit
+    const hasMore = results.length > limit;
+    const videos = hasMore ? results.slice(0, limit) : results;
+
+    // Determine next cursor (last item's ID if there are more results)
+    const nextCursor = hasMore && videos.length > 0 ? videos[videos.length - 1].id : undefined;
+
+    return {
+      videos,
+      totalCount,
+      hasMore,
+      nextCursor
+    };
   }
 
   async insertVideo(video: InsertVideo): Promise<Video> {
@@ -360,94 +279,18 @@ export class DatabaseStorage implements IStorage {
   }
   
   async bulkDeleteVideos(ids: number[]): Promise<number> {
-    // Try-catch to handle and log any deletion errors
-    try {
-      // First, delete related QA conversations
-      console.log(`Deleting QA conversations for video IDs: ${ids.join(', ')}`);
-      const deletedQaResult = await db
-        .delete(qa_conversations)
-        .where(inArray(qa_conversations.video_id, ids))
-        .returning();
-      console.log(`Deleted ${deletedQaResult.length} QA conversations`);
-      
-      // Second, delete related collection associations
-      console.log(`Deleting collection associations for video IDs: ${ids.join(', ')}`);
-      const deletedCollectionAssocs = await db
-        .delete(collection_videos)
-        .where(inArray(collection_videos.video_id, ids))
-        .returning();
-      console.log(`Deleted ${deletedCollectionAssocs.length} collection associations`);
-      
-      // Third, delete related embeddings (this is needed for authenticated users)
-      console.log(`Deleting embeddings for video IDs: ${ids.join(', ')}`);
-      try {
-        // Try to delete from the embeddings table if it exists
-        await db.execute(sql`DELETE FROM embeddings WHERE video_id IN (${sql.join(ids)})`);
-        console.log(`Deleted embeddings for videos`);
-      } catch (embeddingError) {
-        // If the table doesn't exist or there's some other error, log and continue
-        console.warn(`Warning when deleting embeddings:`, embeddingError);
-      }
+    // First, delete related collection associations
+    await db
+      .delete(collection_videos)
+      .where(inArray(collection_videos.video_id, ids));
 
-      // Finally delete the videos
-      console.log(`Deleting videos with IDs: ${ids.join(', ')}`);
-      const result = await db
-        .delete(videos)
-        .where(inArray(videos.id, ids))
-        .returning();
-      console.log(`Successfully deleted ${result.length} videos`);
+    // Then delete the videos
+    const result = await db
+      .delete(videos)
+      .where(inArray(videos.id, ids))
+      .returning();
 
-      return result.length;
-    } catch (error) {
-      console.error("Error in bulkDeleteVideos:", error);
-      
-      // Check if this is a foreign key constraint error
-      if (error instanceof Error && error.message.includes('foreign key constraint')) {
-        console.log("Foreign key constraint error detected. Attempting manual cascade delete...");
-        
-        // Try a more thorough approach for each video individually
-        let deletedCount = 0;
-        
-        for (const id of ids) {
-          try {
-            // Delete QA conversations for this specific video
-            await db
-              .delete(qa_conversations)
-              .where(eq(qa_conversations.video_id, id));
-              
-            // Delete collection associations for this specific video
-            await db
-              .delete(collection_videos)
-              .where(eq(collection_videos.video_id, id));
-            
-            // Delete embeddings for this specific video
-            try {
-              await db.execute(sql`DELETE FROM embeddings WHERE video_id = ${id}`);
-            } catch (embeddingError) {
-              console.warn(`Warning when deleting embeddings for video ID ${id}:`, embeddingError);
-            }
-              
-            // Delete the video itself
-            const deleted = await db
-              .delete(videos)
-              .where(eq(videos.id, id))
-              .returning();
-              
-            if (deleted.length > 0) {
-              deletedCount++;
-              console.log(`Successfully deleted video ID: ${id}`);
-            }
-          } catch (innerError) {
-            console.error(`Failed to delete video ID: ${id}`, innerError);
-          }
-        }
-        
-        return deletedCount;
-      }
-      
-      // Re-throw other errors
-      throw error;
-    }
+    return result.length;
   }
 
   // Collection methods

@@ -3,30 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
-import requestIdMiddleware from "./middleware/request-id.middleware";
-import { requestLogger, responseLogger, errorLogger } from "./middleware/logging.middleware";
-import { logger, setupConsoleRedirection, registerExitHandlers } from "./utils/logger";
 config();
 
-// Set up console redirection to route all console.* calls through Winston
-// This helps capture console logs from throughout the application in our structured logging system
-setupConsoleRedirection();
-
-// Register process exit handlers to ensure logs are flushed on shutdown
-registerExitHandlers();
-
-// Initialize the application
 const app = express();
-
-// Apply request ID middleware first, so all subsequent middleware can use the request ID
-app.use(requestIdMiddleware);
-
-// Apply request logging middleware to log all incoming requests
-app.use(requestLogger);
-
-// Apply response logging middleware to log all outgoing responses
-app.use(responseLogger);
-
 // JSON middleware with increased size limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -38,7 +17,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Legacy logging middleware - keep for backward compatibility with the log function
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -73,23 +51,10 @@ app.use((req, res, next) => {
   // Create a server first, then register the API routes
   const server = await registerRoutes(app);
 
-  // Error logging middleware - should come before the global error handler
-  app.use(errorLogger);
-  
+  // Error handling middleware
   // Global error handler
-  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    logger.error('Global error handler caught', {
-      error: {
-        name: err.name,
-        message: err.message,
-        stack: err.stack,
-        code: err.code,
-        status: err.status,
-      },
-      requestId: req.requestId,
-      url: req.originalUrl,
-      method: req.method
-    });
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    console.error('Global error handler caught:', err);
     
     // Import these dynamically to avoid circular dependencies
     const { handleApiError } = require('./utils/response.utils');
@@ -114,13 +79,8 @@ app.use((req, res, next) => {
     res.json({ status: 'API is working' });
   });
 
-  // Determine environment using Express app's environment setting
-  const expressEnv = app.get("env");
   // Setup Vite in development after API routes
-  if (expressEnv === "development") {
-    // Log environment detection
-    logger.info(`Express environment detected as: ${expressEnv}`);
-    
+  if (app.get("env") === "development") {
     // Add middleware to conditionally bypass Vite for API calls
     app.use((req, res, next) => {
       if (req.path.startsWith('/api/')) {
@@ -143,7 +103,6 @@ app.use((req, res, next) => {
 
     await setupVite(app, server);
   } else {
-    logger.info(`Express environment detected as: ${expressEnv} - serving static files`);
     serveStatic(app);
   }
 
@@ -156,16 +115,7 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    // Log using both the old and new logging systems for transition period
     log(`✅ Server running on http://0.0.0.0:${port}`);
-    log(`📝 Express Environment: ${expressEnv}`);
-    
-    // Log using the new structured logger
-    logger.info('Server started successfully', {
-      port,
-      host: '0.0.0.0',
-      expressEnvironment: expressEnv,
-      nodeVersion: process.version
-    });
+    log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 })();

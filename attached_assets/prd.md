@@ -268,22 +268,6 @@ The product serves audiences who consume educational, informational, and profess
 - **Vector Embeddings:** Text embeddings for semantic search
 - **Transcript Processing:** YouTube transcript API extraction
 
-### Logging & Monitoring Infrastructure
-- **Core Logger:** Winston-based centralized logging system
-- **Specialized Loggers:** Dedicated loggers for API interactions, authentication events, and general application logs 
-- **Log Rotation:** Daily log files with automatic rotation using winston-daily-rotate-file
-- **Environment Detection:** Automatic configuration based on development or production environment
-- **Request Tracing:** UUID-based request correlation across components
-- **Log Types:**
-  - Combined logs (combined-YYYY-MM-DD.log)
-  - Error logs (error-YYYY-MM-DD.log)
-  - API request/response logs (api-YYYY-MM-DD.log)
-  - Authentication logs (auth-YYYY-MM-DD.log)
-  - Debug logs (auth-debug.log)
-- **Console Integration:** Intelligent redirection of console methods through Winston
-- **Admin Interface:** API endpoints for log retrieval, filtering and analysis
-- **Security Features:** Automatic redaction of sensitive data like tokens and passwords
-
 ### Data Model
 The application uses a hybrid architecture with multi-tier storage approach:
 
@@ -495,26 +479,6 @@ The application uses a hybrid architecture with multi-tier storage approach:
   - Enabled persistent highlighting after search selection
   - Updated all content-displaying components to support highlighting
 
-### Comprehensive Logging System (March 2025)
-- **Implemented production-ready logging infrastructure:**
-  - Created centralized logging service based on Winston
-  - Implemented dedicated loggers for API, authentication, and system events
-  - Added daily log rotation with automatic file management
-  - Implemented environment-aware configuration for dev/prod differences
-  - Added comprehensive middleware for request/response logging
-- **Enhanced debugging and monitoring capabilities:**
-  - Created unique request ID system for cross-component tracing
-  - Implemented sensitive data redaction for security
-  - Added specialized authentication event tracking
-  - Created admin-accessible API endpoints for log retrieval and filtering
-  - Built smart console interceptors for consistent log format
-- **Security and performance features:**
-  - Implemented automatic log size management with rotation
-  - Added log flushing mechanisms for ensuring data persistence
-  - Created secure API endpoints for log access with authentication
-  - Implemented smart filtering to reduce log noise from static assets
-  - Enhanced error capture with automatic stack trace preservation
-
 ## 10. Future Enhancements (UNCHANGED)
 
 ### Phase 6: Usage Metering System
@@ -581,7 +545,6 @@ The application uses a hybrid architecture with multi-tier storage approach:
 - **ORM:** Drizzle ORM
 - **Authentication:** Supabase Auth with Google OAuth
 - **AI:** OpenAI GPT and Embeddings API
-- **Logging:** Winston, winston-daily-rotate-file, UUID generation
 - **Build Tools:** Vite, tsx
 
 ### API & Service References

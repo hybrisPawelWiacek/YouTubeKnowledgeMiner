@@ -6,20 +6,16 @@ import { ZodError } from 'zod';
 import videoRoutes from './video.routes';
 import collectionRoutes from './collection.routes';
 import categoryRoutes from './category.routes';
-import anonymousRoutes from './anonymous.routes'; // Renamed from auth.routes for clarity
-import supabaseAuthRoutes from './supabase-auth.routes';
-import demoAuthRoutes from './demo-auth.routes';
+import authRoutes from './auth.routes';
 import debugRoutes from './debug-api';
 import searchRoutes from './search.routes';
 import semanticSearchRoutes from './semantic-search.routes';
 import exportRoutes from './export.routes';
 import qaRoutes from './qa.routes';
-import loggingRoutes from './logging.routes';
 
-// Import services to initialize before handling requests
+// Import OpenAI service to initialize before handling requests
 import { isOpenAIConfigured } from '../services/openai';
-import { isSupabaseConfigured } from '../services/supabase';
-import { initializeVectorFunctions } from '../services/vector-search';
+import { isSupabaseConfigured, initializeVectorFunctions } from '../services/supabase';
 import { addGlobalCategories } from '../../scripts/add-global-categories';
 
 /**
@@ -60,15 +56,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/videos', videoRoutes);
   app.use('/api/collections', collectionRoutes);
   app.use('/api/categories', categoryRoutes);
-  app.use('/api/anonymous', anonymousRoutes); // Using renamed router
-  app.use('/api/supabase-auth', supabaseAuthRoutes);
-  app.use('/api/demo-auth', demoAuthRoutes); 
+  app.use('/api/anonymous', authRoutes);
   app.use('/api/saved-searches', searchRoutes);
   app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);
   app.use('/api/qa', qaRoutes);
-  app.use('/api/logs', loggingRoutes); // Routes for accessing log data
-  app.use('/api/log', loggingRoutes); // Routes for writing logs (client-side auth logging)
   
   // Also register the qa routes under the videos path for backward compatibility
   app.use('/api/videos', qaRoutes);

@@ -1,0 +1,65 @@
+Task: Implement a robust, production-ready logging system across the entire application
+
+Context:
+We've successfully implemented the core anonymous user flow and now need to establish a comprehensive logging system before proceeding with further development. This logging framework will help us debug issues, monitor application health, track user journeys, and provide visibility into system behavior. The logging system should follow industry best practices and establish consistent patterns throughout the application.
+
+Requirements:
+1. Core Logging Infrastructure:
+   - Implement a standardized logging service/utility
+   - Define appropriate log levels (ERROR, WARN, INFO, DEBUG)
+   - Ensure consistent log format with essential context
+   - Configure log destinations (console, file, etc.)
+   - Implement log redaction for sensitive data
+
+2. Application-wide Logging Coverage:
+   - Core user operations (video analysis, library access, etc.)
+   - API requests and responses
+   - System events (startup, initialization, etc.)
+   - User actions and state changes
+   - Background processes and scheduled tasks
+   - Resource usage and performance metrics
+
+3. Error and Exception Logging:
+   - Create consistent error logging pattern
+   - Include stack traces for exceptions
+   - Categorize errors appropriately
+   - Ensure uncaught exceptions are properly logged
+   - Track error frequencies and patterns
+
+4. Request and Response Logging:
+   - Log incoming requests with relevant metadata
+   - Track response times and status codes
+   - Include request IDs for correlation
+   - Redact sensitive information automatically
+   - Log rate-limiting and throttling events
+
+5. User Journey Tracking:
+   - Log significant user interactions
+   - Track feature usage patterns
+   - Monitor anonymous user session activity
+   - Record system limits encounters (e.g., video limits)
+   - Capture performance metrics from user perspective
+
+Deliverables:
+1. Logging utility/service implementation
+2. Configuration for different environments (development, production)
+3. Integration with key application components
+4. Implementation guidelines for future logging usage
+5. Examples of how to use logging in different scenarios
+
+Implementation Approach:
+1. Create a centralized logging service/utility
+2. Define standard log formats and context requirements
+3. Implement in core application components first
+4. Add logging to API layer and request handling
+5. Extend to user actions and system events
+6. Create guidelines for logging in future development
+
+Success Criteria:
+- Logging provides clear visibility into system operation
+- Error conditions are logged with sufficient context for debugging
+- User actions and system events are appropriately tracked
+- Sensitive information is properly redacted
+- Logging format is consistent and well-structured
+- System is extensible for additional application areas
+- Performance impact of logging is minimal

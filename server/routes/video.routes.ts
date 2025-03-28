@@ -11,7 +11,6 @@ import {
 } from '../../shared/schema';
 import { sendSuccess, sendError, handleApiError } from '../utils/response.utils';
 import { AnonymousLimitError, ErrorCode } from '../utils/error.utils';
-import { logger, logSecurityEvent } from '../utils/logger';
 // No separate processor service, processYoutubeVideo is part of YouTube service
 import { 
   getYoutubeTranscript, 
@@ -37,34 +36,23 @@ router.use(getUserInfo);
  */
 router.get('/anonymous/count', async (req: Request, res: Response) => {
   try {
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
     // Get the anonymous session ID from the request header
     const sessionHeader = req.headers['x-anonymous-session'];
     
-    logger.info('Anonymous session count requested', { 
-      requestId, 
-      sessionHeader 
-    });
+    console.log('[video routes] Anonymous session header:', sessionHeader);
     
     if (!sessionHeader) {
-      logger.info('No anonymous session header found', { requestId });
+      console.log('[video routes] No anonymous session header found');
       return sendSuccess(res, { count: 0 });
     }
     
     const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
-    logger.info('Looking up session for video count', { 
-      requestId, 
-      sessionId
-    });
+    console.log('[video routes] Looking up session:', sessionId);
     
     const session = await dbStorage.getAnonymousSessionBySessionId(sessionId as string);
     
     if (!session) {
-      logger.info('No session found, creating new anonymous session', { 
-        requestId, 
-        sessionId 
-      });
-      
+      console.log('[video routes] No session found for ID:', sessionId);
       // Create the session if it doesn't exist
       try {
         const newSession = await dbStorage.createAnonymousSession({
@@ -72,41 +60,21 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
           user_agent: req.headers['user-agent'] || null,
           ip_address: req.ip || null
         });
-        
-        logger.info('Created new anonymous session', { 
-          requestId,
-          sessionId: newSession.session_id,
-          videoCount: 0
-        });
-        
+        console.log('[video routes] Created new anonymous session:', newSession);
         return sendSuccess(res, { count: 0 });
       } catch (err) {
-        logger.error('Error creating anonymous session', {
-          requestId,
-          sessionId,
-          error: err
-        });
-        
+        console.error('[video routes] Error creating anonymous session:', err);
         return sendSuccess(res, { count: 0 });
       }
     }
     
-    logger.info('Found existing anonymous session', { 
-      requestId,
-      sessionId: session.session_id, 
-      videoCount: session.video_count || 0
-    });
-    
+    console.log('[video routes] Found session with video count:', session.video_count);
     return sendSuccess(res, { 
       count: session.video_count || 0,
       max_allowed: 3 
     });
   } catch (error) {
-    logger.error('Error getting anonymous video count', {
-      requestId: req.headers['x-request-id'] as string || 'unknown',
-      error
-    });
-    
+    console.error("Error getting anonymous video count:", error);
     return handleApiError(res, error);
   }
 });
@@ -304,35 +272,91 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
     
-    // Use the unified searchVideos method that works for both anonymous and authenticated users
-    try {
-      // Create a userInfo object with the correct identifier based on user type
-      const searchUserInfo = { 
-        user_id: userInfo.is_anonymous ? null : userInfo.user_id,
-        anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null
-      };
-      
-      // If we have no user ID and no session ID, return empty results
-      if (!searchUserInfo.user_id && !searchUserInfo.anonymous_session_id) {
+    // Handle anonymous users with session
+    if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+      try {
+        console.log("[video routes] Retrieving videos for anonymous session:", userInfo.anonymous_session_id);
+        // For anonymous users with session, search their videos
+        const videos = await dbStorage.getVideosByAnonymousSessionId(userInfo.anonymous_session_id);
+        console.log("[video routes] Found", videos.length, "videos for anonymous session");
+        
+        // For anonymous users, skip Zod validation and manually handle search parameters
+        // to avoid type conversion issues
+        let filteredVideos = videos;
+        
+        // Apply simple filters manually instead of using searchParams
+        if (req.query.query) {
+          const searchTerm = String(req.query.query).toLowerCase();
+          filteredVideos = filteredVideos.filter(v => 
+            v.title.toLowerCase().includes(searchTerm) || 
+            v.channel.toLowerCase().includes(searchTerm) ||
+            (v.transcript && v.transcript.toLowerCase().includes(searchTerm))
+          );
+        }
+        
+        if (req.query.is_favorite === 'true') {
+          filteredVideos = filteredVideos.filter(v => v.is_favorite);
+        }
+        
+        // Apply category filter
+        if (req.query.category_id) {
+          const categoryId = Number(req.query.category_id);
+          filteredVideos = filteredVideos.filter(v => v.category_id === categoryId);
+        }
+        
+        // Apply sorting
+        const sortBy = req.query.sort_by as string || 'date';
+        const sortOrder = req.query.sort_order as string || 'desc';
+        
+        filteredVideos.sort((a, b) => {
+          if (sortBy === 'title') {
+            return sortOrder === 'asc' 
+              ? a.title.localeCompare(b.title)
+              : b.title.localeCompare(a.title);
+          } else if (sortBy === 'rating') {
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            return sortOrder === 'asc' ? ratingA - ratingB : ratingB - ratingA;
+          } else {
+            // Default: sort by date
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+          }
+        });
+        
+        console.log("[video routes] Returning", filteredVideos.length, "filtered videos for anonymous user");
         return sendSuccess(res, {
-          videos: [],
-          totalCount: 0,
+          videos: filteredVideos,
+          totalCount: filteredVideos.length,
+          hasMore: false
+        });
+      } catch (error) {
+        console.error("[video routes] Error processing anonymous videos:", error);
+        return handleApiError(res, error);
+      }
+    } 
+    // Handle authenticated users
+    else if (userInfo.user_id !== null) {
+      if (Object.keys(req.query).length > 0) {
+        const result = await dbStorage.searchVideos(userInfo.user_id, searchParams);
+        return sendSuccess(res, result);
+      } else {
+        const videos = await dbStorage.getVideosByUserId(userInfo.user_id);
+        return sendSuccess(res, {
+          videos,
+          totalCount: videos.length,
           hasMore: false
         });
       }
-        
-      console.log(`[GET /videos] Searching videos for ${userInfo.is_anonymous ? 'anonymous' : 'authenticated'} user:`, 
-        userInfo.is_anonymous ? userInfo.anonymous_session_id : userInfo.user_id);
-      
-      // Use the unified search method that handles both user types
-      const result = await dbStorage.searchVideos(searchUserInfo, searchParams);
-      
-      console.log(`[GET /videos] Found ${result.videos.length} videos (total: ${result.totalCount})`);
-      
-      return sendSuccess(res, result);
-    } catch (error) {
-      console.error(`[GET /videos] Error searching videos:`, error);
-      return handleApiError(res, error);
+    } 
+    // No user ID and no anonymous session
+    else {
+      return sendSuccess(res, {
+        videos: [],
+        totalCount: 0,
+        hasMore: false
+      });
     }
   } catch (error) {
     if (error instanceof ZodError) {
@@ -491,30 +515,17 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
  */
 router.patch('/', async (req: Request, res: Response) => {
   try {
-    // Get request ID for logging
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
     
     // Validate required fields
     const { ids, data } = req.body;
     
-    logger.info('Bulk video update requested', {
-      requestId,
-      userId: userInfo.user_id,
-      isAnonymous: userInfo.is_anonymous,
-      videoCount: ids?.length || 0,
-      updateFields: Object.keys(data || {})
-    });
-    
     if (!Array.isArray(ids) || ids.length === 0) {
-      logger.warn('Invalid bulk update request - no video IDs', { requestId });
       return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
     }
     
     if (!data || typeof data !== 'object') {
-      logger.warn('Invalid bulk update request - no update data', { requestId });
       return sendError(res, "You must provide update data object", 400, "VALIDATION_ERROR");
     }
     
@@ -531,83 +542,27 @@ router.patch('/', async (req: Request, res: Response) => {
         
         // For authenticated users, check user_id
         if (!userInfo.is_anonymous) {
-          const isOwner = video.user_id === userInfo.user_id;
-          
-          if (!isOwner) {
-            // Log unauthorized access attempt
-            logSecurityEvent(
-              requestId,
-              'unauthorized_video_update_attempt',
-              {
-                videoId: video.id,
-                requestedByUserId: userInfo.user_id,
-                actualUserId: video.user_id
-              }
-            );
-          }
-          
-          return isOwner;
+          return video.user_id === userInfo.user_id;
         }
         
         // For anonymous users, check anonymous_session_id
-        const isOwner = video.anonymous_session_id === userInfo.anonymous_session_id;
-        
-        if (!isOwner) {
-          // Log unauthorized access attempt
-          logSecurityEvent(
-            requestId,
-            'unauthorized_anonymous_video_update_attempt',
-            {
-              videoId: video.id,
-              requestedBySession: userInfo.anonymous_session_id,
-              actualSession: video.anonymous_session_id
-            }
-          );
-        }
-        
-        return isOwner;
+        return video.anonymous_session_id === userInfo.anonymous_session_id;
       })
       .map(video => video!.id);  // Extract just the IDs
     
     if (validIds.length === 0) {
-      logger.warn('No valid videos found for bulk update', {
-        requestId,
-        attemptedIds: ids
-      });
       return sendError(res, "No valid videos found to update", 404, "RESOURCE_NOT_FOUND");
-    }
-    
-    // Log any skipped videos due to ownership issues
-    if (validIds.length < ids.length) {
-      logger.warn('Some videos skipped in bulk update due to ownership validation', {
-        requestId,
-        requestedCount: ids.length,
-        validCount: validIds.length,
-        skippedIds: ids.filter(id => !validIds.includes(id))
-      });
     }
     
     // Perform the update with validated IDs
     const updateCount = await dbStorage.bulkUpdateVideos(validIds, data);
-    
-    logger.info('Bulk video update completed successfully', {
-      requestId,
-      updatedCount: updateCount,
-      videoIds: validIds
-    });
     
     return sendSuccess(res, { 
       message: `${updateCount} videos updated successfully`, 
       updated_count: updateCount 
     });
   } catch (error) {
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    
-    logger.error('Error performing bulk video update', {
-      requestId,
-      error
-    });
-    
+    console.error("Error updating videos:", error);
     return handleApiError(res, error);
   }
 });
@@ -615,35 +570,17 @@ router.patch('/', async (req: Request, res: Response) => {
 /**
  * Bulk delete videos
  */
-router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
+router.delete('/bulk', async (req: Request, res: Response) => {
   try {
-    // Get request ID for logging
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
-    
-    logger.info('Bulk video deletion requested', {
-      requestId,
-      userId: userInfo.user_id,
-      isAnonymous: userInfo.is_anonymous,
-      anonymousSessionId: userInfo.anonymous_session_id || 'none',
-      userAgent: req.headers['user-agent']
-    });
     
     // Validate required fields
     const { ids } = req.body;
     
     if (!Array.isArray(ids) || ids.length === 0) {
-      logger.warn('Invalid bulk delete request - no video IDs', { requestId });
       return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
     }
-    
-    logger.info('Processing bulk delete request', {
-      requestId,
-      videoCount: ids.length,
-      videoIds: ids
-    });
     
     // For security, we need to make sure users can only delete their own videos
     // First, get all videos by ID
@@ -658,68 +595,19 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
         
         // For authenticated users, check user_id
         if (!userInfo.is_anonymous) {
-          const isOwner = video.user_id === userInfo.user_id;
-          
-          if (!isOwner) {
-            // Log unauthorized access attempt
-            logSecurityEvent(
-              requestId,
-              'unauthorized_video_deletion_attempt',
-              {
-                videoId: video.id,
-                requestedByUserId: userInfo.user_id,
-                actualUserId: video.user_id
-              }
-            );
-          }
-          
-          return isOwner;
+          return video.user_id === userInfo.user_id;
         }
         
         // For anonymous users, check anonymous_session_id
-        const isOwner = video.anonymous_session_id === userInfo.anonymous_session_id;
-        
-        if (!isOwner) {
-          // Log unauthorized access attempt
-          logSecurityEvent(
-            requestId,
-            'unauthorized_anonymous_video_deletion_attempt',
-            {
-              videoId: video.id,
-              requestedBySession: userInfo.anonymous_session_id,
-              actualSession: video.anonymous_session_id
-            }
-          );
-        }
-        
-        return isOwner;
+        return video.anonymous_session_id === userInfo.anonymous_session_id;
       })
       .map(video => video!.id);  // Extract just the IDs
     
     if (validIds.length === 0) {
-      logger.warn('No valid videos found for bulk delete', {
-        requestId,
-        attemptedIds: ids
-      });
       return sendError(res, "No valid videos found to delete", 404, "RESOURCE_NOT_FOUND");
     }
     
-    // Log any skipped videos due to ownership issues
-    if (validIds.length < ids.length) {
-      logger.warn('Some videos skipped in bulk delete due to ownership validation', {
-        requestId,
-        requestedCount: ids.length,
-        validCount: validIds.length,
-        skippedIds: ids.filter(id => !validIds.includes(id))
-      });
-    }
-    
     // Delete embeddings first
-    logger.info('Deleting embeddings for videos', {
-      requestId,
-      videoCount: validIds.length
-    });
-    
     for (const id of validIds) {
       await deleteVideoEmbeddings(id);
     }
@@ -727,24 +615,12 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
     // Perform the delete with validated IDs
     const deleteCount = await dbStorage.bulkDeleteVideos(validIds);
     
-    logger.info('Bulk video deletion completed successfully', {
-      requestId,
-      deletedCount: deleteCount,
-      videoIds: validIds
-    });
-    
     return sendSuccess(res, { 
       message: `${deleteCount} videos deleted successfully`, 
       deleted_count: deleteCount 
     });
   } catch (error) {
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    
-    logger.error('Error performing bulk video deletion', {
-      requestId,
-      error
-    });
-    
+    console.error("Error deleting videos:", error);
     return handleApiError(res, error);
   }
 });
@@ -757,75 +633,31 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
 router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    logger.info(`Fetching video with ID: ${id}`, { requestId });
     
     // Get video from database
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      logger.info(`Video not found with ID: ${id}`, { requestId });
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
-    logger.info(`Video access attempt`, {
-      requestId,
-      userId: userInfo.user_id,
-      isAnonymous: userInfo.is_anonymous,
-      sessionId: userInfo.anonymous_session_id || 'none',
-      videoId: id,
-      videoOwner: video.user_id,
-      videoSessionId: video.anonymous_session_id || 'none'
-    });
     
-    // SECURITY CHECK #1: Authenticated users can only access their own videos
+    // Check if user has access to this video
+    // Authenticated users can only access their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      // Log security event for unauthorized access
-      logSecurityEvent(
-        requestId,
-        'unauthorized_video_access',
-        {
-          userId: userInfo.user_id,
-          attemptedVideoId: id,
-          videoOwnerId: video.user_id,
-          endpoint: `GET /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
     
-    // SECURITY CHECK #2: Anonymous users can only access videos from their session
+    // Anonymous users can only access videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      // Log security event for unauthorized access
-      logSecurityEvent(
-        requestId,
-        'unauthorized_anonymous_access',
-        {
-          anonymousSessionId: userInfo.anonymous_session_id,
-          attemptedVideoId: id,
-          videoSessionId: video.anonymous_session_id,
-          endpoint: `GET /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
-    
-    logger.info(`Access granted to video: ${video.id}`, { 
-      requestId,
-      videoId: video.id, 
-      videoTitle: video.title
-    });
     
     return sendSuccess(res, video);
   } catch (error) {
-    logger.error(`Error fetching video: ${error}`, { 
-      requestId: req.headers['x-request-id'] as string || 'unknown',
-      error
-    });
+    console.error("Error fetching video:", error);
     return handleApiError(res, error);
   }
 });
@@ -836,60 +668,25 @@ router.get('/:id', validateNumericParam('id'), async (req: Request, res: Respons
 router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    logger.info(`Updating video with ID: ${id}`, { requestId });
     
     // Get video from database to verify ownership
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      logger.info(`Video not found with ID: ${id}`, { requestId });
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
-    logger.info(`Video update attempt`, {
-      requestId,
-      userId: userInfo.user_id,
-      isAnonymous: userInfo.is_anonymous,
-      sessionId: userInfo.anonymous_session_id || 'none',
-      videoId: id,
-      videoOwner: video.user_id,
-      videoSessionId: video.anonymous_session_id || 'none'
-    });
     
-    // SECURITY CHECK #1: Authenticated users can only update their own videos
+    // Check if user has access to update this video
+    // Authenticated users can only update their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      // Log security event for unauthorized update attempt
-      logSecurityEvent(
-        requestId,
-        'unauthorized_video_update',
-        {
-          userId: userInfo.user_id,
-          attemptedVideoId: id,
-          videoOwnerId: video.user_id,
-          endpoint: `PATCH /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
-    // SECURITY CHECK #2: Anonymous users can only update videos from their session
+    // Anonymous users can only update videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      // Log security event for unauthorized anonymous update attempt
-      logSecurityEvent(
-        requestId,
-        'unauthorized_anonymous_update',
-        {
-          anonymousSessionId: userInfo.anonymous_session_id,
-          attemptedVideoId: id,
-          videoSessionId: video.anonymous_session_id,
-          endpoint: `PATCH /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
@@ -897,22 +694,12 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
     const updatedVideo = await dbStorage.updateVideo(id, req.body);
     
     if (!updatedVideo) {
-      logger.error(`Failed to update video: ${id}`, { requestId });
       return sendError(res, "Failed to update video", 500);
     }
     
-    logger.info(`Successfully updated video: ${updatedVideo.id}`, { 
-      requestId,
-      videoId: updatedVideo.id, 
-      videoTitle: updatedVideo.title
-    });
-    
     return sendSuccess(res, updatedVideo);
   } catch (error) {
-    logger.error(`Error updating video: ${error}`, { 
-      requestId: req.headers['x-request-id'] as string || 'unknown',
-      error
-    });
+    console.error("Error updating video:", error);
     return handleApiError(res, error);
   }
 });
@@ -923,87 +710,41 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
 router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const requestId = req.headers['x-request-id'] as string || 'unknown';
-    logger.info(`Deleting video with ID: ${id}`, { requestId });
     
     // Get video from database to verify ownership
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
-      logger.info(`Video not found with ID: ${id}`, { requestId });
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
-    logger.info(`Video delete attempt`, {
-      requestId,
-      userId: userInfo.user_id,
-      isAnonymous: userInfo.is_anonymous,
-      sessionId: userInfo.anonymous_session_id || 'none',
-      videoId: id,
-      videoOwner: video.user_id,
-      videoSessionId: video.anonymous_session_id || 'none'
-    });
     
-    // SECURITY CHECK #1: Authenticated users can only delete their own videos
+    // Check if user has access to delete this video
+    // Authenticated users can only delete their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      // Log security event for unauthorized deletion attempt
-      logSecurityEvent(
-        requestId,
-        'unauthorized_video_deletion',
-        {
-          userId: userInfo.user_id,
-          attemptedVideoId: id,
-          videoOwnerId: video.user_id,
-          endpoint: `DELETE /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
-    // SECURITY CHECK #2: Anonymous users can only delete videos from their session
+    // Anonymous users can only delete videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      // Log security event for unauthorized anonymous deletion attempt
-      logSecurityEvent(
-        requestId,
-        'unauthorized_anonymous_deletion',
-        {
-          anonymousSessionId: userInfo.anonymous_session_id,
-          attemptedVideoId: id,
-          videoSessionId: video.anonymous_session_id,
-          endpoint: `DELETE /videos/${id}`
-        }
-      );
-      
       return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
     // Delete embeddings first
-    logger.info(`Deleting embeddings for video: ${id}`, { requestId });
     await deleteVideoEmbeddings(id);
     
     // Delete the video
     const success = await dbStorage.deleteVideo(id);
     
     if (!success) {
-      logger.error(`Failed to delete video: ${id}`, { requestId });
       return sendError(res, "Failed to delete video", 500);
     }
     
-    logger.info(`Successfully deleted video: ${id}`, { 
-      requestId,
-      videoId: id, 
-      videoTitle: video.title
-    });
-    
     return sendSuccess(res, { message: "Video deleted successfully" });
   } catch (error) {
-    logger.error(`Error deleting video: ${error}`, { 
-      requestId: req.headers['x-request-id'] as string || 'unknown',
-      error
-    });
+    console.error("Error deleting video:", error);
     return handleApiError(res, error);
   }
 });

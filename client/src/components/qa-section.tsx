@@ -179,19 +179,6 @@ export function QASection() {
       );
       
       console.log(`[QA Section] Fetched conversation data for ID ${activeConversation}:`, data);
-      console.log(`[QA Section] Type of messages:`, typeof data.messages);
-      console.log(`[QA Section] Is messages array?`, Array.isArray(data.messages));
-      
-      if (data.messages && typeof data.messages === 'string') {
-        try {
-          console.log('[QA Section] Attempting to parse string messages into JSON:', data.messages);
-          data.messages = JSON.parse(data.messages);
-          console.log('[QA Section] After parsing:', data.messages);
-        } catch (e) {
-          console.error('[QA Section] Failed to parse messages string:', e);
-        }
-      }
-      
       return data;
     },
     enabled: activeConversation !== null,
@@ -311,43 +298,10 @@ export function QASection() {
 
   // Update messages when conversation data changes
   useEffect(() => {
-    if (conversationData) {
-      console.log("Conversation data received:", conversationData);
-      console.log("Messages from conversation:", conversationData.messages);
-      console.log("Is messages an array?", Array.isArray(conversationData.messages));
-      
-      if (Array.isArray(conversationData.messages)) {
-        // If the messages array is empty but there's an active conversation,
-        // there might be a timing issue. Let's refetch to make sure we have the latest data.
-        if (conversationData.messages.length === 0 && conversationData.id) {
-          console.log("Messages array is empty for conversation", conversationData.id, "- refetching to get updated data");
-          setTimeout(() => {
-            refetchConversation();
-          }, 500); // Add a slight delay to allow the backend processing to complete
-        }
-        
-        console.log("Setting messages to:", conversationData.messages);
-        setMessages(conversationData.messages);
-      } else if (typeof conversationData.messages === 'string') {
-        // Try to parse string messages if they come as a string
-        try {
-          const parsedMessages = JSON.parse(conversationData.messages);
-          if (Array.isArray(parsedMessages)) {
-            console.log("Parsed messages from string:", parsedMessages);
-            setMessages(parsedMessages);
-          }
-        } catch (e) {
-          console.error("Failed to parse messages string:", e);
-          // Set to empty array as fallback
-          setMessages([]);
-        }
-      } else {
-        console.error("Conversation messages is not an array:", conversationData.messages);
-        // Set to empty array as fallback
-        setMessages([]);
-      }
+    if (conversationData && Array.isArray(conversationData.messages)) {
+      setMessages(conversationData.messages);
     }
-  }, [conversationData, refetchConversation]);
+  }, [conversationData]);
 
   // Scroll to bottom when new messages are added
   useEffect(() => {
@@ -446,11 +400,7 @@ export function QASection() {
             
             // Update messages with the new AI response
             if (messageData && messageData.conversation && Array.isArray(messageData.conversation.messages)) {
-              console.log("Received initial messages from server:", messageData.conversation.messages);
               setMessages(messageData.conversation.messages);
-              
-              // Force refetch the conversation to ensure we have the latest data
-              refetchConversation();
             }
           } catch (messageError) {
             console.error("Error sending initial message:", messageError);
@@ -524,11 +474,7 @@ export function QASection() {
 
       // Update messages with the new AI response
       if (data && data.conversation && Array.isArray(data.conversation.messages)) {
-        console.log("Received new messages from server:", data.conversation.messages);
         setMessages(data.conversation.messages);
-        
-        // Force refetch the conversation to ensure we have the latest data
-        refetchConversation();
       }
     } catch (error) {
       console.error("Error sending question:", error);
@@ -694,12 +640,7 @@ export function QASection() {
                 </div>
               ) : conversations && conversations.length > 0 ? (
                 <div className="space-y-1.5">
-                  {[...conversations]
-                    .sort((a, b) => {
-                      // Sort by creation date - oldest first
-                      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-                    })
-                    .map((conversation) => (
+                  {conversations.map((conversation) => (
                     <div key={conversation.id} className="group">
                       <div
                         className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${

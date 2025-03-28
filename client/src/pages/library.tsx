@@ -30,20 +30,6 @@ import {
   Loader2,
   Plus,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 export default function Library() {
   // State
@@ -118,12 +104,12 @@ export default function Library() {
         url += `query=${encodeURIComponent(searchQuery)}&`;
       }
 
-      // Add filters - make sure we're sending valid numeric values
-      if (selectedCategory && typeof selectedCategory === 'number') {
+      // Add filters
+      if (selectedCategory) {
         url += `category_id=${selectedCategory}&`;
       }
 
-      if (selectedCollection && typeof selectedCollection === 'number') {
+      if (selectedCollection) {
         url += `collection_id=${selectedCollection}&`;
       }
 
@@ -147,32 +133,18 @@ export default function Library() {
       }
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
-
-      // Setup headers - this is critical for authenticated users
-      let headers: HeadersInit = {};
       
-      // For authenticated users, explicitly add user ID header
-      if (user && user.id) {
-        headers = { 'x-user-id': String(user.id) };
-        console.log('Library - Adding user ID header for authenticated user:', user.id);
-      } 
-      // For anonymous users, add anonymous session header
-      else if (!user) {
+      // Add anonymous session header for anonymous users
+      let headers: HeadersInit = {};
+      if (!user) {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
         console.log('Library - Adding anonymous session header:', sessionId);
       }
-
-      // Make the API request with proper headers
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers
-        },
-        credentials: 'include'
-      });
-
+      
+      // Use our API request function which handles all the auth header logic for us
+      const response = await apiRequest("GET", url, undefined, headers);
+      
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
@@ -245,21 +217,7 @@ export default function Library() {
   // Mutations
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      let headers: HeadersInit = {};
-      
-      // For authenticated users, we need to add the user ID header
-      if (user) {
-        headers = { 'x-user-id': String(user.id) };
-        console.log('Bulk Delete - Adding user ID header for authenticated user:', user.id);
-      }
-      // For anonymous users, we need to add the session header
-      else {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('Bulk Delete - Adding anonymous session header:', sessionId);
-      }
-
-      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
+      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids });
       return response.json();
     },
     onSuccess: () => {
@@ -283,24 +241,10 @@ export default function Library() {
 
   const bulkToggleFavoriteMutation = useMutation({
     mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
-      let headers: HeadersInit = {};
-      
-      // For authenticated users, add the user ID header
-      if (user) {
-        headers = { 'x-user-id': String(user.id) };
-        console.log('Bulk Toggle Favorite - Adding user ID header for authenticated user:', user.id);
-      }
-      // For anonymous users, we need to add the session header
-      else {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('Bulk Toggle Favorite - Adding anonymous session header:', sessionId);
-      }
-
       const response = await apiRequest("PATCH", "/api/videos/bulk", { 
         ids, 
         data: { is_favorite: isFavorite } 
-      }, headers);
+      });
       return response.json();
     },
     onSuccess: (_, variables) => {
@@ -321,23 +265,9 @@ export default function Library() {
 
   const addToCollectionMutation = useMutation({
     mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
-      let headers: HeadersInit = {};
-      
-      // For authenticated users, add the user ID header
-      if (user) {
-        headers = { 'x-user-id': String(user.id) };
-        console.log('Add to Collection - Adding user ID header for authenticated user:', user.id);
-      }
-      // For anonymous users, we need to add the session header
-      else {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('Add to Collection - Adding anonymous session header:', sessionId);
-      }
-
       const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
         video_ids: videoIds
-      }, headers);
+      });
       return response.json();
     },
     onSuccess: (_, variables) => {
@@ -436,19 +366,13 @@ export default function Library() {
     }
   };
 
-  // State for delete confirmation dialog
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
-
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
-    setShowDeleteConfirmation(true);
-  };
 
-  // Handle confirmed deletion
-  const confirmDelete = () => {
-    bulkDeleteMutation.mutate(selectedVideos);
-    setShowDeleteConfirmation(false);
+    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
+      bulkDeleteMutation.mutate(selectedVideos);
+    }
   };
 
   const handleToggleFavorite = (isFavorite: boolean) => {
@@ -517,16 +441,22 @@ export default function Library() {
           setShowedPrompt(true);
         }
       };
-
+      
       // Only execute the check once - not on initial render
       if (libraryInteractions > 0) {
         checkAnonymousLimit();
       } else {
         setShowedPrompt(true);
       }
-
-      // For anonymous users, we want to use the API to get their videos
-      // The videosQuery will handle this with the anonymous session header
+      
+      // Load videos from local storage
+      const localData = getLocalData();
+      if (localData.videos.length > 0) {
+        setAllVideos(localData.videos);
+        setTotalCount(localData.videos.length);
+        setHasMore(false);
+        setIsLoadingMore(false);
+      }
     } else if (user) {
       // Load videos for logged in users
       // Send user ID as a number to API
@@ -534,53 +464,39 @@ export default function Library() {
       // ... existing videosQuery logic ...
     }
 
-    // Load categories - but don't directly set as filter
+    // Load categories
     async function loadCategories() {
       try {
         if (!user) {
           // For anonymous users, no categories are available
-          // Just clear the category selection
           setSelectedCategory(undefined);
           return;
         }
-        
-        // Don't set the fetched categories array directly as the selected category
-        // Instead, load them for the UI but keep selectedCategory as a single ID
-        const response = await fetch('/api/categories', {
-          headers: { 'x-user-id': String(user.id) },
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          console.error('Failed to load categories, status:', response.status);
+        const response = await apiRequest("GET", '/api/categories');
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedCategory(data);
         }
-        // We don't set selectedCategory here - that should be selected by the user from the UI
       } catch (error) {
         console.error('Failed to load categories:', error);
       }
     }
     loadCategories();
 
-    // Load collections - but don't directly set as filter
+    // Load collections
     async function loadCollections() {
       try {
         if (!user) {
-          // For anonymous users, no collections available
-          setSelectedCollection(undefined);
+          // For anonymous users, get collections from local storage
+          const localData = getLocalData();
+          setSelectedCollection(localData.collections || []);
           return;
         }
-        
-        // Don't set the fetched collections array directly as the selected collection
-        // Instead, load them for the UI but keep selectedCollection as a single ID
-        const response = await fetch('/api/collections', {
-          headers: { 'x-user-id': String(user.id) },
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          console.error('Failed to load collections, status:', response.status);
+        const response = await apiRequest("GET", '/api/collections');
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedCollection(data);
         }
-        // We don't set selectedCollection here - that should be selected by the user from the UI
       } catch (error) {
         console.error('Failed to load collections:', error);
       }
@@ -628,7 +544,7 @@ export default function Library() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setIsFilterSidebarOpen(!isFilterSidebarOpen);
+                  setIsFilterSidebarOpen(true);
                   trackEngagement();
                 }}
                 className="flex items-center gap-1"
@@ -811,8 +727,8 @@ export default function Library() {
 
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Unified Sidebar for filters (toggled by the Filters button) */}
-            <div className={`${isFilterSidebarOpen ? "block" : "hidden"}`}>
+            {/* Sidebar for filters (desktop) */}
+            <div className="hidden lg:block">
               <FilterSidebar
                 categories={categoriesQuery.data || []}
                 collections={collectionsQuery.data || []}
@@ -829,10 +745,31 @@ export default function Library() {
                 sortOrder={sortOrder}
                 setSortOrder={setSortOrder}
                 isVisible={true}
-                onClose={() => setIsFilterSidebarOpen(false)}
+                onClose={() => {}}
                 onCreateCollection={() => setIsCreateCollectionOpen(true)}
               />
             </div>
+
+            {/* Sidebar for filters (mobile) */}
+            <FilterSidebar
+              categories={categoriesQuery.data || []}
+              collections={collectionsQuery.data || []}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedCollection={selectedCollection}
+              setSelectedCollection={setSelectedCollection}
+              selectedRating={selectedRating}
+              setSelectedRating={setSelectedRating}
+              showFavoritesOnly={showFavoritesOnly}
+              setShowFavoritesOnly={setShowFavoritesOnly}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              isVisible={isFilterSidebarOpen}
+              onClose={() => setIsFilterSidebarOpen(false)}
+              onCreateCollection={() => setIsCreateCollectionOpen(true)}
+            />
 
             {/* Main Content Area */}
             <div className="flex-grow">
@@ -956,6 +893,7 @@ export default function Library() {
           </div>
         </div>
       </main>
+
       <Footer />
 
       {/* Create Collection Dialog */}
@@ -983,34 +921,6 @@ export default function Library() {
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Videos</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedVideos.length} {selectedVideos.length === 1 ? 'video' : 'videos'}? 
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteConfirmation(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

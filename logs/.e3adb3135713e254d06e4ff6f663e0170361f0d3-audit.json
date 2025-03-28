@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/runner/workspace/logs/.e3adb3135713e254d06e4ff6f663e0170361f0d3-audit.json",
+    "files": [
+        {
+            "date": 1743114230713,
+            "name": "/home/runner/workspace/logs/api-2025-03-27.log",
+            "hash": "9688c596b5e26e4179fd0d1ee64abc7c321b4e1f064ad2dcceec2889b7df006d"
+        },
+        {
+            "date": 1743120015466,
+            "name": "/home/runner/workspace/logs/api-2025-03-28.log",
+            "hash": "f10e32389000a38ba3c02935ac7ac1ee45220265f53dca3ee43dc64160957479"
+        }
+    ],
+    "hashType": "sha256"
+}
