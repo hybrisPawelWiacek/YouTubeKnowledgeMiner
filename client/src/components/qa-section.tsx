@@ -182,15 +182,44 @@ export function QASection() {
       }
 
       console.log(`[QA Section] Fetching active conversation ${activeConversation}`);
-      const data = await fetchAPI<any>(
-        "GET",
-        `/api/qa/${activeConversation}`,
-        undefined,
-        headers,
-      );
+      
+      try {
+        const data = await fetchAPI<any>(
+          "GET",
+          `/api/qa/${activeConversation}`,
+          undefined,
+          headers,
+        );
 
-      console.log(`[QA Section] Fetched conversation data for ID ${activeConversation}:`, data);
-      return data;
+        // Log the response for debugging
+        console.log(`[QA Section] Fetched conversation data for ID ${activeConversation}:`, data);
+        
+        // Add error handling for malformed response
+        if (!data) {
+          console.error(`[QA Section] Received empty data for conversation ${activeConversation}`);
+          return { id: activeConversation, messages: [] };
+        }
+        
+        // If we somehow got an array instead of a single conversation object
+        if (Array.isArray(data)) {
+          console.warn(`[QA Section] Received array for single conversation ID ${activeConversation}`);
+          
+          // Try to find the right conversation in the array
+          const targetConversation = data.find(conv => conv.id === activeConversation);
+          if (targetConversation) {
+            return targetConversation;
+          }
+          
+          // If not found, return empty conversation with the ID
+          return { id: activeConversation, messages: [] };
+        }
+        
+        return data;
+      } catch (error) {
+        console.error(`[QA Section] Error fetching conversation ${activeConversation}:`, error);
+        // Return a minimal valid object with empty messages to prevent UI errors
+        return { id: activeConversation, messages: [] };
+      }
     },
     enabled: activeConversation !== null,
   });
@@ -400,12 +429,16 @@ export function QASection() {
       refetchConversations();
 
       if (data && typeof data === "object" && "id" in data && typeof data.id === "number") {
-        // Set the active conversation
+        // Set the active conversation and initialize with empty messages array
+        // to prevent "no messages" placeholder from showing while loading
         setActiveConversation(data.id);
-
+        
         // Only send the initial question if there's actual content
         if (initialQuestion.trim()) {
           try {
+            // Add user message immediately for better UX
+            setMessages([{ role: "user", content: initialQuestion }]);
+            
             // Send the initial question using improved fetchAPI helper
             console.log(`Sending initial question to conversation ${data.id}:`, initialQuestion);
 
@@ -423,17 +456,32 @@ export function QASection() {
 
             // Update messages with the new AI response
             if (messageData && messageData.conversation && Array.isArray(messageData.conversation.messages)) {
+              // Use both the question and answer
               setMessages(messageData.conversation.messages);
+              
+              // Force refetch conversation data to sync everything
+              setTimeout(() => {
+                refetchConversation();
+              }, 500);
             }
           } catch (messageError) {
             console.error("Error sending initial message:", messageError);
+            // Even if there's an error, keep the user message in the UI
+            qaLogger.error("Failed to send initial question", {
+              conversationId: data.id,
+              error: messageError
+            });
           }
+        } else {
+          // If no initial question, explicitly set empty messages
+          setMessages([]);
         }
       } else {
         console.error("Invalid conversation data received:", data);
       }
     } catch (error) {
       console.error("Error in handleCreateNewConversation:", error);
+      qaLogger.error("Failed to create new conversation", { error });
     } finally {
       // Always reset the submitting state when done
       setIsSubmitting(false);

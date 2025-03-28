@@ -138,3 +138,21 @@ export const uiLogger = createLogger('ui');
 
 // Create a QA logger for conversation issues
 export const qaLogger = createLogger('qa');
+
+// Add specific methods for QA conversation logging
+qaLogger.logConversation = (action: string, conversationId: number, meta: Record<string, any> = {}) => {
+  qaLogger.info(`[Conversation ${conversationId}] ${action}`, {
+    ...meta,
+    conversationId,
+    timestamp: new Date().toISOString()
+  });
+};
+
+qaLogger.logMessage = (action: string, conversationId: number, messageData: any, meta: Record<string, any> = {}) => {
+  qaLogger.info(`[Message] ${action} in conversation ${conversationId}`, {
+    ...meta,
+    conversationId,
+    messageData,
+    timestamp: new Date().toISOString()
+  });
+};
