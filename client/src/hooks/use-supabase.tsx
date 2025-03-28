@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import { updateCurrentSession } from '@/lib/api';
+import { getDemoSession, signOutDemoUser, DemoUser, DemoSession } from '@/lib/demo-auth';
 
 // Key for storing temporary data for anonymous users
 const LOCAL_STORAGE_KEY = 'youtube-miner-anonymous-data';
@@ -14,6 +15,7 @@ type SupabaseContextType = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isDemoUser: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
@@ -27,6 +29,7 @@ type SupabaseContextType = {
   // Add setters for demo auth integration
   setUser: (user: User) => void;
   setSession: (session: Session) => void;
+  setIsDemoUser: (isDemoUser: boolean) => void;
 };
 
 const SupabaseContext = createContext<SupabaseContextType>({
@@ -34,6 +37,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   user: null,
   session: null,
   loading: true,
+  isDemoUser: false,
   signIn: async () => {},
   signInWithGoogle: async () => {},
   signInWithMagicLink: async () => {},
@@ -47,6 +51,7 @@ const SupabaseContext = createContext<SupabaseContextType>({
   // Add setters for demo auth integration
   setUser: () => {},
   setSession: () => {},
+  setIsDemoUser: () => {},
 });
 
 export function SupabaseProvider({ children }: { children: ReactNode }) {
@@ -54,7 +59,19 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Track if this is a demo user
+  const [isDemoUser, setIsDemoUser] = useState(false);
   const { toast } = useToast();
+
+  // Effect to update isDemoUser whenever user changes
+  useEffect(() => {
+    // Check if the current user is a demo user
+    if (user?.user_metadata?.is_demo === true) {
+      setIsDemoUser(true);
+    } else {
+      setIsDemoUser(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchSupabaseConfig = async () => {
@@ -593,6 +610,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // 1. Clear React state
       setUser(null);
       setSession(null);
+      setIsDemoUser(false);
       
       // 2. Clear ALL possible localStorage keys
       localStorage.removeItem(SUPABASE_SESSION_KEY);
@@ -646,6 +664,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // Even if there's an error, try to clear the state as a failsafe
       setUser(null);
       setSession(null);
+      setIsDemoUser(false);
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       localStorage.removeItem('supabase.auth.token');
       updateCurrentSession(null);
@@ -840,6 +859,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
+        isDemoUser,
         signIn,
         signInWithGoogle,
         signInWithMagicLink,
@@ -853,6 +873,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         // Export the user state setters for demo auth
         setUser,
         setSession,
+        setIsDemoUser,
       }}
     >
       {children}

@@ -6,6 +6,7 @@ import { useSupabase } from '@/hooks/use-supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronsUp, BadgePlus, Beaker, Loader2 } from 'lucide-react';
+import { loginAsDemoUser as demoAuth } from '@/lib/demo-auth';
 
 // Define the demo user types for consistent typing
 interface DemoUser {
@@ -19,6 +20,9 @@ export function DemoLogin() {
   const [demoUsers, setDemoUsers] = useState<DemoUser[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [_, setLocation] = useLocation();
+
+  // Custom hook to access the Supabase context methods
+  const { setUser, setSession, setIsDemoUser } = useSupabase();
 
   // Fetch the list of available demo users when the component mounts
   useEffect(() => {
@@ -50,115 +54,32 @@ export function DemoLogin() {
     fetchDemoUsers();
   }, []);
   
-  // Custom hook to access the method that updates the current session
-  const { setUser, setSession } = useSupabase();
-  
-  // Function to log in as a demo user
-  const loginAsDemoUser = async (username: string) => {
+  // Function to log in as a demo user using the dedicated demo auth system
+  const handleDemoLogin = async (username: string) => {
     setIsLoading(true);
     
-    // Add comprehensive DEBUG logging
-    console.log('🔍 [Demo Login] Starting login process for:', username);
-    console.log('🔍 [Demo Login] Current localStorage keys:', Object.keys(localStorage));
-    
     try {
-      // Log API call
-      console.log('🔍 [Demo Login] Calling API endpoint: /api/demo-auth/login');
+      // Log the process
+      console.log('🔍 [Demo Login] Starting login process for:', username);
       
-      const response = await fetch('/api/demo-auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username }),
-      });
+      // Use our dedicated demo auth system
+      const demoSession = await demoAuth(username);
       
-      console.log('🔍 [Demo Login] API response status:', response.status);
+      // Also set the user and session in the Supabase context
+      // This allows the demo auth to work alongside the Supabase auth
+      console.log('🔍 [Demo Login] Setting user in Supabase context');
+      setUser(demoSession.user as any);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ [Demo Login] API error:', errorData);
-        throw new Error(errorData.message || 'Failed to log in as demo user');
-      }
+      console.log('🔍 [Demo Login] Setting session in Supabase context');
+      setSession(demoSession as any);
       
-      const { data } = await response.json();
-      
-      console.log('🔍 [Demo Login] API data received:', JSON.stringify(data, null, 2));
-      
-      if (!data || !data.id) {
-        console.error('❌ [Demo Login] Invalid data format received from API');
-        throw new Error('Invalid response from server');
-      }
-      
-      // Create a mock user and session similar to what we'd get from Supabase
-      const demoUser = {
-        id: data.id,
-        email: data.email,
-        user_metadata: {
-          username: data.username,
-          full_name: data.displayName || data.username,
-          direct_auth: true,
-          is_demo: true,
-          demo_type: data.demoType
-        },
-        role: 'authenticated',
-        aud: 'authenticated',
-        app_metadata: {
-          provider: 'demo'
-        },
-      };
-      
-      console.log('🔍 [Demo Login] Demo user object created:', JSON.stringify(demoUser, null, 2));
-      
-      const mockSession = {
-        user: demoUser,
-        access_token: `demo_token_${data.id}`,
-        refresh_token: 'demo_refresh_token',
-        expires_in: 3600,
-        expires_at: Date.now() + 3600000
-      };
-      
-      console.log('🔍 [Demo Login] Mock session created with token:', mockSession.access_token);
-      
-      // Import the updateCurrentSession function to keep all auth states in sync
-      const { updateCurrentSession } = await import('@/lib/api');
-      
-      // Update the user context
-      console.log('🔍 [Demo Login] Setting user in context');
-      setUser(demoUser as any);
-      
-      console.log('🔍 [Demo Login] Setting session in context');
-      setSession(mockSession as any);
-      
-      // Also update the API module's session state
-      console.log('🔍 [Demo Login] Updating current session in API module');
-      updateCurrentSession(mockSession);
-      
-      // Store using BOTH possible keys for maximum compatibility
-      const STORAGE_KEY = 'youtube-miner-supabase-session';
-      
-      console.log('🔍 [Demo Login] Saving to localStorage with key:', STORAGE_KEY);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockSession));
-      
-      // Also save with alternate key format that might be used
-      console.log('🔍 [Demo Login] Also saving with alternate key for compatibility');
-      localStorage.setItem('supabase.auth.token', JSON.stringify({ 
-        currentSession: mockSession,
-        expiresAt: Date.now() + 3600000
-      }));
-      
-      // Verify data was saved properly
-      const savedSession = localStorage.getItem(STORAGE_KEY);
-      console.log('🔍 [Demo Login] Verification - Session in localStorage:', 
-        savedSession ? 'Present' : 'Missing', 
-        'Length:', savedSession?.length);
-      
-      // Log all localStorage keys after setting
-      console.log('🔍 [Demo Login] All localStorage keys after login:', Object.keys(localStorage)); 
+      // Explicitly set the demo user state to true
+      console.log('🔍 [Demo Login] Setting isDemoUser state to true');
+      setIsDemoUser(true);
       
       toast({
         title: 'Demo Login Successful',
-        description: `You are now logged in as "${data.displayName || data.username}"`,
+        description: `You are now logged in as "${demoSession.user.user_metadata?.full_name || demoSession.user.user_metadata?.username}"`,
       });
       
       // Redirect to home page
@@ -166,7 +87,7 @@ export function DemoLogin() {
       setLocation('/');
       
     } catch (error: any) {
-      console.error('Demo login error:', error);
+      console.error('❌ [Demo Login] Error:', error);
       toast({
         title: 'Demo Login Failed',
         description: error.message || 'Failed to log in as demo user',
@@ -230,7 +151,7 @@ export function DemoLogin() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => loginAsDemoUser(user.username)}
+                onClick={() => handleDemoLogin(user.username)}
                 disabled={isLoading}
               >
                 {isLoading ? (
