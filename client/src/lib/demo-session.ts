@@ -184,8 +184,9 @@ export function isDemoUser(user: User | null): boolean {
 }
 
 /**
- * Sign out a demo user completely, clearing state
- * This handles all necessary cleanup
+ * Sign out a demo user completely, clearing state and storage
+ * This function is much more aggressive about cleaning up sessions
+ * 
  * @param setUser React state setter for user
  * @param setSession React state setter for session
  * @returns A promise that resolves to true if successful, false otherwise
@@ -197,6 +198,11 @@ export async function signOutDemoUser(
   try {
     console.log('[Demo Session] Starting demo user sign out process');
     
+    // Check session keys before cleanup
+    const sessionKeys = Object.keys(localStorage).filter(key => 
+      key.includes('session') || key.includes('supabase')
+    );
+    
     // Check if we actually have a demo session to clear
     const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
     const hasSupabaseSession = localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
@@ -204,9 +210,14 @@ export async function signOutDemoUser(
     console.log('[Demo Session] Pre-logout state:', { 
       hasDemoSession, 
       hasSupabaseSession,
+      sessionKeys
     });
     
-    // First clear React state
+    // Perform a complete cleanup of localStorage first
+    // This ensures storage is cleared even if React state updates fail
+    clearAllSessionData();
+    
+    // Now update React state
     setUser(null);
     setSession(null);
     console.log('[Demo Session] React state cleared');
@@ -215,42 +226,76 @@ export async function signOutDemoUser(
     updateCurrentSession(null);
     console.log('[Demo Session] API session state cleared');
     
-    // Clear stored session data
-    clearSession();
-    
-    // Verify we succeeded
-    const hasDemoSessionAfter = localStorage.getItem(DEMO_SESSION_KEY) !== null;
-    const hasSupabaseSessionAfter = localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
+    // Verify we succeeded with localStorage
+    const remainingSessionKeys = Object.keys(localStorage).filter(key => 
+      key.includes('session') || key.includes('supabase')
+    );
     
     console.log('[Demo Session] Post-logout state:', { 
-      hasDemoSessionAfter, 
-      hasSupabaseSessionAfter
+      remainingKeys: remainingSessionKeys
     });
     
-    if (hasDemoSessionAfter || hasSupabaseSessionAfter) {
-      console.error('[Demo Session] Failed to clear all session data');
+    // Final cleanup if anything still exists
+    if (remainingSessionKeys.length > 0) {
+      console.error('[Demo Session] Some session data still exists, forcing final cleanup');
       
-      // Try again with direct methods
-      localStorage.removeItem(DEMO_SESSION_KEY);
-      localStorage.removeItem(SUPABASE_SESSION_KEY);
-      localStorage.removeItem(DEMO_SESSION_KEY + ':timestamp');
+      // One more aggressive cleanup
+      remainingSessionKeys.forEach(key => {
+        console.log(`[Demo Session] Final cleanup: removing ${key}`);
+        localStorage.removeItem(key);
+      });
       
-      // Final check
-      const stillFailed = localStorage.getItem(DEMO_SESSION_KEY) !== null || 
-                          localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
-      
-      if (stillFailed) {
-        console.error('[Demo Session] Critical failure: Unable to clear session storage');
-        return false;
+      // Also try to clear using window.localStorage directly as an alternative method
+      try {
+        remainingSessionKeys.forEach(key => {
+          window.localStorage.removeItem(key);
+        });
+      } catch (e) {
+        console.error('[Demo Session] Error during window.localStorage cleanup:', e);
       }
     }
     
     console.log('[Demo Session] Demo user signed out successfully');
     
-    // Resolving after a small delay to allow React state to settle
-    return await new Promise(resolve => setTimeout(() => resolve(true), 50));
+    // Wait a bit longer to ensure all async operations complete
+    return await new Promise(resolve => setTimeout(() => resolve(true), 150));
   } catch (error) {
     console.error('[Demo Session] Error during sign out:', error);
+    
+    // Attempt emergency cleanup even in error case
+    try {
+      clearAllSessionData();
+    } catch (e) {
+      console.error('[Demo Session] Failed emergency cleanup:', e);
+    }
+    
     return false;
+  }
+}
+
+/**
+ * Clear all session-related data from localStorage
+ * More thorough than just clearSession()
+ */
+function clearAllSessionData(): void {
+  try {
+    // First remove our explicit keys
+    localStorage.removeItem(DEMO_SESSION_KEY);
+    localStorage.removeItem(SUPABASE_SESSION_KEY);
+    localStorage.removeItem(DEMO_SESSION_KEY + ':timestamp');
+    
+    // Then find and remove anything session-related
+    const sessionKeys = Object.keys(localStorage).filter(key => 
+      key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')
+    );
+    
+    sessionKeys.forEach(key => {
+      console.log(`[Demo Session] Clearing session data: ${key}`);
+      localStorage.removeItem(key);
+    });
+    
+    console.log('[Demo Session] Cleared all session-related data');
+  } catch (error) {
+    console.error('[Demo Session] Error clearing all session data:', error);
   }
 }

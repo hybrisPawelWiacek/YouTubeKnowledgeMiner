@@ -75,10 +75,15 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
+      // Store the initial user state before logout for comparison
+      const initialUserId = user?.id;
+      const isDemo = user?.user_metadata?.is_demo === true;
+      const isDirect = user?.user_metadata?.direct_auth === true;
+      
       logStateChange('Header', 'signOut-start', { 
-        userId: user?.id,
-        isDemo: user?.user_metadata?.is_demo === true,
-        isDirect: user?.user_metadata?.direct_auth === true 
+        userId: initialUserId,
+        isDemo,
+        isDirect
       });
       
       // Dump state before signOut
@@ -86,7 +91,7 @@ export function Header() {
       
       console.log("===== HEADER: SIGN OUT BUTTON CLICKED =====");
       console.log("Current user before signOut:", user);
-      console.log("Is demo user:", user?.user_metadata?.is_demo);
+      console.log("Is demo user:", isDemo);
       console.log("All localStorage keys before signOut:", Object.keys(localStorage));
       
       // Check demo session health before logout
@@ -102,12 +107,14 @@ export function Header() {
       // Call the signOut function
       await signOut();
       
-      // Force a small delay to let React state update
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // THIS IS THE CRUCIAL CHANGE: In React, state updates are asynchronous
+      // Instead of checking the React state (which won't have updated yet),
+      // we need to directly check localStorage and other indicators
+      
+      // Wait a bit longer to make sure any async operations complete
+      await new Promise(resolve => setTimeout(resolve, 150));
       
       console.log("After signOut called");
-      console.log("User state after signOut:", user);
-      console.log("All localStorage keys after signOut:", Object.keys(localStorage));
       
       // Check again for demo session
       const hasDemoSessionAfter = localStorage.getItem('youtube-miner-demo-session') !== null;
@@ -117,30 +124,45 @@ export function Header() {
       const sessionHealthAfter = checkDemoSessionHealth();
       console.log("[Header] Demo session health after signOut:", sessionHealthAfter);
       
+      // Check localStorage directly for any remaining sessions
+      const hasAnySessionData = Object.keys(localStorage).some(key => 
+        key.includes('session') || key.includes('supabase')
+      );
+      
       // Force an additional clear if session persists
-      if (hasDemoSessionAfter) {
-        console.log("WARNING: Demo session still exists after signOut, forcing removal");
+      if (hasDemoSessionAfter || hasAnySessionData) {
+        console.log("WARNING: Session data still exists after signOut, forcing cleanup");
         localStorage.removeItem('youtube-miner-demo-session');
         localStorage.removeItem('youtube-miner-supabase-session');
+        localStorage.removeItem('youtube-miner-demo-session:timestamp');
+        
+        // Additional cleanup for any other session-related data
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('session') || key.includes('supabase')) {
+            console.log(`Removing persistent key: ${key}`);
+            localStorage.removeItem(key);
+          }
+        });
       }
       
       // Dump state after signOut
       dumpStorageSnapshot();
       console.log("===== HEADER: SIGN OUT PROCESS COMPLETED =====");
       
-      logStateChange('Header', 'signOut-complete', { 
-        userStateAfter: user ? 'still-present' : 'cleared',
-        localStorageCleared: !hasDemoSessionAfter
-      });
-      
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
       });
       
-      // Force page refresh if session still exists
-      if (user !== null || hasDemoSessionAfter) {
-        console.log("WARNING: User state persists after logout, forcing page refresh");
+      // IMPORTANT: Instead of checking React state (which might not be updated yet),
+      // check direct indicators of session persistence
+      if (hasDemoSessionAfter || hasAnySessionData) {
+        console.log("WARNING: Session data persists after cleanup, forcing page reload");
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        // Force navigation to home page to ensure clean state
         setTimeout(() => {
           window.location.href = '/';
         }, 500);

@@ -497,30 +497,49 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           
           console.log("[SignOut] Demo user signout result:", signoutSuccess);
           
-          // Verify session was cleared
-          console.log("Demo session after signout:", localStorage.getItem(DEMO_SESSION_KEY));
-          console.log("All localStorage keys after signout:", Object.keys(localStorage));
+          // Verify session was cleared directly through localStorage
+          const hasRemainingDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+          const hasRemainingSupabaseSession = localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
           
-          // Extra verification after state clearing
-          console.log("User state after clearing:", user);
-          console.log("Session state after clearing:", session);
+          console.log("[SignOut] Session state after signout:", {
+            hasRemainingDemoSession,
+            hasRemainingSupabaseSession,
+            allKeys: Object.keys(localStorage)
+          });
           
-          if (!signoutSuccess) {
-            console.error("[SignOut] Demo user signout failed, using emergency fallback");
+          if (!signoutSuccess || hasRemainingDemoSession || hasRemainingSupabaseSession) {
+            console.error("[SignOut] Demo user signout failed or sessions still exist, using emergency cleanup");
             
-            // Emergency fallback - force clear everything
+            // Emergency cleanup - force clear everything
             localStorage.removeItem(DEMO_SESSION_KEY);
             localStorage.removeItem(SUPABASE_SESSION_KEY);
+            
+            // Find and clear all session-related keys
+            Object.keys(localStorage).forEach(key => {
+              if (key.includes('session') || key.includes('supabase')) {
+                localStorage.removeItem(key);
+              }
+            });
+            
+            // Force React state updates
             setUser(null);
             setSession(null);
             updateCurrentSession(null);
+            
+            console.log("[SignOut] Emergency cleanup completed");
           }
         } catch (demoSignoutError) {
           console.error("[SignOut] Error during demo signout:", demoSignoutError);
           
-          // Emergency fallback for exceptions
-          localStorage.removeItem(DEMO_SESSION_KEY);
-          localStorage.removeItem(SUPABASE_SESSION_KEY);
+          // Emergency fallback for exceptions - much more thorough cleanup
+          Object.keys(localStorage).forEach(key => {
+            if (key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')) {
+              console.log(`[SignOut] Error recovery: removing key ${key}`);
+              localStorage.removeItem(key);
+            }
+          });
+          
+          // Force React state updates
           setUser(null);
           setSession(null);
           updateCurrentSession(null);
