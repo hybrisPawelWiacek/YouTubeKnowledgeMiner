@@ -2,6 +2,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { refreshAuthState } from "./lib/auth-refresh";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
@@ -138,12 +139,6 @@ function SessionManager() {
 
 function Router() {
   const [, setLocation] = useLocation();
-  
-  // Helper function for auth refresh
-  function refreshAuthState() {
-    console.log("[Auth Refresh] Dispatching global auth state refresh event");
-    window.dispatchEvent(new Event('auth-state-refresh'));
-  }
   
   // Listen for custom navigation events to update the router location
   useEffect(() => {

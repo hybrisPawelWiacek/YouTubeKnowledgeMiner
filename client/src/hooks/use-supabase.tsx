@@ -65,62 +65,37 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   
   // Callback to manually refresh the auth state
   const refreshAuthState = useCallback(() => {
-    console.log('[SupabaseProvider] Auth state refresh requested');
+    console.log('[Auth Refresh] Manual refresh requested');
     
-    // Log the current state of all authentication-related localStorage
-    console.log('[SupabaseProvider] Current auth state:', {
-      demoSession: localStorage.getItem(DEMO_SESSION_KEY),
-      supabaseSession: localStorage.getItem(SUPABASE_SESSION_KEY),
-      anonymousSession: localStorage.getItem(ANONYMOUS_SESSION_KEY),
-      anonymousPreserved: localStorage.getItem(ANONYMOUS_PRESERVED_KEY),
-      anonymousBackup: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_backup'),
-      anonymousRestoreInfo: {
-        timestamp: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_restored_at'),
-        by: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_restored_by')
-      },
-      currentUser: user ? {
-        id: user.id,
-        email: user.email,
-        isDemo: user.user_metadata?.is_demo || false
-      } : null
-    });
-    
-    // Check for demo session first (highest priority)
+    // Check for demo session first
     const demoSession = getStoredSession();
     if (demoSession) {
-      console.log('[SupabaseProvider] Restoring demo session', {
+      console.log('[Auth Refresh] Restoring demo session', {
         id: demoSession.user.id,
-        username: demoSession.user.user_metadata?.username,
-        isDemo: demoSession.user.user_metadata?.is_demo || false
+        username: demoSession.user.user_metadata?.username
       });
       setUser(demoSession.user);
       setSession(demoSession);
       updateCurrentSession(demoSession);
-      
-      // Log success message
-      console.log('[SupabaseProvider] Successfully restored demo session');
       return;
     }
     
-    // Check for anonymous session next (medium priority, only if no user)
+    // Check for anonymous session next
     const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
     if (anonymousSessionId && !user) {
-      console.log('[SupabaseProvider] Restoring anonymous session', { anonymousSessionId });
-      
+      console.log('[Auth Refresh] Restoring anonymous session', { anonymousSessionId });
       // For anonymous users, we don't have a user object, just ensure we have no user set
       setUser(null);
       setSession(null);
-      
       // No need to update current session as the API handles anonymous sessions via cookies
-      console.log('[SupabaseProvider] Anonymous session active, cleared user and session state');
     }
     
-    // If Supabase client exists, try to refresh the session (lowest priority, overrides anonymous)
+    // If Supabase client exists, try to refresh the session
     if (supabase) {
-      console.log('[SupabaseProvider] Checking Supabase session');
+      console.log('[Auth Refresh] Checking Supabase session');
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          console.log('[SupabaseProvider] Setting Supabase session', { 
+          console.log('[Auth Refresh] Setting Supabase session', { 
             id: session.user.id, 
             email: session.user.email 
           });
@@ -589,26 +564,6 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Helper function to create a consistent logger
-  const createLogger = (prefix: string) => ({
-    info: (message: string, data?: any) => {
-      console.log(`[${prefix}] ${message}`, data !== undefined ? data : '');
-    },
-    error: (message: string, error?: any) => {
-      console.error(`[${prefix}] ${message}`, error !== undefined ? error : '');
-    },
-    warn: (message: string, data?: any) => {
-      console.warn(`[${prefix}] ${message}`, data !== undefined ? data : '');
-    },
-    debug: (message: string, data?: any) => {
-      if (typeof console.debug === 'function') {
-        console.debug(`[${prefix}] ${message}`, data !== undefined ? data : '');
-      } else {
-        console.log(`[${prefix}:Debug] ${message}`, data !== undefined ? data : '');
-      }
-    }
-  });
-
   const signOut = async () => {
     if (!supabase) {
       toast({
@@ -619,27 +574,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Create a logger specifically for signout operations
-    const logger = createLogger('Auth:SignOut');
-
     try {
-      
-      // Log the start of the sign-out process
-      logger.info("===== SIGN OUT PROCESS STARTING =====");
-      logger.debug("Current user state:", user);
-      logger.debug("User metadata:", user?.user_metadata);
-      logger.debug("Current session state:", session ? {
-        expires_at: session.expires_at,
-        user_id: session.user.id
-      } : null);
-      logger.debug("Authentication-related localStorage keys:", 
-        Object.keys(localStorage).filter(key => 
-          key.includes('session') || 
-          key.includes('supabase') || 
-          key.includes('anonymous') || 
-          key.includes('ytk_')
-        )
-      );
+      console.log("===== SIGN OUT PROCESS STARTING =====");
+      console.log("Current user state:", user);
+      console.log("User metadata:", user?.user_metadata);
+      console.log("Current session state:", session);
+      console.log("All localStorage keys:", Object.keys(localStorage));
       
       // ====== CRITICAL FIX: PRE-SIGNOUT ANONYMOUS SESSION PRESERVATION ======
       // First preserve any anonymous session before we import any modules
@@ -648,7 +588,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // Directly check and save any anonymous session
       const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
       if (anonymousSessionId) {
-        logger.info(`Preserving anonymous session before any imports: ${anonymousSessionId}`);
+        console.log(`[SignOut] Preserving anonymous session before any imports: ${anonymousSessionId}`);
         
         try {
           // Store the session for restoration after sign-out
@@ -665,12 +605,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             })
           );
           
-          logger.info(`Successfully preserved anonymous session: ${anonymousSessionId}`);
+          console.log(`[SignOut] Successfully preserved anonymous session: ${anonymousSessionId}`);
         } catch (preserveError) {
-          logger.error("Error preserving anonymous session:", preserveError);
+          console.error("[SignOut] Error preserving anonymous session:", preserveError);
         }
       } else {
-        logger.info("No anonymous session found to preserve");
+        console.log("[SignOut] No anonymous session found to preserve");
       }
       // ====== END CRITICAL FIX ======
       
@@ -680,47 +620,41 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       
       // Check if the current user is a demo user
       const isDemo = isDemoUser(user);
-      logger.info("Checking user type", { isDemo });
+      console.log("Is demo user:", isDemo);
       
       // Check localStorage for demo session
       const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
-      logger.debug("Demo session check", { hasDemoSession });
+      console.log("Has demo session in localStorage:", hasDemoSession);
       
       // Check if user was authenticated with direct method (but not a demo)
       const isDirectAuth = !isDemo && user?.user_metadata?.direct_auth === true;
-      logger.debug("User authentication type", { isDemo, isDirectAuth, hasDemoSession });
+      console.log("Is direct auth user:", isDirectAuth);
       
       if (isDemo || hasDemoSession) {
         // For demo users, use the specialized signout that handles demo sessions
-        logger.info("Detected demo user, using demo signout process");
+        console.log("[SignOut] Detected demo user, using demo signout process");
         
         // Extra logging for diagnosis
-        const demoSessionData = localStorage.getItem(DEMO_SESSION_KEY);
-        logger.debug("Demo session state before clearing", {
-          exists: !!demoSessionData,
-          truncated: demoSessionData ? demoSessionData.substring(0, 50) + '...' : null
-        });
+        console.log("Demo session before clearing:", localStorage.getItem(DEMO_SESSION_KEY));
         
         try {
           // Use the proper async signout function
           const signoutSuccess = await signOutDemoUser(setUser, setSession);
           
-          logger.info("Demo user signout result", { success: signoutSuccess });
+          console.log("[SignOut] Demo user signout result:", signoutSuccess);
           
           // Verify session was cleared directly through localStorage
           const hasRemainingDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
           const hasRemainingSupabaseSession = localStorage.getItem(SUPABASE_SESSION_KEY) !== null;
           
-          logger.debug("Session state after signout", {
+          console.log("[SignOut] Session state after signout:", {
             hasRemainingDemoSession,
             hasRemainingSupabaseSession,
-            authRelatedKeys: Object.keys(localStorage).filter(key => 
-              key.includes('session') || key.includes('supabase') || key.includes('ytk_')
-            )
+            allKeys: Object.keys(localStorage)
           });
           
           if (!signoutSuccess || hasRemainingDemoSession || hasRemainingSupabaseSession) {
-            logger.warn("Demo user signout failed or sessions still exist, using emergency cleanup");
+            console.error("[SignOut] Demo user signout failed or sessions still exist, using emergency cleanup");
             
             // Emergency cleanup - force clear everything
             localStorage.removeItem(DEMO_SESSION_KEY);
@@ -729,7 +663,6 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             // Find and clear all session-related keys
             Object.keys(localStorage).forEach(key => {
               if (key.includes('session') || key.includes('supabase')) {
-                logger.debug(`Emergency cleanup: removing key ${key}`);
                 localStorage.removeItem(key);
               }
             });
@@ -739,15 +672,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             setSession(null);
             updateCurrentSession(null);
             
-            logger.info("Emergency cleanup completed");
+            console.log("[SignOut] Emergency cleanup completed");
           }
         } catch (demoSignoutError) {
-          logger.error("Error during demo signout", demoSignoutError);
+          console.error("[SignOut] Error during demo signout:", demoSignoutError);
           
           // Emergency fallback for exceptions - much more thorough cleanup
           Object.keys(localStorage).forEach(key => {
             if (key.includes('session') || key.includes('supabase') || key.includes('youtube-miner')) {
-              logger.debug(`Error recovery: removing key ${key}`);
+              console.log(`[SignOut] Error recovery: removing key ${key}`);
               localStorage.removeItem(key);
             }
           });
@@ -765,7 +698,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         return;
       } else if (isDirectAuth) {
         // For direct auth users, just clear the user state
-        logger.info("Detected direct auth user, clearing state");
+        console.log("[SignOut] Detected direct auth user, clearing state");
         setUser(null);
         setSession(null);
         
@@ -773,24 +706,24 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         updateCurrentSession(null);
         
         // Trigger a global auth state refresh
-        logger.debug("Triggering global auth state refresh for direct auth user");
+        console.log("[SignOut] Triggering global auth state refresh for direct auth user");
         window.dispatchEvent(new Event('auth-state-refresh'));
         
         // Try to restore any preserved anonymous session when signing out
-        logger.info("Attempting to restore anonymous session after direct auth signout");
+        console.log("[SignOut] Attempting to restore anonymous session after direct auth signout");
         try {
           const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
           const restoredSession = restorePreservedAnonymousSession();
           
           if (restoredSession) {
-            logger.info("Successfully restored anonymous session", { sessionId: restoredSession });
+            console.log("[SignOut] Successfully restored anonymous session:", restoredSession);
           } else {
             // If no preserved session exists, ensure we clean up properly
-            logger.warn("No preserved anonymous session found, clearing anonymous data");
+            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
             clearAnonymousSession(false); // permanent clearing
           }
         } catch (restoreError) {
-          logger.error("Error restoring anonymous session", restoreError);
+          console.error("[SignOut] Error restoring anonymous session:", restoreError);
           clearAnonymousSession(false); // fallback to permanent clearing
         }
         
@@ -808,51 +741,42 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       const currentAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
       
       if (currentAnonymousSession) {
-        logger.info("Found current anonymous session before Supabase signout", { 
-          sessionId: currentAnonymousSession
-        });
+        console.log(`[SignOut] Found current anonymous session before Supabase signout, preserving: ${currentAnonymousSession}`);
         
         // Directly preserve without async operations, which can lead to race conditions
         localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
-        logger.debug("Successfully preserved anonymous session before Supabase signout", { 
-          sessionId: currentAnonymousSession
-        });
+        console.log(`[SignOut] Successfully preserved anonymous session before Supabase signout: ${currentAnonymousSession}`);
       } else {
-        logger.info("No anonymous session found to preserve before Supabase signout");
+        console.log("[SignOut] No anonymous session found to preserve before Supabase signout");
       }
       
       // Now proceed with standard Supabase signout
-      logger.info("Using standard Supabase signout");
+      console.log("[SignOut] Using standard Supabase signout");
       const { error } = await supabase.auth.signOut();
 
       if (error) {
-        logger.error("Supabase signout error", error);
         throw error;
       }
       
       // CRITICAL FIX: Explicitly update the React state
       // This ensures the signout is reflected in the UI immediately without relying on Supabase's event system
-      logger.debug("Explicitly clearing React state");
+      console.log("[SignOut] Explicitly clearing React state");
       setUser(null);
       setSession(null);
       updateCurrentSession(null);
       
       // Trigger an auth state refresh to ensure the UI updates
-      logger.debug("Triggering global auth state refresh");
+      console.log("[SignOut] Triggering global auth state refresh");
       window.dispatchEvent(new Event('auth-state-refresh'));
       
       // Double-check if the preserved session still exists after Supabase operations
       const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
       
       if (preservedSession) {
-        logger.debug("Found preserved anonymous session after Supabase operations", { 
-          sessionId: preservedSession
-        });
+        console.log(`[SignOut] Found preserved anonymous session after Supabase operations: ${preservedSession}`);
       } else if (currentAnonymousSession) {
         // If we had a session before but lost it, recreate the preserved key
-        logger.warn("Anonymous session was lost during Supabase operations, restoring preservation", {
-          sessionId: currentAnonymousSession
-        });
+        console.log(`[SignOut] Anonymous session was lost during Supabase operations, restoring preservation: ${currentAnonymousSession}`);
         localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
       }
       
@@ -862,47 +786,41 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         const sessionToRestore = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
         
         if (sessionToRestore) {
-          logger.info("Directly restoring anonymous session", { sessionId: sessionToRestore });
+          console.log(`[SignOut] Directly restoring anonymous session: ${sessionToRestore}`);
           
           // Restore directly to avoid any async timing issues
           localStorage.setItem(ANONYMOUS_SESSION_KEY, sessionToRestore);
           localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', sessionToRestore);
           localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
           localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
-          localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_by', 'signout_direct');
           
           // Clean up preserved session
           localStorage.removeItem(ANONYMOUS_PRESERVED_KEY);
           
-          logger.info("Successfully restored anonymous session directly", { 
-            sessionId: sessionToRestore,
-            timestamp: Date.now()
-          });
+          console.log(`[SignOut] Successfully restored anonymous session directly: ${sessionToRestore}`);
         } else {
           // Fall back to the helper function if direct method doesn't work
-          logger.info("No direct anonymous session found, trying helper function");
+          console.log("[SignOut] No direct anonymous session found, trying helper function");
           const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
           const restoredSession = restorePreservedAnonymousSession();
           
           if (restoredSession) {
-            logger.info("Successfully restored anonymous session via helper", { 
-              sessionId: restoredSession
-            });
+            console.log("[SignOut] Successfully restored anonymous session via helper:", restoredSession);
           } else {
             // If no preserved session exists, ensure we clean up any stale data
-            logger.warn("No preserved anonymous session found, clearing anonymous data");
+            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
             // Import dynamically to avoid circular dependencies
             const { clearAnonymousSession } = await import('@/lib/anonymous-session');
             clearAnonymousSession(false); // false means permanent clearing
           }
         }
       } catch (restoreError) {
-        logger.error("Error restoring anonymous session", restoreError);
+        console.error("[SignOut] Error restoring anonymous session:", restoreError);
       }
       
-      logger.info("===== SIGN OUT PROCESS COMPLETED =====");
+      console.log("===== SIGN OUT PROCESS COMPLETED =====");
     } catch (error: any) {
-      logger.error("Error during signout", error);
+      console.error("[SignOut] Error during signout:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to sign out",
@@ -1083,25 +1001,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   
   // Register the refresh callback so it can be called from anywhere in the application
   useEffect(() => {
-    // Create a consistent logging style 
-    const logger = {
-      info: (message: string, data?: any) => {
-        console.log(`[Auth] ${message}`, data !== undefined ? data : '');
-      },
-      warn: (message: string, data?: any) => {
-        console.warn(`[Auth] ${message}`, data !== undefined ? data : '');
-      },
-      error: (message: string, data?: any) => {
-        console.error(`[Auth] ${message}`, data !== undefined ? data : '');
-      }
-    };
-    
-    logger.info('Registering auth refresh callback');
+    console.log('[Auth] Registering auth refresh callback');
     registerRefreshCallback(refreshAuthState);
     
     // Listen for auth state refresh events
     const handleAuthStateRefresh = () => {
-      logger.info('Received auth state refresh event');
+      console.log('[Auth] Received auth state refresh event');
       refreshAuthState();
     };
     
