@@ -513,7 +513,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
 /**
  * Bulk update videos
  */
-router.patch('/', async (req: Request, res: Response) => {
+router.patch('/', requireSession, async (req: Request, res: Response) => {
   try {
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
@@ -570,7 +570,7 @@ router.patch('/', async (req: Request, res: Response) => {
 /**
  * Bulk delete videos
  */
-router.delete('/bulk', async (req: Request, res: Response) => {
+router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
   try {
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
@@ -630,7 +630,7 @@ router.delete('/bulk', async (req: Request, res: Response) => {
  * This route MUST be placed after all other GET routes with specific paths
  * as Express will match '/:id' for ANY path segment if placed earlier
  */
-router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.get('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     
@@ -665,7 +665,7 @@ router.get('/:id', validateNumericParam('id'), async (req: Request, res: Respons
 /**
  * Update a video
  */
-router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     
@@ -707,7 +707,7 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
 /**
  * Delete a video
  */
-router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
+router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     
