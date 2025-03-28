@@ -290,7 +290,8 @@ export async function performSemanticSearch(
     categoryId?: number;
     collectionId?: number;
     isFavorite?: boolean;
-    anonymous_session_id?: string; // Add support for anonymous session ID
+    anonymous_session_id?: string; // For anonymous users
+    user_id?: number | null; // Explicit user ID filter for security
   } = {},
   limit: number = 10
 ): Promise<{
@@ -317,7 +318,30 @@ export async function performSemanticSearch(
     if (userId !== null && !filters.anonymous_session_id) {
       // For registered users, filter by their user ID directly
       log(`Performing semantic search for registered user ${userId}`, 'embeddings');
+      
+      // IMPORTANT SECURITY FIX: For authenticated users, only show their own content
+      // - Add user_id filter directly to ensure embeddings belong to the current user
+      // - This prevents cross-account data leakage
       conditions.push(eq(embeddings.user_id, userId));
+      
+      // Also filter videos by user_id to ensure we only get content they own
+      const userVideos = await db.select({
+        id: videos.id
+      })
+      .from(videos)
+      .where(eq(videos.user_id, userId));
+      
+      if (userVideos.length === 0) {
+        log(`No videos found for user ${userId}`, 'embeddings');
+        return []; // No videos for this user, return empty results
+      }
+      
+      const videoIds = userVideos.map(v => v.id);
+      log(`Found ${videoIds.length} videos for user: ${videoIds.join(', ')}`, 'embeddings');
+      
+      // Add video ID filter to ensure embeddings only come from videos owned by this user
+      videoFilter = inArray(embeddings.video_id, videoIds);
+      
     } else if (filters.anonymous_session_id) {
       // For anonymous users, we need to get their videos by session ID first
       // then filter embeddings by those video IDs
@@ -346,7 +370,7 @@ export async function performSemanticSearch(
       return [];
     }
     
-    // Apply video filter from anonymous session if we have one
+    // Apply video filter to ensure data ownership boundaries are respected
     if (videoFilter) {
       conditions.push(videoFilter);
     } else if (filters.videoId) {

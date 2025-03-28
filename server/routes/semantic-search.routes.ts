@@ -35,7 +35,9 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     log(`SEMANTIC SEARCH: Using user ID from request: ${userId}`, 'routes');
     log(`SEMANTIC SEARCH: Is anonymous: ${userInfo.is_anonymous}, Has session: ${!!userInfo.anonymous_session_id}`, 'routes');
 
-    // Build search filters object for the embeddings service
+    // SECURITY ENHANCEMENT: Build search filters to ensure data isolation
+    // This guarantees that authenticated users only see their own content, 
+    // and anonymous users only see content from their own session
     const searchFilters: any = {
       contentTypes: filter?.content_types,
       videoId: filter?.video_id,
@@ -44,13 +46,28 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       isFavorite: filter?.is_favorite,
     };
     
-    // For anonymous users, add the session ID to filter by their videos
+    // Always set proper ownership filters based on authentication status
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
+      // Anonymous user - filter by their session ID
       log(`Adding anonymous session ID ${userInfo.anonymous_session_id} to search filters`, 'routes');
       searchFilters.anonymous_session_id = userInfo.anonymous_session_id;
+      
+      // Explicitly set user_id to null to ensure we're not mixing authentication types
+      searchFilters.user_id = null;
+    } else if (!userInfo.is_anonymous && userId) {
+      // Authenticated user - filter by their user ID
+      log(`Adding user ID ${userId} to search filters for authenticated user`, 'routes');
+      searchFilters.user_id = userId;
+      
+      // Explicitly set anonymous_session_id to null to ensure we're not mixing authentication types
+      searchFilters.anonymous_session_id = null;
+    } else {
+      // Error case - no valid identification
+      log(`WARNING: Cannot identify user for semantic search - no valid session or user ID`, 'routes');
+      return sendError(res, "User identification required for semantic search", 401);
     }
     
-    // Execute semantic search using the embeddings service
+    // Execute semantic search using the embeddings service with enhanced security filters
     const results = await performSemanticSearch(
       userId,
       query,

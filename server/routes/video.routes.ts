@@ -589,28 +589,34 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
 router.get('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
+    console.log(`[GET /videos/:id] Fetching video with ID: ${id}`);
     
     // Get video from database
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
+      console.log(`[GET /videos/:id] Video not found with ID: ${id}`);
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
+    console.log(`[GET /videos/:id] Access attempt by user_id: ${userInfo.user_id}, anonymous: ${userInfo.is_anonymous}, session: ${userInfo.anonymous_session_id || 'none'}`);
+    console.log(`[GET /videos/:id] Video belongs to user_id: ${video.user_id}, anonymous_session_id: ${video.anonymous_session_id || 'none'}`);
     
-    // Check if user has access to this video
-    // Authenticated users can only access their own videos
+    // SECURITY CHECK #1: Authenticated users can only access their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
+      console.log(`[GET /videos/:id] ACCESS DENIED - Authenticated user ${userInfo.user_id} attempted to access video belonging to user ${video.user_id}`);
       return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
     
-    // Anonymous users can only access videos from their session
+    // SECURITY CHECK #2: Anonymous users can only access videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
+      console.log(`[GET /videos/:id] ACCESS DENIED - Anonymous session ${userInfo.anonymous_session_id} attempted to access video belonging to session ${video.anonymous_session_id}`);
       return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
     }
     
+    console.log(`[GET /videos/:id] Access granted to video: ${video.id} - ${video.title}`);
     return sendSuccess(res, video);
   } catch (error) {
     console.error("Error fetching video:", error);
@@ -624,25 +630,30 @@ router.get('/:id', validateNumericParam('id'), async (req: Request, res: Respons
 router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
+    console.log(`[PATCH /videos/:id] Updating video with ID: ${id}`);
     
     // Get video from database to verify ownership
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
+      console.log(`[PATCH /videos/:id] Video not found with ID: ${id}`);
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
+    console.log(`[PATCH /videos/:id] Update attempt by user_id: ${userInfo.user_id}, anonymous: ${userInfo.is_anonymous}, session: ${userInfo.anonymous_session_id || 'none'}`);
+    console.log(`[PATCH /videos/:id] Video belongs to user_id: ${video.user_id}, anonymous_session_id: ${video.anonymous_session_id || 'none'}`);
     
-    // Check if user has access to update this video
-    // Authenticated users can only update their own videos
+    // SECURITY CHECK #1: Authenticated users can only update their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
+      console.log(`[PATCH /videos/:id] ACCESS DENIED - Authenticated user ${userInfo.user_id} attempted to update video belonging to user ${video.user_id}`);
       return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
-    // Anonymous users can only update videos from their session
+    // SECURITY CHECK #2: Anonymous users can only update videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
+      console.log(`[PATCH /videos/:id] ACCESS DENIED - Anonymous session ${userInfo.anonymous_session_id} attempted to update video belonging to session ${video.anonymous_session_id}`);
       return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
     }
     
@@ -650,9 +661,11 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
     const updatedVideo = await dbStorage.updateVideo(id, req.body);
     
     if (!updatedVideo) {
+      console.log(`[PATCH /videos/:id] Failed to update video: ${id}`);
       return sendError(res, "Failed to update video", 500);
     }
     
+    console.log(`[PATCH /videos/:id] Successfully updated video: ${updatedVideo.id} - ${updatedVideo.title}`);
     return sendSuccess(res, updatedVideo);
   } catch (error) {
     console.error("Error updating video:", error);
@@ -666,38 +679,46 @@ router.patch('/:id', validateNumericParam('id'), async (req: Request, res: Respo
 router.delete('/:id', validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
+    console.log(`[DELETE /videos/:id] Deleting video with ID: ${id}`);
     
     // Get video from database to verify ownership
     const video = await dbStorage.getVideo(id);
     
     if (!video) {
+      console.log(`[DELETE /videos/:id] Video not found with ID: ${id}`);
       return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
     }
     
     // Get user info from middleware
     const userInfo = res.locals.userInfo;
+    console.log(`[DELETE /videos/:id] Delete attempt by user_id: ${userInfo.user_id}, anonymous: ${userInfo.is_anonymous}, session: ${userInfo.anonymous_session_id || 'none'}`);
+    console.log(`[DELETE /videos/:id] Video belongs to user_id: ${video.user_id}, anonymous_session_id: ${video.anonymous_session_id || 'none'}`);
     
-    // Check if user has access to delete this video
-    // Authenticated users can only delete their own videos
+    // SECURITY CHECK #1: Authenticated users can only delete their own videos
     if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
+      console.log(`[DELETE /videos/:id] ACCESS DENIED - Authenticated user ${userInfo.user_id} attempted to delete video belonging to user ${video.user_id}`);
       return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
-    // Anonymous users can only delete videos from their session
+    // SECURITY CHECK #2: Anonymous users can only delete videos from their session
     if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
+      console.log(`[DELETE /videos/:id] ACCESS DENIED - Anonymous session ${userInfo.anonymous_session_id} attempted to delete video belonging to session ${video.anonymous_session_id}`);
       return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
     }
     
     // Delete embeddings first
+    console.log(`[DELETE /videos/:id] Deleting embeddings for video: ${id}`);
     await deleteVideoEmbeddings(id);
     
     // Delete the video
     const success = await dbStorage.deleteVideo(id);
     
     if (!success) {
+      console.log(`[DELETE /videos/:id] Failed to delete video: ${id}`);
       return sendError(res, "Failed to delete video", 500);
     }
     
+    console.log(`[DELETE /videos/:id] Successfully deleted video: ${id} - ${video.title}`);
     return sendSuccess(res, { message: "Video deleted successfully" });
   } catch (error) {
     console.error("Error deleting video:", error);
