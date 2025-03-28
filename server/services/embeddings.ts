@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { log } from '../vite';
-import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history, videos, collection_videos } from '@shared/schema';
+import { Embedding, InsertEmbedding, contentTypeEnum, embeddings, search_history, videos, collection_videos, collections } from '@shared/schema';
 import { chunkText, generateEmbeddingsBatch } from './openai';
 import { calculateCosineSimilarity } from './vector-search';
 import { eq, and, sql, inArray } from 'drizzle-orm';
@@ -395,40 +395,98 @@ export async function performSemanticSearch(
     // Additional filtering for category and collection
     let filteredResults = [...embeddingsResults];
     
-    // If we're filtering by category, get videos with that category
+    // Apply security-conscious filters that respect ownership boundaries
+    // If we're filtering by category, get videos with that category AND correct ownership
     if (filters.categoryId) {
+      // Build a secure query that respects user boundaries
+      const whereConditions = [eq(videos.category_id, filters.categoryId)];
+      
+      // Add proper ownership filter
+      if (userId !== null && !filters.anonymous_session_id) {
+        // For authenticated users, only include their videos
+        whereConditions.push(eq(videos.user_id, userId));
+      } else if (filters.anonymous_session_id) {
+        // For anonymous users, only include videos from their session
+        whereConditions.push(eq(videos.anonymous_session_id, filters.anonymous_session_id));
+      }
+      
+      // Execute the secured query
       const videosInCategory = await db.query.videos.findMany({
-        where: eq(videos.category_id, filters.categoryId),
+        where: and(...whereConditions),
         columns: {
           id: true
         }
       });
+      
+      log(`Found ${videosInCategory.length} videos in category ${filters.categoryId} with proper ownership filter`, 'embeddings');
       
       const videoIdsInCategory = videosInCategory.map(v => v.id);
       filteredResults = filteredResults.filter(r => videoIdsInCategory.includes(r.video_id));
     }
     
-    // If we're filtering by collection, get videos in that collection
+    // If we're filtering by collection, get videos in that collection WITH ownership check
     if (filters.collectionId) {
-      const videoIdsInCollection = await db.query.collection_videos.findMany({
-        where: eq(collection_videos.collection_id, filters.collectionId),
-        columns: {
-          video_id: true
-        }
-      });
+      // First, verify the collection belongs to the user
+      let collectionBelongsToUser = false;
+      let collectionOwnerCheck;
       
-      const collectionVideoIds = videoIdsInCollection.map(v => v.video_id);
-      filteredResults = filteredResults.filter(r => collectionVideoIds.includes(r.video_id));
+      if (userId !== null && !filters.anonymous_session_id) {
+        // Check if collection belongs to authenticated user
+        collectionOwnerCheck = await db.query.collections.findFirst({
+          where: and(
+            eq(collections.id, filters.collectionId),
+            eq(collections.user_id, userId)
+          )
+        });
+      } else if (filters.anonymous_session_id) {
+        // Anonymous users don't have collections yet, so this would always be empty
+        // But include the check for future-proofing if we add anonymous collections
+        collectionOwnerCheck = null;
+      }
+      
+      collectionBelongsToUser = !!collectionOwnerCheck;
+      
+      // Only proceed if the collection belongs to the user
+      if (collectionBelongsToUser) {
+        const videoIdsInCollection = await db.query.collection_videos.findMany({
+          where: eq(collection_videos.collection_id, filters.collectionId),
+          columns: {
+            video_id: true
+          }
+        });
+        
+        const collectionVideoIds = videoIdsInCollection.map(v => v.video_id);
+        filteredResults = filteredResults.filter(r => collectionVideoIds.includes(r.video_id));
+      } else {
+        log(`Security: Blocked attempt to access collection ${filters.collectionId} that doesn't belong to user ${userId}`, 'embeddings');
+        // If collection doesn't belong to user, return no results for this filter
+        filteredResults = [];
+      }
     }
     
-    // If we're filtering by favorite status, get favorite videos
+    // If we're filtering by favorite status, get favorite videos WITH ownership check
     if (filters.isFavorite) {
+      // Build a secure query that respects user boundaries
+      const whereConditions = [eq(videos.is_favorite, true)];
+      
+      // Add proper ownership filter
+      if (userId !== null && !filters.anonymous_session_id) {
+        // For authenticated users, only include their videos
+        whereConditions.push(eq(videos.user_id, userId));
+      } else if (filters.anonymous_session_id) {
+        // For anonymous users, only include videos from their session
+        whereConditions.push(eq(videos.anonymous_session_id, filters.anonymous_session_id));
+      }
+      
+      // Execute the secured query
       const favoriteVideos = await db.query.videos.findMany({
-        where: eq(videos.is_favorite, true),
+        where: and(...whereConditions),
         columns: {
           id: true
         }
       });
+      
+      log(`Found ${favoriteVideos.length} favorite videos with proper ownership filter`, 'embeddings');
       
       const favoriteVideoIds = favoriteVideos.map(v => v.id);
       filteredResults = filteredResults.filter(r => favoriteVideoIds.includes(r.video_id));
