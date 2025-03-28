@@ -112,11 +112,29 @@ export function DemoLogin() {
       
       console.log('[Demo Login] Demo user session stored successfully');
       
-      // Temporarily preserve anonymous session for restoration on logout
+      // Explicitly preserve anonymous session for restoration on logout
       try {
-        const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-        clearAnonymousSession(true); // true = preserve for later restoration
-        console.log('[Demo Login] Anonymous session temporarily preserved for later restoration');
+        // Define direct key references for anonymous session storage
+        const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+        const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+        
+        // Check if an anonymous session exists
+        const currentAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+        
+        if (currentAnonymousSession) {
+          console.log(`[Demo Login] Found anonymous session to preserve: ${currentAnonymousSession}`);
+          
+          // Directly preserve the session ID for restoration after logout
+          localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+          
+          console.log(`[Demo Login] Successfully preserved anonymous session: ${currentAnonymousSession}`);
+          
+          // Now that we've preserved it, we can clear the active session
+          localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+          console.log('[Demo Login] Cleared active anonymous session after preservation');
+        } else {
+          console.log('[Demo Login] No anonymous session found to preserve');
+        }
       } catch (error) {
         console.error('[Demo Login] Failed to preserve anonymous session:', error);
       }

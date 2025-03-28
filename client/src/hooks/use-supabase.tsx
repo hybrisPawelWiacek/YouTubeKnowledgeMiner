@@ -584,7 +584,24 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      // Otherwise use standard Supabase signout
+      // Before Supabase signout, directly check and preserve any anonymous session
+      const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id'; 
+      const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+      
+      // Direct check for anonymous session before any potential logout operations
+      const currentAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+      
+      if (currentAnonymousSession) {
+        console.log(`[SignOut] Found current anonymous session before Supabase signout, preserving: ${currentAnonymousSession}`);
+        
+        // Directly preserve without async operations, which can lead to race conditions
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+        console.log(`[SignOut] Successfully preserved anonymous session before Supabase signout: ${currentAnonymousSession}`);
+      } else {
+        console.log("[SignOut] No anonymous session found to preserve before Supabase signout");
+      }
+      
+      // Now proceed with standard Supabase signout
       console.log("[SignOut] Using standard Supabase signout");
       const { error } = await supabase.auth.signOut();
 
@@ -592,19 +609,50 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
-      // Attempt to restore the preserved anonymous session (if one exists)
+      // Double-check if the preserved session still exists after Supabase operations
+      const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
+      
+      if (preservedSession) {
+        console.log(`[SignOut] Found preserved anonymous session after Supabase operations: ${preservedSession}`);
+      } else if (currentAnonymousSession) {
+        // If we had a session before but lost it, recreate the preserved key
+        console.log(`[SignOut] Anonymous session was lost during Supabase operations, restoring preservation: ${currentAnonymousSession}`);
+        localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+      }
+      
+      // Now explicitly restore the anonymous session
       try {
-        const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
-        const restoredSession = restorePreservedAnonymousSession();
+        // First check if we have a preserved session directly
+        const sessionToRestore = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
         
-        if (restoredSession) {
-          console.log("[SignOut] Successfully restored anonymous session after logout:", restoredSession);
+        if (sessionToRestore) {
+          console.log(`[SignOut] Directly restoring anonymous session: ${sessionToRestore}`);
+          
+          // Restore directly to avoid any async timing issues
+          localStorage.setItem(ANONYMOUS_SESSION_KEY, sessionToRestore);
+          localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', sessionToRestore);
+          localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
+          localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
+          
+          // Clean up preserved session
+          localStorage.removeItem(ANONYMOUS_PRESERVED_KEY);
+          
+          console.log(`[SignOut] Successfully restored anonymous session directly: ${sessionToRestore}`);
         } else {
-          // If no preserved session exists, ensure we clean up any stale data
-          console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
-          // Import dynamically to avoid circular dependencies
-          const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-          clearAnonymousSession(false); // false means permanent clearing
+          // Fall back to the helper function if direct method doesn't work
+          console.log("[SignOut] No direct anonymous session found, trying helper function");
+          const { restorePreservedAnonymousSession } = await import('@/lib/anonymous-session');
+          const restoredSession = restorePreservedAnonymousSession();
+          
+          if (restoredSession) {
+            console.log("[SignOut] Successfully restored anonymous session via helper:", restoredSession);
+          } else {
+            // If no preserved session exists, ensure we clean up any stale data
+            console.log("[SignOut] No preserved anonymous session found, clearing anonymous data");
+            // Import dynamically to avoid circular dependencies
+            const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+            clearAnonymousSession(false); // false means permanent clearing
+          }
         }
       } catch (restoreError) {
         console.error("[SignOut] Error restoring anonymous session:", restoreError);
