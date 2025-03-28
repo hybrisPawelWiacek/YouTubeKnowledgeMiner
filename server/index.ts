@@ -1,14 +1,30 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, serveStatic } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
+import { createLogger } from "./services/logger";
+import { httpLoggerMiddleware } from "./middleware/http-logger";
+import { errorHandlerMiddleware } from "./middleware/error-handler";
+import performanceMonitorMiddleware, { startSystemMetricsCollection } from "./middleware/performance-monitor";
+import logsRouter from "./routes/logs";
+import { log } from "./utils/logger";
+
 config();
+
+// Create application logger
+const appLogger = createLogger('app');
 
 const app = express();
 // JSON middleware with increased size limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Apply our custom HTTP request logger middleware
+app.use(httpLoggerMiddleware);
+
+// Apply performance monitoring middleware
+app.use(performanceMonitorMiddleware);
 
 // Ensure API routes are not intercepted by Vite
 app.use('/api', (req, res, next) => {
@@ -17,62 +33,15 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+// Register client logs endpoint
+app.use('/api/logs', logsRouter);
 
 (async () => {
   // Create a server first, then register the API routes
   const server = await registerRoutes(app);
 
-  // Error handling middleware
-  // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error('Global error handler caught:', err);
-    
-    // Import these dynamically to avoid circular dependencies
-    const { handleApiError } = require('./utils/response.utils');
-    const { ZodError } = require('zod');
-    const { ValidationError } = require('./utils/error.utils');
-    
-    // Special handling for Zod validation errors
-    if (err instanceof ZodError) {
-      const validationError = new ValidationError(
-        err.errors[0].message || 'Validation error',
-        err.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
-      );
-      return handleApiError(res, validationError);
-    }
-    
-    // Use our handleApiError utility for consistent error formatting
-    return handleApiError(res, err);
-  });
+  // Apply our custom error handler middleware as the last middleware
+  app.use(errorHandlerMiddleware);
 
   // Special route to check the API status - for debugging
   app.get('/api/status', (req, res) => {
@@ -117,5 +86,8 @@ app.use((req, res, next) => {
   }, () => {
     log(`✅ Server running on http://0.0.0.0:${port}`);
     log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Start system metrics logging (every 5 minutes)
+    startSystemMetricsCollection();
   });
 })();
