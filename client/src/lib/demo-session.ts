@@ -338,7 +338,17 @@ export async function signOutDemoUser(
       allStorageKeys
     });
     
-    // First, explicitly preserve anonymous session if present (before any cleanup)
+    // CRITICAL FIX: Update React state FIRST before any localStorage operations
+    // This ensures the UI immediately reflects the logged-out state
+    console.log('[Demo Session] Immediately clearing React state FIRST');
+    setUser(null);
+    setSession(null);
+    
+    // Also clear API module session immediately
+    updateCurrentSession(null);
+    console.log('[Demo Session] React and API state cleared immediately');
+
+    // Now handle preservation of anonymous session if present
     if (hasAnonSession) {
       const anonymousSessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
       console.log(`[Demo Session] Found anonymous session to preserve: ${anonymousSessionId}`);
@@ -353,15 +363,6 @@ export async function signOutDemoUser(
     // Now perform a complete cleanup of localStorage
     // This ensures storage is cleared even if React state updates fail
     clearAllSessionData(true); // true indicates to preserve anonymous session
-    
-    // Now update React state
-    setUser(null);
-    setSession(null);
-    console.log('[Demo Session] React state cleared');
-    
-    // Clear API module session
-    updateCurrentSession(null);
-    console.log('[Demo Session] API session state cleared');
     
     // Verify the preserved session is still there
     const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);

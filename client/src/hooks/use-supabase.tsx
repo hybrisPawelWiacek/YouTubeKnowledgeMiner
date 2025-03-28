@@ -707,6 +707,13 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
+      // CRITICAL FIX: Explicitly update the React state
+      // This ensures the signout is reflected in the UI immediately without relying on Supabase's event system
+      console.log("[SignOut] Explicitly clearing React state");
+      setUser(null);
+      setSession(null);
+      updateCurrentSession(null);
+      
       // Double-check if the preserved session still exists after Supabase operations
       const preservedSession = localStorage.getItem(ANONYMOUS_PRESERVED_KEY);
       
