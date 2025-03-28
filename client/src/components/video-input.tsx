@@ -149,8 +149,14 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     },
   });
 
-  const handleVideoProcessed = (video: YoutubeVideo) => {
+  const handleVideoProcessed = (videoData: any) => {
+    // Check if the video data is wrapped in a data property (API format)
+    const video = videoData.data ? videoData.data : videoData;
+    console.log('[VideoInput] Processing video with extracted data:', video);
+    
+    // Now call the parent component's handler with the properly structured data
     onVideoProcessed(video);
+    
     toast({
       title: "Video analyzed",
       description: "Successfully processed video information and transcript",
@@ -159,6 +165,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const handleContinueAsGuest = () => {
     if (pendingVideo) {
+      // Pass the pending video through the same processor that handles the data structure
       handleVideoProcessed(pendingVideo);
     }
   };
