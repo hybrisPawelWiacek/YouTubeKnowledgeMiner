@@ -67,7 +67,7 @@ export default function ExplorerPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [videoInfoMap, setVideoInfoMap] = useState<Record<number, VideoInfo>>({});
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(true);
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(false);
   
   const { toast } = useToast();
   const isMobile = useIsMobile();
