@@ -711,7 +711,12 @@ export function QASection() {
                 </div>
               ) : conversations && conversations.length > 0 ? (
                 <div className="space-y-1.5">
-                  {conversations.map((conversation) => (
+                  {[...conversations]
+                    .sort((a, b) => {
+                      // Sort by creation date, newest first
+                      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    })
+                    .map((conversation) => (
                     <div key={conversation.id} className="group">
                       <div
                         className={`px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors ${
