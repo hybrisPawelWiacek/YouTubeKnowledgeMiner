@@ -67,20 +67,26 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
+      console.log('[VideoInput] Starting API request to analyze video:', videoUrl);
       const response = await apiRequest("POST", "/api/videos/analyze", { url: videoUrl });
-      return response.json();
+      const data = await response.json();
+      console.log('[VideoInput] API response data:', data);
+      return data;
     },
     onSuccess: async (data) => {
+      console.log('[VideoInput] onSuccess called with data:', data);
       setPendingVideo(data);
       
       if (!user) {
         // Check if we've reached the limit
         const limitReached = await hasReachedAnonymousLimit();
+        console.log('[VideoInput] Anonymous user limit reached?', limitReached);
         if (limitReached) {
           promptAuth('analyze_again');
         } else {
           // This will be processed by the server on the backend
           // We only need to update the local UI state
+          console.log('[VideoInput] About to call handleVideoProcessed with data:', data);
           handleVideoProcessed(data);
           
           // Refresh count to get latest from server
@@ -112,6 +118,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           }
         }
       } else {
+        console.log('[VideoInput] Authenticated user, calling handleVideoProcessed with data:', data);
         handleVideoProcessed(data);
       }
     },
