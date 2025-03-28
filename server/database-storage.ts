@@ -279,7 +279,12 @@ export class DatabaseStorage implements IStorage {
   }
   
   async bulkDeleteVideos(ids: number[]): Promise<number> {
-    // First, delete related collection associations
+    // First, delete any QA conversations associated with these videos
+    await db
+      .delete(qa_conversations)
+      .where(inArray(qa_conversations.video_id, ids));
+    
+    // Delete related collection associations
     await db
       .delete(collection_videos)
       .where(inArray(collection_videos.video_id, ids));
