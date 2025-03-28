@@ -783,26 +783,28 @@ export default function Library() {
               </div>
             )}
 
-            {/* Sidebar for filters (mobile) */}
-            <FilterSidebar
-              categories={categoriesQuery.data || []}
-              collections={collectionsQuery.data || []}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              selectedCollection={selectedCollection}
-              setSelectedCollection={setSelectedCollection}
-              selectedRating={selectedRating}
-              setSelectedRating={setSelectedRating}
-              showFavoritesOnly={showFavoritesOnly}
-              setShowFavoritesOnly={setShowFavoritesOnly}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              sortOrder={sortOrder}
-              setSortOrder={setSortOrder}
-              isVisible={isFilterSidebarOpen}
-              onClose={() => setIsFilterSidebarOpen(false)}
-              onCreateCollection={() => setIsCreateCollectionOpen(true)}
-            />
+            {/* Sidebar for filters (mobile) - Only show on mobile devices */}
+            <div className="lg:hidden">
+              <FilterSidebar
+                categories={categoriesQuery.data || []}
+                collections={collectionsQuery.data || []}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedCollection={selectedCollection}
+                setSelectedCollection={setSelectedCollection}
+                selectedRating={selectedRating}
+                setSelectedRating={setSelectedRating}
+                showFavoritesOnly={showFavoritesOnly}
+                setShowFavoritesOnly={setShowFavoritesOnly}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOrder={sortOrder}
+                setSortOrder={setSortOrder}
+                isVisible={isFilterSidebarOpen}
+                onClose={() => setIsFilterSidebarOpen(false)}
+                onCreateCollection={() => setIsCreateCollectionOpen(true)}
+              />
+            </div>
 
             {/* Main Content Area */}
             <div className="flex-grow">
