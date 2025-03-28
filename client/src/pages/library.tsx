@@ -525,14 +525,8 @@ export default function Library() {
         setShowedPrompt(true);
       }
 
-      // Load videos from local storage
-      const localData = getLocalData();
-      if (localData.videos.length > 0) {
-        setAllVideos(localData.videos);
-        setTotalCount(localData.videos.length);
-        setHasMore(false);
-        setIsLoadingMore(false);
-      }
+      // For anonymous users, we want to use the API to get their videos
+      // The videosQuery will handle this with the anonymous session header
     } else if (user) {
       // Load videos for logged in users
       // Send user ID as a number to API
