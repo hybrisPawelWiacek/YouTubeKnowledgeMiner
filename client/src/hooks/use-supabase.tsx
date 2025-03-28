@@ -462,20 +462,69 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      console.log("===== SIGN OUT PROCESS STARTING =====");
+      console.log("Current user state:", user);
+      console.log("User metadata:", user?.user_metadata);
+      console.log("Current session state:", session);
+      console.log("All localStorage keys:", Object.keys(localStorage));
+      
       // Import helpers to avoid circular dependencies
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-      const { signOutDemoUser, isDemoUser } = await import('@/lib/demo-session');
+      const { signOutDemoUser, isDemoUser, clearSession, DEMO_SESSION_KEY } = await import('@/lib/demo-session');
       
       // Check if the current user is a demo user
       const isDemo = isDemoUser(user);
+      console.log("Is demo user:", isDemo);
+      
+      // Check localStorage for demo session
+      const hasDemoSession = localStorage.getItem(DEMO_SESSION_KEY) !== null;
+      console.log("Has demo session in localStorage:", hasDemoSession);
       
       // Check if user was authenticated with direct method (but not a demo)
       const isDirectAuth = !isDemo && user?.user_metadata?.direct_auth === true;
+      console.log("Is direct auth user:", isDirectAuth);
       
-      if (isDemo) {
+      if (isDemo || hasDemoSession) {
         // For demo users, use the specialized signout that handles demo sessions
         console.log("[SignOut] Detected demo user, using demo signout process");
-        signOutDemoUser(setUser, setSession);
+        
+        // Extra logging for diagnosis
+        console.log("Demo session before clearing:", localStorage.getItem(DEMO_SESSION_KEY));
+        
+        try {
+          // Use the proper async signout function
+          const signoutSuccess = await signOutDemoUser(setUser, setSession);
+          
+          console.log("[SignOut] Demo user signout result:", signoutSuccess);
+          
+          // Verify session was cleared
+          console.log("Demo session after signout:", localStorage.getItem(DEMO_SESSION_KEY));
+          console.log("All localStorage keys after signout:", Object.keys(localStorage));
+          
+          // Extra verification after state clearing
+          console.log("User state after clearing:", user);
+          console.log("Session state after clearing:", session);
+          
+          if (!signoutSuccess) {
+            console.error("[SignOut] Demo user signout failed, using emergency fallback");
+            
+            // Emergency fallback - force clear everything
+            localStorage.removeItem(DEMO_SESSION_KEY);
+            localStorage.removeItem(SUPABASE_SESSION_KEY);
+            setUser(null);
+            setSession(null);
+            updateCurrentSession(null);
+          }
+        } catch (demoSignoutError) {
+          console.error("[SignOut] Error during demo signout:", demoSignoutError);
+          
+          // Emergency fallback for exceptions
+          localStorage.removeItem(DEMO_SESSION_KEY);
+          localStorage.removeItem(SUPABASE_SESSION_KEY);
+          setUser(null);
+          setSession(null);
+          updateCurrentSession(null);
+        }
         
         toast({
           title: "Signed out",
@@ -514,6 +563,8 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // This ensures users who sign out completely start fresh
       console.log("Clearing anonymous session data on supabase signout");
       clearAnonymousSession();
+      
+      console.log("===== SIGN OUT PROCESS COMPLETED =====");
     } catch (error: any) {
       console.error("[SignOut] Error during signout:", error);
       toast({

@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { useQuery } from "@tanstack/react-query";
+import { logStateChange, dumpStorageSnapshot } from "@/lib/debug-utils";
 
 // Define maximum videos allowed for anonymous users
 const MAX_ANONYMOUS_VIDEOS = 3;
@@ -74,13 +75,80 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
+      logStateChange('Header', 'signOut-start', { 
+        userId: user?.id,
+        isDemo: user?.user_metadata?.is_demo === true,
+        isDirect: user?.user_metadata?.direct_auth === true 
+      });
+      
+      // Dump state before signOut
+      dumpStorageSnapshot();
+      
+      console.log("===== HEADER: SIGN OUT BUTTON CLICKED =====");
+      console.log("Current user before signOut:", user);
+      console.log("Is demo user:", user?.user_metadata?.is_demo);
+      console.log("All localStorage keys before signOut:", Object.keys(localStorage));
+      
+      // Check demo session health before logout
+      const { checkDemoSessionHealth } = await import('@/lib/debug-utils');
+      const sessionHealth = checkDemoSessionHealth();
+      
+      console.log("[Header] Demo session health before signOut:", sessionHealth);
+      
+      // Standard check for demo session existence
+      const hasDemoSession = localStorage.getItem('youtube-miner-demo-session') !== null;
+      console.log("[Header] Has demo session before signOut:", hasDemoSession);
+      
+      // Call the signOut function
       await signOut();
+      
+      // Force a small delay to let React state update
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      console.log("After signOut called");
+      console.log("User state after signOut:", user);
+      console.log("All localStorage keys after signOut:", Object.keys(localStorage));
+      
+      // Check again for demo session
+      const hasDemoSessionAfter = localStorage.getItem('youtube-miner-demo-session') !== null;
+      console.log("Has demo session after signOut:", hasDemoSessionAfter);
+      
+      // Use the health checker again to verify session state
+      const sessionHealthAfter = checkDemoSessionHealth();
+      console.log("[Header] Demo session health after signOut:", sessionHealthAfter);
+      
+      // Force an additional clear if session persists
+      if (hasDemoSessionAfter) {
+        console.log("WARNING: Demo session still exists after signOut, forcing removal");
+        localStorage.removeItem('youtube-miner-demo-session');
+        localStorage.removeItem('youtube-miner-supabase-session');
+      }
+      
+      // Dump state after signOut
+      dumpStorageSnapshot();
+      console.log("===== HEADER: SIGN OUT PROCESS COMPLETED =====");
+      
+      logStateChange('Header', 'signOut-complete', { 
+        userStateAfter: user ? 'still-present' : 'cleared',
+        localStorageCleared: !hasDemoSessionAfter
+      });
+      
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
       });
+      
+      // Force page refresh if session still exists
+      if (user !== null || hasDemoSessionAfter) {
+        console.log("WARNING: User state persists after logout, forcing page refresh");
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 500);
+      }
     } catch (error) {
       console.error("Error signing out:", error);
+      logStateChange('Header', 'signOut-error', { error });
+      
       toast({
         title: "Sign out failed",
         description: "There was a problem signing you out",
