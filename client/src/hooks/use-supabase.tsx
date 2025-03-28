@@ -451,13 +451,19 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       // Import here to avoid circular dependencies
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
       
-      // Check if user was authenticated with direct method
+      // Check if user was authenticated with direct method (includes demo users)
       const isDirectAuth = user?.user_metadata?.direct_auth === true;
+      const isDemoUser = user?.user_metadata?.is_demo === true;
+      
+      console.log(`Signing out user. Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
       
       if (isDirectAuth) {
-        // For direct auth users, just clear the user state
+        // For direct auth users (including demo users), clear the user state and localStorage
         setUser(null);
         setSession(null);
+        
+        // IMPORTANT: Always remove session from localStorage for all user types
+        localStorage.removeItem(SUPABASE_SESSION_KEY);
         
         // Clear the session in our API module
         updateCurrentSession(null);
@@ -479,6 +485,17 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       if (error) {
         throw error;
       }
+      
+      // Ensure we also clear local state when using Supabase signout
+      // This is a safety measure in case the Supabase auth state change event doesn't fire properly
+      setUser(null);
+      setSession(null);
+      
+      // IMPORTANT: Always remove session from localStorage for all user types
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
+      
+      // Clear the session in our API module
+      updateCurrentSession(null);
       
       // Clear any anonymous session when signing out
       // This ensures users who sign out completely start fresh
