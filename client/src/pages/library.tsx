@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
@@ -40,6 +41,7 @@ export default function Library() {
   const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [showedPrompt, setShowedPrompt] = useState(false); // Track if prompt has been shown
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
@@ -393,10 +395,14 @@ export default function Library() {
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
-
-    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
-      bulkDeleteMutation.mutate(selectedVideos);
-    }
+    
+    // Open the delete confirmation dialog instead of using browser confirm
+    setIsDeleteDialogOpen(true);
+  };
+  
+  // Actual delete action when confirmed through the modal
+  const confirmDelete = () => {
+    bulkDeleteMutation.mutate(selectedVideos);
   };
 
   const handleToggleFavorite = (isFavorite: boolean) => {
@@ -944,6 +950,18 @@ export default function Library() {
         onClose={() => setShowAuthPrompt(false)}
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        setIsOpen={setIsDeleteDialogOpen}
+        title="Delete Selected Videos"
+        description={`Are you sure you want to delete ${selectedVideos.length} ${selectedVideos.length === 1 ? 'video' : 'videos'}? This action cannot be undone.`}
+        onConfirm={confirmDelete}
+        variant="danger"
+        confirmText="Delete"
+        cancelText="Cancel"
       />
     </div>
   );
