@@ -597,35 +597,59 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     try {
       // Import here to avoid circular dependencies
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+      const { clearDemoSession, signOutDemoUser } = await import('@/lib/demo-auth');
       
       // Check if user was authenticated with direct method (includes demo users)
       const isDirectAuth = user?.user_metadata?.direct_auth === true;
       const isDemoUser = user?.user_metadata?.is_demo === true;
       
-      console.log(`Signing out user. Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
+      console.log(`🔑 [Logout] Signing out user. Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
+      console.log('🔑 [Logout] localStorage keys before cleanup:', Object.keys(localStorage));
       
       // **** FORCEFUL CLEANUP APPROACH ****
       // Clear ALL possible authentication-related states regardless of user type
       
+      if (isDemoUser) {
+        console.log('🔑 [Logout] Using dedicated demo user logout function');
+        signOutDemoUser();
+      } else {
+        console.log('🔑 [Logout] Standard user logout procedure');
+      }
+      
       // Clear the anonymous session
-      console.log('Clearing anonymous session during sign out');
+      console.log('🔑 [Logout] Clearing anonymous session');
       clearAnonymousSession();
       
       // 1. Clear React state
+      console.log('🔑 [Logout] Clearing React state (user, session, isDemoUser)');
       setUser(null);
       setSession(null);
       setIsDemoUser(false);
       
       // 2. Clear ALL possible localStorage keys
+      console.log('🔑 [Logout] Clearing ALL possible localStorage auth keys');
+      
+      // Main app session keys
       localStorage.removeItem(SUPABASE_SESSION_KEY);
+      localStorage.removeItem('youtube-miner-demo-session'); // DEMO_SESSION_KEY from demo-auth.ts
+      
+      // Supabase keys
       localStorage.removeItem('supabase.auth.token');
       localStorage.removeItem('sb-access-token');
       localStorage.removeItem('sb-refresh-token');
       localStorage.removeItem('sb-auth-token');
       localStorage.removeItem('sb-provider-token');
       
+      // Demo auth specific keys (may be redundant with signOutDemoUser but being thorough)
+      localStorage.removeItem('demo-auth-token');
+      localStorage.removeItem('demo-refresh-token');
+      localStorage.removeItem('demo-user-data');
+      
       // 3. Clear the session in our API module
+      console.log('🔑 [Logout] Clearing API session via updateCurrentSession(null)');
       updateCurrentSession(null);
+      
+      console.log('🔑 [Logout] localStorage keys after cleanup:', Object.keys(localStorage));
       
       // Handle demo/direct auth users differently
       if (isDirectAuth) {
@@ -636,7 +660,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         
         // Force a complete page refresh for demo users as a failsafe
         if (isDemoUser) {
-          console.log("Forcing page reload for demo user logout");
+          console.log("🔑 [Logout] Forcing page reload for demo user logout");
           // Small delay to allow toast to display
           setTimeout(() => {
             window.location.reload();
@@ -647,9 +671,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       }
       
       // For standard Supabase users, also call the Supabase signOut method
+      console.log('🔑 [Logout] Calling Supabase auth.signOut() for standard users');
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error("Error from Supabase signOut:", error);
+        console.error("🔑 [Logout] Error from Supabase signOut:", error);
         // Continue anyway since we've already cleared all local state
       }
       
@@ -659,13 +684,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       });
       
     } catch (error: any) {
-      console.error("Error in signOut function:", error);
+      console.error("🔑 [Logout] Error in signOut function:", error);
       
       // Even if there's an error, try to clear the state as a failsafe
+      console.log('🔑 [Logout] Emergency cleanup after error');
       setUser(null);
       setSession(null);
       setIsDemoUser(false);
       localStorage.removeItem(SUPABASE_SESSION_KEY);
+      localStorage.removeItem('youtube-miner-demo-session');
       localStorage.removeItem('supabase.auth.token');
       updateCurrentSession(null);
       

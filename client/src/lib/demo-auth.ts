@@ -231,22 +231,47 @@ export async function loginAsDemoUser(username: string): Promise<DemoSession> {
  */
 export function signOutDemoUser(): void {
   console.log('🔑 [Demo Auth] Signing out demo user');
+  console.log('🔑 [Demo Auth] LocalStorage keys before cleanup:', Object.keys(localStorage));
+  
+  // Get the session first to log what we're cleaning up
+  const demoSession = getDemoSession();
+  if (demoSession) {
+    console.log('🔑 [Demo Auth] Found active demo session for user ID:', 
+      demoSession.user.id, 'Username:', demoSession.user.user_metadata.username);
+  } else {
+    console.log('🔑 [Demo Auth] No active demo session found to clear');
+  }
   
   // 1. Clear the demo session in localStorage
+  console.log('🔑 [Demo Auth] Clearing demo session from localStorage (key:', DEMO_SESSION_KEY, ')');
   clearDemoSession();
   
   // 2. Clear the session in our API module
+  console.log('🔑 [Demo Auth] Clearing session from API module');
   updateCurrentSession(null);
   
   // 3. Clear any other potential demo auth related data
   // This provides a more complete cleanup similar to the Supabase auth
+  console.log('🔑 [Demo Auth] Clearing additional demo-related keys');
   localStorage.removeItem('demo-auth-token');
   localStorage.removeItem('demo-refresh-token');
   localStorage.removeItem('demo-user-data');
   
-  // 4. Import and use anonymous session clearing here would create a circular dependency
+  // 4. Also clear Supabase session keys to be thorough
+  console.log('🔑 [Demo Auth] Clearing Supabase auth keys');
+  localStorage.removeItem('youtube-miner-supabase-session'); // SUPABASE_SESSION_KEY
+  localStorage.removeItem('supabase.auth.token');
+  localStorage.removeItem('sb-access-token');
+  localStorage.removeItem('sb-refresh-token');
+  localStorage.removeItem('sb-auth-token');
+  localStorage.removeItem('sb-provider-token');
+  
+  // 5. Import and use anonymous session clearing here would create a circular dependency
   // So we directly remove the anonymous session key instead
   const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+  console.log('🔑 [Demo Auth] Clearing anonymous session key:', ANONYMOUS_SESSION_KEY);
   localStorage.removeItem(ANONYMOUS_SESSION_KEY);
-  console.log('🔑 [Demo Auth] Anonymous session cleared during sign out');
+  
+  console.log('🔑 [Demo Auth] LocalStorage keys after cleanup:', Object.keys(localStorage));
+  console.log('🔑 [Demo Auth] Demo user sign out complete');
 }
