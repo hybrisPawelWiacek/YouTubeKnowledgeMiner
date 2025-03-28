@@ -36,7 +36,7 @@ router.use(getUserInfo); // This middleware sets res.locals.userInfo
  * Get the count of videos for an anonymous session
  * This endpoint must be placed BEFORE the /:id route to avoid being captured as an ID parameter
  */
-router.get('/anonymous/count', async (req: Request, res: Response) => {
+router.get('/count', async (req: Request, res: Response) => {
   try {
     // Get the anonymous session ID from the request header
     const sessionHeader = req.headers['x-anonymous-session'];
