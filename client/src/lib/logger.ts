@@ -1,239 +1,185 @@
 /**
- * Client-side logging service
+ * Client-side logging module
  * 
- * This module provides a unified interface for logging in the browser,
- * with batched sending of logs to the server and fallback to console.
+ * This module provides a consistent logging interface for client-side code,
+ * with support for local storage buffering and sending logs to the server.
  */
 
-import axios from 'axios';
-
-// Configuration
-const LOG_ENDPOINT = '/api/logs';
-const FLUSH_INTERVAL = 10000; // 10 seconds
-const MAX_BATCH_SIZE = 50;
-const MAX_QUEUE_SIZE = 100;
-
-// Log levels
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-// Log entry structure
 interface LogEntry {
   level: LogLevel;
   message: string;
   component?: string;
-  metadata?: Record<string, any>;
   timestamp: number;
+  metadata?: Record<string, any>;
 }
 
-// Queue for batching logs
-let logQueue: LogEntry[] = [];
-let flushTimeout: ReturnType<typeof setTimeout> | null = null;
-let isSending = false;
+// Constants
+const LOG_BUFFER_KEY = 'log_buffer';
+const MAX_BUFFER_SIZE = 50; // Maximum number of logs to store before sending
+const FLUSH_INTERVAL = 30 * 1000; // Send logs every 30 seconds
+const MAX_FAILED_RETRIES = 3;
+
+// State
+let buffer: LogEntry[] = [];
+let flushTimeoutId: number | null = null;
+let failedFlushes = 0;
+let isFlushInProgress = false;
+
+// Initialize buffer from localStorage if available
+try {
+  const savedBuffer = localStorage.getItem(LOG_BUFFER_KEY);
+  if (savedBuffer) {
+    buffer = JSON.parse(savedBuffer);
+  }
+} catch (e) {
+  console.error('Error loading log buffer from localStorage', e);
+  buffer = [];
+}
 
 /**
- * Send log entries to the server
+ * Save the buffer to localStorage
  */
-async function sendLogs(entries: LogEntry[]): Promise<void> {
-  if (entries.length === 0) return;
+function saveBuffer() {
+  try {
+    localStorage.setItem(LOG_BUFFER_KEY, JSON.stringify(buffer));
+  } catch (e) {
+    // If localStorage fails (quota exceeded, etc.), just continue without saving
+    console.error('Error saving log buffer to localStorage', e);
+  }
+}
+
+/**
+ * Send logs to the server
+ */
+async function flushLogs() {
+  if (buffer.length === 0 || isFlushInProgress) return;
+  
+  isFlushInProgress = true;
   
   try {
-    isSending = true;
-    await axios.post(LOG_ENDPOINT, entries);
+    const logsCopy = [...buffer];
+    
+    const response = await fetch('/api/logs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(logsCopy),
+    });
+    
+    if (response.ok) {
+      // Remove sent logs from buffer
+      buffer = buffer.slice(logsCopy.length);
+      saveBuffer();
+      failedFlushes = 0;
+    } else {
+      failedFlushes++;
+      console.error(`Failed to send logs to server: ${response.status}`);
+    }
   } catch (error) {
-    // If sending to server fails, log to console as fallback
-    console.error('Failed to send logs to server:', error);
-    entries.forEach(entry => {
-      const { level, message, component, metadata } = entry;
-      console[level](`[${component || 'app'}] ${message}`, metadata);
-    });
+    failedFlushes++;
+    console.error('Error sending logs to server:', error);
   } finally {
-    isSending = false;
-  }
-}
-
-/**
- * Flush the log queue to the server
- */
-function flushLogs(): void {
-  if (logQueue.length === 0 || isSending) return;
-  
-  // Take a copy of the current queue and clear it
-  const entries = [...logQueue];
-  logQueue = [];
-  
-  // Send the entries
-  sendLogs(entries);
-  
-  // Clear the timeout
-  if (flushTimeout) {
-    clearTimeout(flushTimeout);
-    flushTimeout = null;
-  }
-}
-
-/**
- * Schedule a flush of the log queue
- */
-function scheduleFlush(): void {
-  if (flushTimeout) return;
-  flushTimeout = setTimeout(() => {
-    flushLogs();
-    flushTimeout = null;
-  }, FLUSH_INTERVAL);
-}
-
-/**
- * Queue a log entry for sending to the server
- * If the queue reaches the batch size, flush immediately
- */
-const queueLog = (entry: LogEntry): void => {
-  // Add to queue, limiting the queue size
-  if (logQueue.length >= MAX_QUEUE_SIZE) {
-    logQueue.shift(); // Remove oldest entry if queue is full
-  }
-  logQueue.push(entry);
-  
-  // Flush immediately if we reach batch size
-  if (logQueue.length >= MAX_BATCH_SIZE) {
-    flushLogs();
-  } else {
-    scheduleFlush();
-  }
-  
-  // Also log to console for immediate feedback during development
-  if (import.meta.env.DEV) {
-    const { level, message, component, metadata } = entry;
-    console[level](`[${component || 'app'}] ${message}`, metadata);
-  }
-};
-
-/**
- * Component-specific logger
- */
-class ComponentLogger {
-  private component: string;
-  
-  constructor(component: string) {
-    this.component = component;
-  }
-  
-  /**
-   * Log at debug level
-   */
-  debug(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'debug',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at info level
-   */
-  info(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'info',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at warn level
-   */
-  warn(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'warn',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log at error level
-   */
-  error(message: string, metadata: Record<string, any> = {}): void {
-    queueLog({
-      level: 'error',
-      message,
-      component: this.component,
-      metadata,
-      timestamp: Date.now()
-    });
-  }
-  
-  /**
-   * Log an Error object
-   */
-  logError(message: string, error: Error, metadata: Record<string, any> = {}): void {
-    this.error(message, {
-      ...metadata,
-      error: {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+    isFlushInProgress = false;
+    
+    // If we've failed too many times, stop trying to flush for now
+    if (failedFlushes >= MAX_FAILED_RETRIES) {
+      if (flushTimeoutId) {
+        clearTimeout(flushTimeoutId);
+        flushTimeoutId = null;
       }
-    });
-  }
-  
-  /**
-   * Track a user event (such as button click, form submission, etc.)
-   */
-  trackEvent(eventName: string, metadata: Record<string, any> = {}): void {
-    this.info(`Event: ${eventName}`, {
-      ...metadata,
-      eventType: 'user_event',
-      eventName
-    });
-  }
-  
-  /**
-   * Track feature usage (such as search, filter, etc.)
-   */
-  trackFeature(featureName: string, metadata: Record<string, any> = {}): void {
-    this.info(`Feature: ${featureName}`, {
-      ...metadata,
-      eventType: 'feature_usage',
-      featureName
-    });
-  }
-  
-  /**
-   * Track performance metrics
-   */
-  trackPerformance(operation: string, durationMs: number, metadata: Record<string, any> = {}): void {
-    this.info(`Performance: ${operation} (${durationMs.toFixed(2)}ms)`, {
-      ...metadata,
-      eventType: 'performance',
-      operation,
-      durationMs
-    });
+    }
   }
 }
 
 /**
- * Create a logger for a specific component
+ * Schedule a flush of logs to the server
  */
-export const createComponentLogger = (component: string): ComponentLogger => {
-  return new ComponentLogger(component);
-};
-
-// Global logger instance
-export const logger = new ComponentLogger('app');
-
-// Flush logs when page is about to unload
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    flushLogs();
-  });
+function scheduleFlush() {
+  if (flushTimeoutId === null) {
+    flushTimeoutId = window.setTimeout(() => {
+      flushLogs();
+      flushTimeoutId = null;
+      scheduleFlush();
+    }, FLUSH_INTERVAL);
+  }
 }
 
-// Export types for external use
-export type { LogLevel, LogEntry };
+/**
+ * Add a log entry to the buffer
+ */
+function addLogEntry(level: LogLevel, message: string, component?: string, metadata?: Record<string, any>) {
+  const logEntry: LogEntry = {
+    level,
+    message,
+    component,
+    timestamp: Date.now(),
+    metadata,
+  };
+  
+  buffer.push(logEntry);
+  saveBuffer();
+  
+  // If buffer is full or this is an error, flush immediately
+  if (buffer.length >= MAX_BUFFER_SIZE || level === 'error') {
+    flushLogs();
+  }
+  
+  // Schedule regular flush
+  scheduleFlush();
+  
+  // Also log to console for development feedback
+  const consoleMsg = component ? `[${component}] ${message}` : message;
+  if (level === 'debug') console.debug(consoleMsg, metadata);
+  else if (level === 'info') console.info(consoleMsg, metadata);
+  else if (level === 'warn') console.warn(consoleMsg, metadata);
+  else if (level === 'error') console.error(consoleMsg, metadata);
+}
+
+// Create logger functions for different components
+export function createLogger(component: string) {
+  return {
+    debug: (message: string, metadata?: Record<string, any>) => 
+      addLogEntry('debug', message, component, metadata),
+    
+    info: (message: string, metadata?: Record<string, any>) => 
+      addLogEntry('info', message, component, metadata),
+    
+    warn: (message: string, metadata?: Record<string, any>) => 
+      addLogEntry('warn', message, component, metadata),
+    
+    error: (message: string, metadata?: Record<string, any>) => 
+      addLogEntry('error', message, component, metadata),
+  };
+}
+
+// Create a default logger
+const logger = {
+  debug: (message: string, metadata?: Record<string, any>) => 
+    addLogEntry('debug', message, undefined, metadata),
+  
+  info: (message: string, metadata?: Record<string, any>) => 
+    addLogEntry('info', message, undefined, metadata),
+  
+  warn: (message: string, metadata?: Record<string, any>) => 
+    addLogEntry('warn', message, undefined, metadata),
+  
+  error: (message: string, metadata?: Record<string, any>) => 
+    addLogEntry('error', message, undefined, metadata),
+};
+
+// Add event listener for unload to flush logs when the page closes
+window.addEventListener('beforeunload', () => {
+  saveBuffer();
+  
+  // Use sendBeacon for more reliable delivery on page unload
+  if (navigator.sendBeacon && buffer.length > 0) {
+    navigator.sendBeacon('/api/logs', JSON.stringify(buffer));
+    buffer = [];
+    localStorage.removeItem(LOG_BUFFER_KEY);
+  }
+});
+
+export default logger;

@@ -19,6 +19,7 @@ import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
+import logger from "@/lib/logger";
 import {
   Filter,
   LayoutGrid,
@@ -140,14 +141,15 @@ export default function Library() {
         url += `&cursor=${cursor}`;
       }
 
-      console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
+      // Log using the logger
+      logger.info('Fetching videos for user', { userId: user?.id, userIdType: typeof user?.id });
 
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
-        console.log('Library - Adding anonymous session header:', sessionId);
+        logger.info('Adding anonymous session header', { sessionId });
       }
 
       // Use our API request function which handles all the auth header logic for us
@@ -906,7 +908,7 @@ export default function Library() {
               if (collections.length > 0) {
                 const latestCollection = collections[collections.length - 1];
                 handleAddToCollection(latestCollection.id);
-              }              }
+              }
             });
           }
         }}

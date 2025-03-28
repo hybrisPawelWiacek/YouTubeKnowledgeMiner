@@ -1,8 +1,8 @@
 /**
  * Error Handler Middleware
  * 
- * This middleware provides centralized error handling for the application.
- * It logs detailed error information and responds with appropriate error messages.
+ * This middleware catches and logs all errors that occur during request processing,
+ * provides structured error responses, and ensures consistent error handling across the application.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -11,86 +11,47 @@ import { createLogger } from '../services/logger';
 const errorLogger = createLogger('error');
 
 /**
- * Custom error class for API errors
+ * Error handling middleware
+ * Catches all errors and logs them with appropriate details
  */
-export class ApiError extends Error {
-  statusCode: number;
+export function errorHandlerMiddleware(err: any, req: Request, res: Response, next: NextFunction) {
+  // Get request ID if it exists (from http-logger middleware)
+  const requestId = (req as any).id || 'unknown';
   
-  constructor(message: string, statusCode: number = 500) {
-    super(message);
-    this.name = 'ApiError';
-    this.statusCode = statusCode;
-  }
-}
-
-/**
- * Handle API errors by logging them and sending appropriate responses
- */
-export function errorHandlerMiddleware(
-  error: Error | ApiError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  // Default status code
-  let statusCode = 500;
+  // Determine status code - use the error's code if it exists, otherwise 500
+  const statusCode = err.status || err.statusCode || 500;
   
-  // Check if it's an API error
-  if (error instanceof ApiError) {
-    statusCode = error.statusCode;
-  }
+  // Add request details to error log
+  const errorDetails = {
+    requestId,
+    method: req.method,
+    path: req.path,
+    query: req.query,
+    statusCode,
+    ip: req.ip,
+    userAgent: req.headers['user-agent']
+  };
   
-  // Log details based on error severity
+  // Log the error with full stack trace and request details
   if (statusCode >= 500) {
-    // Server errors
-    errorLogger.error(`Server Error: ${error.message}`, {
-      error: {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      },
-      request: {
-        method: req.method,
-        path: req.path,
-        params: req.params,
-        query: req.query,
-        ip: req.ip,
-        requestId: (req as any).id
-      }
+    errorLogger.error(`Server Error: ${err.message}`, {
+      ...errorDetails,
+      stack: err.stack
     });
   } else {
-    // Client errors
-    errorLogger.warn(`Client Error: ${error.message}`, {
-      error: {
-        name: error.name,
-        message: error.message
-      },
-      request: {
-        method: req.method,
-        path: req.path,
-        params: req.params,
-        query: req.query,
-        requestId: (req as any).id
-      }
-    });
+    // For 4xx errors, log as warnings
+    errorLogger.warn(`Client Error: ${err.message}`, errorDetails);
   }
   
-  // Customize response based on environment
-  let responseMessage = error.message;
-  let responseDetails = undefined;
-  
-  // In development, include more details
-  if (process.env.NODE_ENV !== 'production') {
-    responseDetails = {
-      name: error.name,
-      stack: error.stack
-    };
-  }
-  
-  // Send response
+  // Send a response to the client
   res.status(statusCode).json({
-    error: responseMessage,
-    ...(responseDetails ? { details: responseDetails } : {})
+    error: {
+      message: process.env.NODE_ENV === 'production' && statusCode === 500
+        ? 'Internal server error'  // Generic message in production for 500 errors
+        : err.message,
+      code: err.code,
+      requestId  // Include requestId so client can reference it in support requests
+    }
   });
 }
 
