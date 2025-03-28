@@ -1,4 +1,5 @@
 import { useSupabase } from "@/hooks/use-supabase";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { FolderOpen, Home, User, LogOut, ChevronDown, Search } from "lucide-react";
@@ -19,12 +20,55 @@ import { useQuery } from "@tanstack/react-query";
 const MAX_ANONYMOUS_VIDEOS = 3;
 
 export function Header() {
-  const { user, signOut } = useSupabase();
+  const { user: supabaseUser, signOut: supabaseSignOut } = useSupabase();
+  const { user: authUser, isAuthenticated, logout: authLogout } = useAuth();
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
   const [maxAllowedVideos, setMaxAllowedVideos] = useState(MAX_ANONYMOUS_VIDEOS);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Get the active user from either auth system
+  // Get the active user from either auth system, with type checking
+  const user = authUser || supabaseUser;
+  
+  // Helper function to safely check for metadata
+  const getUserName = () => {
+    if (supabaseUser?.user_metadata?.full_name) {
+      return supabaseUser.user_metadata.full_name;
+    } else if (authUser?.username) {
+      return authUser.username;
+    } else if (supabaseUser?.email) {
+      return supabaseUser.email;
+    } else if (authUser?.email) {
+      return authUser.email;
+    }
+    return 'User';
+  };
+  
+  // Helper function to safely get avatar
+  const getUserAvatar = () => {
+    return supabaseUser?.user_metadata?.avatar_url || null;
+  };
+  
+  // Helper function to get email
+  const getUserEmail = () => {
+    return authUser?.email || supabaseUser?.email || '';
+  };
+  
+  // Helper function to get first letter for avatar
+  const getAvatarLetter = () => {
+    const email = getUserEmail();
+    return email ? email[0].toUpperCase() : 'U';
+  };
+  
+  // Helper function to get auth provider
+  const getAuthProvider = () => {
+    if (supabaseUser?.app_metadata?.provider) {
+      return supabaseUser.app_metadata.provider;
+    }
+    return authUser ? 'Custom' : 'Email';
+  };
 
   // Fetch anonymous session video count from server when not authenticated
   const { data: videoCountData, isLoading: isVideoCountLoading } = useQuery({
@@ -74,7 +118,13 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      // Try to sign out using both auth systems
+      if (authUser) {
+        await authLogout();
+      } else if (supabaseUser) {
+        await supabaseSignOut();
+      }
+      
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
@@ -153,21 +203,21 @@ export function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2 px-2">
                     <div className="flex items-center">
-                      {user.user_metadata?.avatar_url ? (
+                      {getUserAvatar() ? (
                         <img 
-                          src={user.user_metadata.avatar_url} 
+                          src={getUserAvatar()!} 
                           alt="Profile" 
                           className="w-8 h-8 rounded-full object-cover border border-primary/30"
                         />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
                           <span className="text-white font-medium">
-                            {user.email ? user.email[0].toUpperCase() : "U"}
+                            {getAvatarLetter()}
                           </span>
                         </div>
                       )}
                       <span className="ml-2 text-sm text-gray-300 hidden sm:inline">
-                        {user.user_metadata?.full_name || user.email}
+                        {getUserName()}
                       </span>
                       <ChevronDown className="h-4 w-4 ml-1 text-gray-400" />
                     </div>
@@ -176,25 +226,25 @@ export function Header() {
                 <DropdownMenuContent align="end" className="w-64">
                   <div className="px-3 py-2">
                     <div className="flex items-center space-x-3">
-                      {user.user_metadata?.avatar_url ? (
+                      {getUserAvatar() ? (
                         <img 
-                          src={user.user_metadata.avatar_url} 
+                          src={getUserAvatar()!} 
                           alt="Profile" 
                           className="w-10 h-10 rounded-full"
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
                           <span className="text-white font-medium">
-                            {user.email ? user.email[0].toUpperCase() : "U"}
+                            {getAvatarLetter()}
                           </span>
                         </div>
                       )}
                       <div className="space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {user.user_metadata?.full_name || 'User'}
+                          {getUserName()}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 leading-none">
-                          {user.email}
+                          {getUserEmail()}
                         </p>
                       </div>
                     </div>
@@ -203,7 +253,7 @@ export function Header() {
                   <DropdownMenuSeparator />
                   
                   <div className="px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Account Provider: {user.app_metadata?.provider || 'Email'}
+                    Account Provider: {getAuthProvider()}
                   </div>
                   
                   <DropdownMenuSeparator />

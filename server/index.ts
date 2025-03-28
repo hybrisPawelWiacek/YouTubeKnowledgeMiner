@@ -55,6 +55,23 @@ app.use('/api/logs', logsRouter);
   // Apply our custom error handler middleware as the last middleware
   app.use(errorHandler);
   
+  // Add a special catch-all route handler for all non-API routes
+  // This will serve the React app for client-side routing
+  app.get(['/auth', '/auth/*', '/library', '/explorer', '/video/*', '/'], (req, res, next) => {
+    // For API routes, pass to the next handler
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    
+    // For client routes, let the Vite middleware or serveStatic handle it
+    if (app.get("env") === "development") {
+      return next();
+    } else {
+      const distPath = path.resolve(__dirname, "public");
+      return res.sendFile(path.resolve(distPath, "index.html"));
+    }
+  });
+  
   // Add 404 handler for routes that don't match any handlers
   app.use(notFoundHandler);
 
@@ -73,6 +90,12 @@ app.use('/api/logs', logsRouter);
         return next('route');
       }
       next();
+    });
+
+    // Add explicit route handling for client routes before setting up Vite
+    // This ensures routes like /auth are properly handled by the client app
+    app.get(['/auth', '/auth/*', '/library', '/explorer', '/video/*'], (req, res, next) => {
+      next(); // Continue to Vite middleware
     });
 
     // Special middleware to handle direct API requests from curl
