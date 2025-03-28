@@ -20,22 +20,71 @@ export const SUPABASE_SESSION_KEY = 'youtube-miner-supabase-session';
  */
 export function storeSession(session: Session): void {
   try {
-    // First store the demo session with our key
-    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+    // Create a more reliable timestamp for session expiry
+    if (!session.expires_at) {
+      session.expires_at = Date.now() + 3600000; // 1 hour from now
+    }
+    
+    // Add more consistent metadata for demo users
+    if (session.user && session.user.user_metadata) {
+      // Make sure the demo user flag is always set
+      session.user.user_metadata.is_demo = true;
+      
+      // Store the creation timestamp
+      session.user.user_metadata.created_at = Date.now();
+      
+      // Ensure we have a demo type
+      if (!session.user.user_metadata.demo_type) {
+        session.user.user_metadata.demo_type = 'basic';
+      }
+    }
+    
+    // Prepare storage
+    const sessionJSON = JSON.stringify(session);
+    
+    // Before storing demo session, save any anonymous session for later restoration
+    // This is a critical step to ensure we can restore after logout
+    const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
+    const ANONYMOUS_PRESERVED_KEY = ANONYMOUS_SESSION_KEY + '_preserved';
+    const currentAnonymousSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+    
+    if (currentAnonymousSession) {
+      console.log(`[Demo Session] Found anonymous session during login, preserving: ${currentAnonymousSession}`);
+      localStorage.setItem(ANONYMOUS_PRESERVED_KEY, currentAnonymousSession);
+      console.log(`[Demo Session] Preserved anonymous session: ${currentAnonymousSession}`);
+    } else {
+      console.log('[Demo Session] No anonymous session found during demo login');
+    }
+    
+    // Store the demo session 
+    localStorage.setItem(DEMO_SESSION_KEY, sessionJSON);
     
     // Also store in Supabase session storage to ensure both mechanisms work
-    localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(SUPABASE_SESSION_KEY, sessionJSON);
     
     // Add a timestamp to track when the session was created
     localStorage.setItem(DEMO_SESSION_KEY + ':timestamp', Date.now().toString());
     
     // Verify session was stored
     const storedSession = localStorage.getItem(DEMO_SESSION_KEY);
+    const supabaseSession = localStorage.getItem(SUPABASE_SESSION_KEY);
     
-    if (!storedSession) {
+    if (!storedSession || !supabaseSession) {
       console.error('[Demo Session] Critical failure: Session not stored in localStorage after set attempt');
+      
+      // Emergency retry with delay
+      setTimeout(() => {
+        console.log('[Demo Session] Emergency retry of session storage');
+        localStorage.setItem(DEMO_SESSION_KEY, sessionJSON);
+        localStorage.setItem(SUPABASE_SESSION_KEY, sessionJSON);
+      }, 50);
     } else {
       console.log('[Demo Session] Successfully stored demo session in localStorage');
+      console.log('[Demo Session] User info:', {
+        id: session.user?.id,
+        email: session.user?.email,
+        username: session.user?.user_metadata?.username
+      });
       
       // Additional debugging to verify the data is valid JSON
       try {

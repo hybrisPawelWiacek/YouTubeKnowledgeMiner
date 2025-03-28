@@ -112,22 +112,105 @@ export function storeAnonymousSessionId(sessionId: string): void {
  * @param temporary If true, the session is saved to a backup key for potential restoration later
  */
 export function clearAnonymousSession(temporary: boolean = false): void {
-  // If we're clearing temporarily (such as during login), save the current session
-  // to a backup key so it can be restored when the user logs out
-  if (temporary) {
-    const currentSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
-    if (currentSession) {
-      console.log('[Anonymous Session] Temporarily saving session before clearing:', currentSession);
-      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_preserved', currentSession);
+  try {
+    // Log current storage state for debugging
+    const sessionKeys = {
+      main: localStorage.getItem(ANONYMOUS_SESSION_KEY),
+      backup: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_backup'),
+      preserved: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_preserved')
+    };
+    
+    console.log('[Anonymous Session] Pre-clear state:', sessionKeys);
+    
+    // If we're clearing temporarily (such as during login), save the current session
+    // to a backup key so it can be restored when the user logs out
+    if (temporary) {
+      const currentSession = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+      
+      if (currentSession) {
+        console.log('[Anonymous Session] Temporarily preserving session:', currentSession);
+        
+        // Store with timestamp to help with debugging
+        const preserveData = {
+          session: currentSession,
+          preserved_at: Date.now(),
+          source: 'clearAnonymousSession'
+        };
+        
+        // Store the session ID directly
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_preserved', currentSession);
+        
+        // Also store detailed metadata
+        try {
+          localStorage.setItem(
+            ANONYMOUS_SESSION_KEY + '_preserved_meta',
+            JSON.stringify(preserveData)
+          );
+        } catch (metaError) {
+          console.error('[Anonymous Session] Error storing preservation metadata:', metaError);
+        }
+        
+        console.log('[Anonymous Session] Session temporarily preserved:', currentSession);
+      } else {
+        console.log('[Anonymous Session] No session found to preserve');
+      }
+    } else {
+      // If we're clearing permanently, also remove any backup sessions (but NOT preserved)
+      console.log('[Anonymous Session] Permanently clearing session');
+      
+      if (temporary === false) {
+        // Only remove backup keys, NOT the preserved key which is used after logout
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_backup');
+        
+        // These should only be cleared in a permanent wipe scenario
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_timestamp');
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_last_accessed');
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_restored_at');
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_emergency');
+        
+        console.log('[Anonymous Session] Removed backup keys (permanent clear)');
+      }
     }
-  } else {
-    // If we're clearing permanently, also remove any backup or preserved sessions
-    localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_backup');
-    localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_preserved');
+    
+    // Always remove the main session key
+    localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+    
+    // Delay checking to ensure operations have completed
+    setTimeout(() => {
+      // Verify cleared state
+      const verifyState = {
+        mainAfterClear: localStorage.getItem(ANONYMOUS_SESSION_KEY),
+        preservedAfterClear: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_preserved'),
+        allKeysAfterClear: Object.keys(localStorage).filter(key => key.includes('anon') || key.includes('ytk'))
+      };
+      
+      console.log('[Anonymous Session] Post-clear state:', verifyState);
+      
+      // Emergency fix if clearing failed
+      if (verifyState.mainAfterClear !== null) {
+        console.error('[Anonymous Session] CRITICAL: Session not cleared properly, forcing empty value');
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, '');
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+      }
+      
+      // Make sure preserved session still exists if this was a temporary clear
+      if (temporary && sessionKeys.main && !verifyState.preservedAfterClear) {
+        console.error('[Anonymous Session] CRITICAL: Preserved session lost during clear, restoring it');
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_preserved', sessionKeys.main);
+      }
+    }, 50);
+    
+    console.log('[Anonymous Session] Session cleared (temporary: ' + temporary + ')');
+  } catch (error) {
+    console.error('[Anonymous Session] Error clearing session:', error);
+    
+    // Last-ditch attempt
+    try {
+      localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+    } catch (e) {
+      console.error('[Anonymous Session] Critical failure clearing session:', e);
+    }
   }
-  
-  localStorage.removeItem(ANONYMOUS_SESSION_KEY);
-  console.log('[Anonymous Session] Session cleared (temporary: ' + temporary + ')');
 }
 
 /**
@@ -138,35 +221,89 @@ export function clearAnonymousSession(temporary: boolean = false): void {
  */
 export function restorePreservedAnonymousSession(): string | null {
   try {
-    const preservedSession = localStorage.getItem(ANONYMOUS_SESSION_KEY + '_preserved');
+    console.log('[Anonymous Session] Starting session restoration process');
+    
+    // Check all potential session storage keys to better understand the state
+    const sessionKeys = {
+      main: localStorage.getItem(ANONYMOUS_SESSION_KEY),
+      backup: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_backup'),
+      preserved: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_preserved'),
+      timestamp: localStorage.getItem(ANONYMOUS_SESSION_KEY + '_timestamp')
+    };
+    
+    console.log('[Anonymous Session] Current storage state:', sessionKeys);
+    
+    // We primarily want to restore from the preserved key
+    const preservedSession = sessionKeys.preserved;
     
     if (preservedSession) {
-      console.log('[Anonymous Session] Restoring preserved session:', preservedSession);
+      console.log('[Anonymous Session] Found preserved session to restore:', preservedSession);
       
-      // Store the session ID in multiple places for redundancy
-      localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
-      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', preservedSession);
+      // Force a clean slate by removing any existing session keys first
+      localStorage.removeItem(ANONYMOUS_SESSION_KEY);
+      localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_backup');
+      localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_timestamp');
       
-      // Set timestamp of restoration
-      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
+      // Small delay to ensure removal operations complete
+      setTimeout(() => {
+        // Store the session ID in multiple places for redundancy
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, preservedSession);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', preservedSession);
+        
+        // Set timestamp of restoration
+        const now = Date.now();
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', now.toString());
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_last_accessed', now.toString());
+        
+        // Add a refresh timestamp for tracking when the session was last restored
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', now.toString());
+        
+        // Clear the preserved backup once it's been restored to prevent duplicate restores
+        localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_preserved');
+        
+        console.log('[Anonymous Session] Session restored successfully:', {
+          session: preservedSession,
+          timestamp: new Date(now).toISOString()
+        });
+      }, 50);
       
-      // Clear the preserved backup once it's been restored
-      localStorage.removeItem(ANONYMOUS_SESSION_KEY + '_preserved');
-      
-      // Add a refresh timestamp for tracking when the session was last restored
-      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_restored_at', Date.now().toString());
-      
-      // Notify of success with timestamp info to help debug persistence issues
-      console.log('[Anonymous Session] Successfully restored session at:', new Date().toISOString());
+      // Immediately return the session ID even though async operations are still happening
       return preservedSession;
     } else {
       console.log('[Anonymous Session] No preserved session found to restore');
+      
+      // Check if we should create a brand new session since none was preserved
+      if (!sessionKeys.main && !sessionKeys.backup) {
+        const newSession = generateSessionId();
+        console.log('[Anonymous Session] Creating new session since no preserved session exists:', newSession);
+        
+        localStorage.setItem(ANONYMOUS_SESSION_KEY, newSession);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', newSession);
+        localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
+        
+        return newSession;
+      }
     }
     
     return null;
   } catch (error) {
     console.error('[Anonymous Session] Error restoring preserved session:', error);
-    return null;
+    
+    // Create emergency fallback session to ensure user experience continues
+    try {
+      const emergencySession = generateSessionId();
+      console.log('[Anonymous Session] Creating emergency session due to restore error:', emergencySession);
+      
+      localStorage.setItem(ANONYMOUS_SESSION_KEY, emergencySession);
+      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_backup', emergencySession);
+      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_timestamp', Date.now().toString());
+      localStorage.setItem(ANONYMOUS_SESSION_KEY + '_emergency', 'true');
+      
+      return emergencySession;
+    } catch (backupError) {
+      console.error('[Anonymous Session] Critical error creating emergency session:', backupError);
+      return null;
+    }
   }
 }
 
