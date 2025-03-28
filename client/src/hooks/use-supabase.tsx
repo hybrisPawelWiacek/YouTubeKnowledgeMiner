@@ -599,101 +599,106 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       const { clearAnonymousSession } = await import('@/lib/anonymous-session');
       const { clearDemoSession, signOutDemoUser } = await import('@/lib/demo-auth');
       
-      // Check if user was authenticated with direct method (includes demo users)
+      // Capture user info before we start cleanup - these will be used in multiple places
       const isDirectAuth = user?.user_metadata?.direct_auth === true;
       const isDemoUser = user?.user_metadata?.is_demo === true;
+      const userId = user?.id;
+      const userEmail = user?.email;
       
-      console.log(`🔑 [Logout] Signing out user. Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
+      console.log(`🔑 [Logout] Signing out user ID: ${userId}, Email: ${userEmail}`);
+      console.log(`🔑 [Logout] User type - Direct auth: ${isDirectAuth}, Demo user: ${isDemoUser}`);
       console.log('🔑 [Logout] localStorage keys before cleanup:', Object.keys(localStorage));
       
       // **** FORCEFUL CLEANUP APPROACH ****
-      // Clear ALL possible authentication-related states regardless of user type
+      // We'll clean up EVERYTHING in a specific order to ensure nothing is missed
       
+      // STEP 1: Handle demo user special cleanup if needed
       if (isDemoUser) {
-        console.log('🔑 [Logout] Using dedicated demo user logout function');
+        console.log('🔑 [Logout] Using dedicated demo user logout function first');
         signOutDemoUser();
-      } else {
-        console.log('🔑 [Logout] Standard user logout procedure');
       }
       
-      // Clear the anonymous session
+      // STEP 2: Clear the anonymous session
       console.log('🔑 [Logout] Clearing anonymous session');
       clearAnonymousSession();
       
-      // 1. Clear React state
-      console.log('🔑 [Logout] Clearing React state (user, session, isDemoUser)');
-      setUser(null);
-      setSession(null);
-      setIsDemoUser(false);
+      // STEP 3: Clear API session state
+      console.log('🔑 [Logout] Clearing API session via updateCurrentSession(null)');
+      updateCurrentSession(null);
       
-      // 2. Clear ALL possible localStorage keys
+      // STEP 4: Clear ALL localStorage keys manually as a failsafe
       console.log('🔑 [Logout] Clearing ALL possible localStorage auth keys');
       
-      // Main app session keys
-      localStorage.removeItem(SUPABASE_SESSION_KEY);
-      localStorage.removeItem('youtube-miner-demo-session'); // DEMO_SESSION_KEY from demo-auth.ts
+      // Demo session (main key)
+      localStorage.removeItem('youtube-miner-demo-session'); // DEMO_SESSION_KEY
       
       // Supabase keys
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
       localStorage.removeItem('supabase.auth.token');
       localStorage.removeItem('sb-access-token');
       localStorage.removeItem('sb-refresh-token');
       localStorage.removeItem('sb-auth-token');
       localStorage.removeItem('sb-provider-token');
       
-      // Demo auth specific keys (may be redundant with signOutDemoUser but being thorough)
+      // Anonymous session
+      localStorage.removeItem('ytk_anonymous_session_id');
+      localStorage.removeItem('ytk_anonymous_video_count');
+      
+      // Demo auth extras
       localStorage.removeItem('demo-auth-token');
       localStorage.removeItem('demo-refresh-token');
       localStorage.removeItem('demo-user-data');
       
-      // 3. Clear the session in our API module
-      console.log('🔑 [Logout] Clearing API session via updateCurrentSession(null)');
-      updateCurrentSession(null);
+      // STEP 5: Clear React state AFTER localStorage cleanup
+      console.log('🔑 [Logout] Clearing React state (user, session, isDemoUser)');
+      setUser(null);
+      setSession(null);
+      setIsDemoUser(false);
       
       console.log('🔑 [Logout] localStorage keys after cleanup:', Object.keys(localStorage));
       
-      // Handle demo/direct auth users differently
+      // STEP 6: Handle any remaining auth-specific cleanup
       if (isDirectAuth) {
-        toast({
-          title: "Signed out",
-          description: "You've been successfully signed out",
-        });
-        
-        // Force a complete page refresh for demo users as a failsafe
-        if (isDemoUser) {
-          console.log("🔑 [Logout] Forcing page reload for demo user logout");
-          // Small delay to allow toast to display
-          setTimeout(() => {
-            window.location.reload();
-          }, 500);
+        console.log("🔑 [Logout] Direct auth cleanup complete");
+      } else if (supabase) {
+        // For standard Supabase users, also call the Supabase signOut method
+        console.log('🔑 [Logout] Calling Supabase auth.signOut() for standard users');
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.error("🔑 [Logout] Error from Supabase signOut:", error);
         }
-        
-        return;
       }
       
-      // For standard Supabase users, also call the Supabase signOut method
-      console.log('🔑 [Logout] Calling Supabase auth.signOut() for standard users');
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("🔑 [Logout] Error from Supabase signOut:", error);
-        // Continue anyway since we've already cleared all local state
-      }
-      
+      // STEP 7: Show success message
       toast({
         title: "Signed out",
         description: "You've been successfully signed out",
       });
       
+      // FINAL STEP: Force page reload as ultimate failsafe for ALL user types
+      console.log("🔑 [Logout] Forcing page reload to ensure clean state");
+      setTimeout(() => {
+        window.location.href = '/'; // Use href instead of reload() for a cleaner experience
+      }, 300);
+      
     } catch (error: any) {
       console.error("🔑 [Logout] Error in signOut function:", error);
       
-      // Even if there's an error, try to clear the state as a failsafe
+      // Even if there's an error, try to clear everything as a failsafe
       console.log('🔑 [Logout] Emergency cleanup after error');
+      
+      // Clear React state
       setUser(null);
       setSession(null);
       setIsDemoUser(false);
+      
+      // Clear all storage
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       localStorage.removeItem('youtube-miner-demo-session');
       localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('ytk_anonymous_session_id');
+      
+      // Clear API state
       updateCurrentSession(null);
       
       toast({

@@ -52,12 +52,12 @@ export interface DemoSession {
 }
 
 // Check if a user is a demo user
-export function isDemoUser(user?: User | null): boolean {
+export function isDemoUser(user?: User | DemoUser | null): boolean {
   return !!user?.user_metadata?.is_demo;
 }
 
 // Check if a user is authenticated with direct auth (includes demo users)
-export function isDirectAuth(user?: User | null): boolean {
+export function isDirectAuth(user?: User | DemoUser | null): boolean {
   return !!user?.user_metadata?.direct_auth;
 }
 
@@ -159,7 +159,7 @@ export function getDemoSession(): DemoSession | null {
     }
     
     // Check if this really is a demo user
-    if (!isDemoUser(session.user)) {
+    if (!session.user?.user_metadata?.is_demo) {
       console.log('❌ [Demo Auth] Stored session is not for a demo user');
       localStorage.removeItem(DEMO_SESSION_KEY);
       return null;
@@ -246,9 +246,15 @@ export function signOutDemoUser(): void {
   console.log('🔑 [Demo Auth] Clearing demo session from localStorage (key:', DEMO_SESSION_KEY, ')');
   clearDemoSession();
   
-  // 2. Clear the session in our API module
+  // 2. Clear the session in our API module - this is crucial for proper logout
   console.log('🔑 [Demo Auth] Clearing session from API module');
-  updateCurrentSession(null);
+  // Import in the function body to avoid circular dependencies
+  import('./api').then(({ updateCurrentSession }) => {
+    updateCurrentSession(null);
+    console.log('🔑 [Demo Auth] API session cleared successfully');
+  }).catch((error) => {
+    console.error('🔑 [Demo Auth] Error clearing API session:', error);
+  });
   
   // 3. Clear any other potential demo auth related data
   // This provides a more complete cleanup similar to the Supabase auth

@@ -8,6 +8,12 @@ let currentSession: any = null;
 
 // Function to update the current session (to be called from components)
 export function updateCurrentSession(session: any) {
+  if (session === null) {
+    console.log('[API] Clearing current session - logout in progress');
+    currentSession = null;
+    return;
+  }
+  
   console.log(`[API] Updating current session, user ID: ${session?.user?.id}, email: ${session?.user?.email}`);
   console.log(`[API] Session authentication type: ${session?.user?.user_metadata?.direct_auth ? 'direct auth' : 'supabase'}`);
   
@@ -91,7 +97,7 @@ export async function apiRequest(
     console.log('[API] No current session or user available for API call');
     
     // Check if we have a demo user session in localStorage
-    const hasDemoSession = localStorage.getItem('demo-session') !== null;
+    const hasDemoSession = localStorage.getItem('youtube-miner-demo-session') !== null;
     if (hasDemoSession) {
       console.log('[API] Demo user session found in localStorage, not using anonymous session');
     } else {
