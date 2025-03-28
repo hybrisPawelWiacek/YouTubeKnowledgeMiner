@@ -19,7 +19,6 @@ import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
-import logger from "@/lib/logger";
 import {
   Filter,
   LayoutGrid,
@@ -31,14 +30,6 @@ import {
   Loader2,
   Plus,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 
 export default function Library() {
   // State
@@ -141,20 +132,19 @@ export default function Library() {
         url += `&cursor=${cursor}`;
       }
 
-      // Log using the logger
-      logger.info('Fetching videos for user', { userId: user?.id, userIdType: typeof user?.id });
-
+      console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
+      
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
         const sessionId = getOrCreateAnonymousSessionId();
         headers = { 'x-anonymous-session': sessionId };
-        logger.info('Adding anonymous session header', { sessionId });
+        console.log('Library - Adding anonymous session header:', sessionId);
       }
-
+      
       // Use our API request function which handles all the auth header logic for us
       const response = await apiRequest("GET", url, undefined, headers);
-
+      
       if (!response.ok) throw new Error("Failed to fetch videos");
       return response.json();
     }
@@ -379,13 +369,10 @@ export default function Library() {
   // Handle bulk actions
   const handleDeleteSelected = () => {
     if (selectedVideos.length === 0) return;
-    setShowDeleteConfirmation(true);
-  };
 
-  // Handle confirmed deletion
-  const confirmDelete = () => {
-    bulkDeleteMutation.mutate(selectedVideos);
-    setShowDeleteConfirmation(false);
+    if (confirm(`Are you sure you want to delete ${selectedVideos.length} videos? This action cannot be undone.`)) {
+      bulkDeleteMutation.mutate(selectedVideos);
+    }
   };
 
   const handleToggleFavorite = (isFavorite: boolean) => {
@@ -454,14 +441,14 @@ export default function Library() {
           setShowedPrompt(true);
         }
       };
-
+      
       // Only execute the check once - not on initial render
       if (libraryInteractions > 0) {
         checkAnonymousLimit();
       } else {
         setShowedPrompt(true);
       }
-
+      
       // Load videos from local storage
       const localData = getLocalData();
       if (localData.videos.length > 0) {
@@ -536,14 +523,6 @@ export default function Library() {
     loadSavedSearches();
   }, [user, showedPrompt]);
 
-  // State for managing collection creation
-  const [showCollectionForm, setShowCollectionForm] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState("");
-  const [assigningVideosToCollection, setAssigningVideosToCollection] = useState(false);
-
-  // State for delete confirmation dialog
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
-
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -565,7 +544,7 @@ export default function Library() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setIsFilterSidebarOpen(!isFilterSidebarOpen);
+                  setIsFilterSidebarOpen(true);
                   trackEngagement();
                 }}
                 className="flex items-center gap-1"
@@ -748,8 +727,8 @@ export default function Library() {
 
           {/* Main Content */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Unified Sidebar for filters (toggled by the Filters button) */}
-            <div className={`${isFilterSidebarOpen ? "block" : "hidden"}`}>
+            {/* Sidebar for filters (desktop) */}
+            <div className="hidden lg:block">
               <FilterSidebar
                 categories={categoriesQuery.data || []}
                 collections={collectionsQuery.data || []}
@@ -766,10 +745,31 @@ export default function Library() {
                 sortOrder={sortOrder}
                 setSortOrder={setSortOrder}
                 isVisible={true}
-                onClose={() => setIsFilterSidebarOpen(false)}
+                onClose={() => {}}
                 onCreateCollection={() => setIsCreateCollectionOpen(true)}
               />
             </div>
+
+            {/* Sidebar for filters (mobile) */}
+            <FilterSidebar
+              categories={categoriesQuery.data || []}
+              collections={collectionsQuery.data || []}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedCollection={selectedCollection}
+              setSelectedCollection={setSelectedCollection}
+              selectedRating={selectedRating}
+              setSelectedRating={setSelectedRating}
+              showFavoritesOnly={showFavoritesOnly}
+              setShowFavoritesOnly={setShowFavoritesOnly}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              isVisible={isFilterSidebarOpen}
+              onClose={() => setIsFilterSidebarOpen(false)}
+              onCreateCollection={() => setIsCreateCollectionOpen(true)}
+            />
 
             {/* Main Content Area */}
             <div className="flex-grow">
@@ -921,24 +921,6 @@ export default function Library() {
         promptType="access_library"
         onContinueAsGuest={() => setShowAuthPrompt(false)}
       />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
-        <DialogHeader>
-          <DialogTitle>Delete Videos</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete {selectedVideos.length} videos? This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setShowDeleteConfirmation(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={confirmDelete}>
-            Delete
-          </Button>
-        </DialogFooter>
-      </Dialog>
     </div>
   );
 }

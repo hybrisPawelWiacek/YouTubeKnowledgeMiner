@@ -5,66 +5,42 @@
  * to send logs to the server.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { createLogger } from '../services/logger';
 
-// Create a dedicated logger for client logs
-const clientLogger = createLogger('client');
-
-// Create router
 const router = Router();
+const clientLogger = createLogger('client');
 
 /**
  * POST /api/logs - Receive logs from the client
  */
-router.post('/', async (req: Request, res: Response) => {
-  try {
-    // Validate request
-    if (!Array.isArray(req.body)) {
-      return res.status(400).json({ error: 'Expected array of log entries' });
+router.post('/', (req, res) => {
+  const logEntries = req.body;
+  
+  if (!Array.isArray(logEntries)) {
+    return res.status(400).json({ error: 'Expected an array of log entries' });
+  }
+  
+  // Process each log entry
+  logEntries.forEach(entry => {
+    const { level, message, component, metadata, timestamp } = entry;
+    
+    // Ensure valid log level
+    const validLevels = ['debug', 'info', 'warn', 'error'];
+    if (!validLevels.includes(level)) {
+      return;
     }
     
-    // Process each log entry
-    req.body.forEach((entry: any) => {
-      // Basic validation
-      if (!entry || typeof entry !== 'object' || !entry.level || !entry.message) {
-        return; // Skip invalid entries
-      }
-      
-      // Map client log level to server log level
-      const level = ['debug', 'info', 'warn', 'error'].includes(entry.level) 
-        ? entry.level 
-        : 'info';
-      
-      // Get component if it exists
-      const component = entry.component || 'unknown';
-      
-      // Extract basic fields
-      const { message, timestamp, metadata = {} } = entry;
-      
-      // Add some client-specific metadata
-      const clientMetadata = {
-        ...metadata,
-        clientTimestamp: timestamp,
-        userAgent: req.headers['user-agent'],
-        ip: req.ip,
-        component
-      };
-      
-      // Log with the appropriate level and the special client component prefix
-      if (level === 'debug') clientLogger.debug(`[${component}] ${message}`, clientMetadata);
-      else if (level === 'info') clientLogger.info(`[${component}] ${message}`, clientMetadata);
-      else if (level === 'warn') clientLogger.warn(`[${component}] ${message}`, clientMetadata);
-      else if (level === 'error') clientLogger.error(`[${component}] ${message}`, clientMetadata);
+    // Log to the appropriate level
+    clientLogger[level](`[${component || 'client'}] ${message}`, {
+      ...metadata,
+      component,
+      clientTimestamp: timestamp,
+      receivedAt: Date.now()
     });
-    
-    res.status(200).json({ success: true });
-  } catch (error) {
-    // If anything goes wrong, log it but still report success to the client
-    // (we don't want client logging to fail the application)
-    clientLogger.error('Error processing client logs', { error });
-    res.status(200).json({ success: true });
-  }
+  });
+  
+  res.status(200).json({ success: true, count: logEntries.length });
 });
 
 export default router;

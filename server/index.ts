@@ -6,7 +6,7 @@ import { config } from "dotenv";
 import { createLogger } from "./services/logger";
 import { httpLoggerMiddleware } from "./middleware/http-logger";
 import { errorHandlerMiddleware } from "./middleware/error-handler";
-import performanceMonitorMiddleware from "./middleware/performance-monitor";
+import performanceMonitorMiddleware, { startSystemMetricsCollection } from "./middleware/performance-monitor";
 import logsRouter from "./routes/logs";
 import { log } from "./utils/logger";
 
@@ -86,5 +86,8 @@ app.use('/api/logs', logsRouter);
   }, () => {
     log(`✅ Server running on http://0.0.0.0:${port}`);
     log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Start system metrics logging (every 5 minutes)
+    startSystemMetricsCollection();
   });
 })();
