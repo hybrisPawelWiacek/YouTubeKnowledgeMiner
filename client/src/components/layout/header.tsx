@@ -87,7 +87,11 @@ export function Header() {
       });
       
       // Dump state before signOut
-      dumpStorageSnapshot();
+      try {
+        dumpStorageSnapshot();
+      } catch (dumpError) {
+        console.error("[Header] Error dumping storage snapshot before signOut:", dumpError);
+      }
       
       console.log("===== HEADER: SIGN OUT BUTTON CLICKED =====");
       console.log("Current user before signOut:", user);
@@ -127,10 +131,14 @@ export function Header() {
       }
       
       // Check demo session health before logout
-      const { checkDemoSessionHealth } = await import('@/lib/debug-utils');
-      const sessionHealth = checkDemoSessionHealth();
-      
-      console.log("[Header] Demo session health before signOut:", sessionHealth);
+      try {
+        const { checkDemoSessionHealth } = await import('@/lib/debug-utils');
+        const sessionHealth = checkDemoSessionHealth();
+        
+        console.log("[Header] Demo session health before signOut:", sessionHealth);
+      } catch (healthError) {
+        console.error("[Header] Error checking demo session health:", healthError);
+      }
       
       // Call the signOut function
       await signOut();
@@ -184,7 +192,11 @@ export function Header() {
       }
       
       // Dump state after signOut
-      dumpStorageSnapshot();
+      try {
+        dumpStorageSnapshot();
+      } catch (dumpError) {
+        console.error("[Header] Error dumping storage snapshot after signOut:", dumpError);
+      }
       console.log("===== HEADER: SIGN OUT PROCESS COMPLETED =====");
       
       toast({
@@ -230,7 +242,15 @@ export function Header() {
       }
     } catch (error) {
       console.error("Error signing out:", error);
-      logStateChange('Header', 'signOut-error', { error });
+      
+      try {
+        // Try to log the error state safely
+        logStateChange('Header', 'signOut-error', { 
+          errorMessage: error instanceof Error ? error.message : String(error)
+        });
+      } catch (logError) {
+        console.error("Error logging sign out error:", logError);
+      }
       
       toast({
         title: "Sign out failed",
