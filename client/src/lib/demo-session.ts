@@ -104,27 +104,36 @@ export function storeSession(session: Session): void {
 /**
  * Get a stored demo user session from localStorage
  * Returns null if no session exists or if the session is invalid
+ * This is a critical method that must be robust as it's used during initial page load
  */
 export function getStoredSession(): Session | null {
   try {
     console.log('[Demo Session] Attempting to retrieve stored session');
     
+    // Log all localStorage keys for debugging
+    const allKeys = Object.keys(localStorage);
+    const sessionRelatedKeys = allKeys.filter(key => key.includes('session') || key.includes('demo') || key.includes('supabase'));
+    console.log('[Demo Session] Available session-related storage keys:', sessionRelatedKeys);
+    
     // Try our demo session key first
     let storedSessionStr = localStorage.getItem(DEMO_SESSION_KEY);
+    let source = 'demo_storage';
     
     // If not found, check if it's in the Supabase key
     if (!storedSessionStr) {
-      console.log('[Demo Session] Demo session not found, checking Supabase session storage');
+      console.log('[Demo Session] Demo session not found in primary storage, checking Supabase session storage');
       storedSessionStr = localStorage.getItem(SUPABASE_SESSION_KEY);
+      source = 'supabase_storage';
       
       if (storedSessionStr) {
         // Try to parse and verify if it's a demo session
         try {
           const supabaseSession = JSON.parse(storedSessionStr);
           if (supabaseSession?.user?.user_metadata?.is_demo) {
-            console.log('[Demo Session] Found demo session in Supabase storage, restoring');
+            console.log('[Demo Session] Found demo session in Supabase storage, restoring to demo storage');
             // Restore the session to our own storage
             localStorage.setItem(DEMO_SESSION_KEY, storedSessionStr);
+            console.log('[Demo Session] Successfully restored demo session to primary storage');
           } else {
             // Not a demo session
             console.log('[Demo Session] Supabase session exists but is not a demo user session');
@@ -135,6 +144,8 @@ export function getStoredSession(): Session | null {
           storedSessionStr = null;
         }
       }
+    } else {
+      console.log('[Demo Session] Found demo session in primary storage');
     }
     
     if (!storedSessionStr) {
@@ -146,10 +157,31 @@ export function getStoredSession(): Session | null {
     let session: Session;
     try {
       session = JSON.parse(storedSessionStr) as Session;
+      
+      console.log('[Demo Session] Successfully parsed session from ' + source, {
+        user_id: session.user?.id,
+        is_demo_user: !!session.user?.user_metadata?.is_demo,
+        username: session.user?.user_metadata?.username,
+        expires_at: session.expires_at ? new Date(session.expires_at).toISOString() : 'none',
+      });
     } catch (parseError) {
       console.error('[Demo Session] Failed to parse stored session data:', parseError);
-      clearSession(); // Clear invalid data
+      // Try to clean up only the invalid data source
+      if (source === 'demo_storage') {
+        localStorage.removeItem(DEMO_SESSION_KEY);
+      } else if (source === 'supabase_storage') {
+        localStorage.removeItem(SUPABASE_SESSION_KEY);
+      }
       return null;
+    }
+    
+    // Ensure both storage locations have the session for consistency
+    try {
+      localStorage.setItem(DEMO_SESSION_KEY, storedSessionStr);
+      localStorage.setItem(SUPABASE_SESSION_KEY, storedSessionStr);
+      console.log('[Demo Session] Ensured session is stored in both locations');
+    } catch (storageError) {
+      console.error('[Demo Session] Error ensuring consistent session storage:', storageError);
     }
     
     // Validate that this is a demo user session
@@ -161,15 +193,37 @@ export function getStoredSession(): Session | null {
     // Validate user ID exists
     if (!session?.user?.id) {
       console.warn('[Demo Session] Retrieved session has invalid user ID');
-      clearSession();
+      clearSession(); // Clear invalid data
       return null;
+    }
+    
+    // Set a far future expiration if missing
+    if (!session.expires_at) {
+      console.log('[Demo Session] Setting default expiration for demo session');
+      session.expires_at = Date.now() + (24 * 60 * 60 * 1000); // 24 hours from now
+      
+      // Update storage with corrected session
+      try {
+        localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+        localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+      } catch (e) {
+        console.error('[Demo Session] Error updating session expiration:', e);
+      }
     }
     
     // Validate expiration (though demos don't technically expire)
     if (session.expires_at && session.expires_at < Date.now()) {
-      console.warn('[Demo Session] Retrieved demo session is expired');
-      clearSession();
-      return null;
+      console.warn('[Demo Session] Retrieved demo session is expired, refreshing expiration');
+      // Instead of clearing, refresh the expiration for demo users
+      session.expires_at = Date.now() + (24 * 60 * 60 * 1000); // 24 hours from now
+      
+      // Update storage with refreshed session
+      try {
+        localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+        localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+      } catch (e) {
+        console.error('[Demo Session] Error refreshing session expiration:', e);
+      }
     }
     
     console.log('[Demo Session] Retrieved valid demo session from localStorage', {

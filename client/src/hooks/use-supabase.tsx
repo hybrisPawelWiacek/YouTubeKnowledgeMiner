@@ -59,12 +59,60 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [demoSessionInitialized, setDemoSessionInitialized] = useState(false);
   const { toast } = useToast();
 
+  // First useEffect - specifically for demo session initialization 
+  // This needs to run before any async fetches
   useEffect(() => {
+    const initDemoSession = () => {
+      try {
+        console.log('[Auth] Checking for demo user session on initial load');
+        const demoSession = getStoredSession();
+        
+        if (demoSession) {
+          console.log('[Auth] Demo session found during initial load', {
+            id: demoSession.user.id,
+            username: demoSession.user.user_metadata?.username,
+            is_demo: demoSession.user.user_metadata?.is_demo
+          });
+          
+          // Set React state
+          setUser(demoSession.user);
+          setSession(demoSession);
+          
+          // Make sure the API module knows about this session
+          updateCurrentSession(demoSession);
+          
+          // Mark as complete to skip redundant initialization
+          setDemoSessionInitialized(true);
+          setLoading(false);
+          
+          return true;
+        }
+      } catch (error) {
+        console.error('[Auth] Error initializing demo session:', error);
+      }
+      
+      return false;
+    };
+    
+    // Run demo initialization immediately
+    initDemoSession();
+  }, []); 
+  
+  // Second useEffect for standard Supabase flow - only runs if demo init didn't succeed
+  useEffect(() => {
+    // Skip if demo session was already initialized
+    if (demoSessionInitialized) {
+      console.log('[Auth] Skipping Supabase initialization as demo session was loaded');
+      return;
+    }
+    
     const fetchSupabaseConfig = async () => {
       try {
         // Get Supabase configuration from our API
+        console.log('[Auth] Fetching Supabase config (no demo session found)');
         const response = await fetch('/api/supabase-auth/config');
         const { data, success } = await response.json();
 
@@ -98,6 +146,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             localStorage.removeItem(SUPABASE_SESSION_KEY);
           }
           
+          // Debug current storage state for session diagnosis
+          console.log('[Auth] Current storage state:', {
+            hasDemo: !!demoSession,
+            hasSupabase: !!storedSession,
+            demoSessionKey: localStorage.getItem('youtube-miner-demo-session') ? 'exists' : 'missing',
+            supabaseSessionKey: localStorage.getItem(SUPABASE_SESSION_KEY) ? 'exists' : 'missing',
+          });
+          
           // Restore session in the following priority order:
           // 1. Demo session (if exists)
           // 2. Active Supabase session
@@ -106,6 +162,12 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           if (demoSession) {
             // Demo sessions take priority over other auth methods
             console.log('[Demo Session] Restoring demo user session');
+            console.log('[Demo Session] Demo user details:', {
+              id: demoSession.user.id,
+              username: demoSession.user.user_metadata?.username,
+              is_demo: demoSession.user.user_metadata?.is_demo,
+              expires_at: demoSession.expires_at ? new Date(demoSession.expires_at).toISOString() : 'none'
+            });
             setSession(demoSession);
             setUser(demoSession.user);
             updateCurrentSession(demoSession);
