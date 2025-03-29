@@ -93,7 +93,9 @@ export async function getAnonymousVideoCountInfo(): Promise<{ count: number; max
     };
     
     // Use fetch directly to avoid circular dependencies
-    const response = await fetch('/api/anonymous/videos/count', {
+    // Add cache-busting query parameter to prevent 304 cached responses
+    const cacheBuster = `?_t=${Date.now()}`;
+    const response = await fetch(`/api/anonymous/videos/count${cacheBuster}`, {
       method: 'GET',
       headers,
       credentials: 'include'

@@ -160,17 +160,18 @@ export default function Library() {
     console.log('VideosQuery error:', videosQuery.error);
     
     if (videosQuery.data) {
-      // Check if the data has a nested data structure as seen in the logs
-      const responseData = videosQuery.data.data ? videosQuery.data.data : videosQuery.data;
-      console.log('🎯 Videos detected:', responseData.videos?.length || 0);
-      console.log('📄 First video:', responseData.videos?.[0]);
+      // Use type assertion to handle potential nested structures
+      const responseData = videosQuery.data as any;
+      const videos = responseData.videos || (responseData.data?.videos || []);
+      console.log('🎯 Videos detected:', videos.length || 0);
+      console.log('📄 First video:', videos[0] || 'No videos');
       
       // When filters change, we're on page 1 and replace videos
       if (page === 1 && cursor === undefined) {
-        setAllVideos(responseData.videos || []);
+        setAllVideos(videos);
       } else {
         // For pagination, append new videos to existing ones
-        setAllVideos(prev => [...prev, ...(responseData.videos || [])]);
+        setAllVideos(prev => [...prev, ...videos]);
       }
       setHasMore(responseData.hasMore || false);
       setTotalCount(responseData.totalCount || 0);
