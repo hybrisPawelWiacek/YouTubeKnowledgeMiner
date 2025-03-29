@@ -78,18 +78,43 @@ export function Header() {
         // Import to avoid circular dependencies
         const { getAnonymousVideoCountInfo } = await import('@/lib/anonymous-session');
         
-        // Get count info using our utility function
-        const countInfo = await getAnonymousVideoCountInfo();
-        return countInfo;
+        // Get count info using our utility function with a direct API call
+        const sessionId = getOrCreateAnonymousSessionId();
+        const headers = { 'x-anonymous-session': sessionId };
+        
+        // Add cache-busting to prevent 304 responses
+        const cacheBuster = `?_t=${Date.now()}`;
+        const response = await fetch(`/api/videos/count${cacheBuster}`, {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error fetching video count: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('[Header] Video count response:', data);
+        
+        if (data && typeof data.count === 'number') {
+          return {
+            count: data.count,
+            maxAllowed: typeof data.max_allowed === 'number' ? data.max_allowed : MAX_ANONYMOUS_VIDEOS
+          };
+        }
+        
+        return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
       } catch (error) {
         console.error('Error fetching anonymous video count:', error);
         return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
       }
     },
     enabled: !user, // Only run this query for anonymous users
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 10000, // Refetch every 10 seconds
     refetchOnWindowFocus: true,
-    retry: 1
+    staleTime: 5000, // Consider data stale after 5 seconds
+    retry: 2
   });
 
   // Track anonymous video count using session-based approach

@@ -225,6 +225,10 @@ export default function Library() {
 
   const collectionsQuery = useQuery<Collection[]>({
     queryKey: ["/api/collections"],
+    select: (data) => {
+      // Ensure data is an array to prevent "map is not a function" errors
+      return Array.isArray(data) ? data : [];
+    }
   });
 
   // Mutations
