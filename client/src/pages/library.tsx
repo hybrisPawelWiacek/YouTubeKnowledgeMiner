@@ -155,16 +155,23 @@ export default function Library() {
 
   // Handle query result data for pagination
   useEffect(() => {
+    console.log('VideosQuery data:', videosQuery.data);
+    console.log('VideosQuery status:', videosQuery.status);
+    console.log('VideosQuery error:', videosQuery.error);
+    
     if (videosQuery.data) {
+      console.log('🎯 Videos detected:', videosQuery.data.videos?.length || 0);
+      console.log('📄 First video:', videosQuery.data.videos?.[0]);
+      
       // When filters change, we're on page 1 and replace videos
       if (page === 1 && cursor === undefined) {
-        setAllVideos(videosQuery.data.videos);
+        setAllVideos(videosQuery.data.videos || []);
       } else {
         // For pagination, append new videos to existing ones
-        setAllVideos(prev => [...prev, ...videosQuery.data.videos]);
+        setAllVideos(prev => [...prev, ...(videosQuery.data.videos || [])]);
       }
-      setHasMore(videosQuery.data.hasMore);
-      setTotalCount(videosQuery.data.totalCount);
+      setHasMore(videosQuery.data.hasMore || false);
+      setTotalCount(videosQuery.data.totalCount || 0);
       setCursor(videosQuery.data.nextCursor);
       setIsLoadingMore(false);
     }
