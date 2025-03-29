@@ -33,8 +33,22 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    // Add anonymous session header if available
+    const headers: HeadersInit = {};
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { getOrCreateAnonymousSessionId, hasAnonymousSession } = await import('./anonymous-session');
+      if (hasAnonymousSession()) {
+        const sessionId = getOrCreateAnonymousSessionId();
+        headers['x-anonymous-session'] = sessionId;
+      }
+    } catch (error) {
+      console.error('Error getting anonymous session for query:', error);
+    }
+
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
+      headers
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
