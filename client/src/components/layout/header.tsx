@@ -97,7 +97,15 @@ export function Header() {
         const data = await response.json();
         console.log('[Header] Video count response:', data);
         
-        if (data && typeof data.count === 'number') {
+        // Parse the response - server returns data wrapped in a 'data' property
+        if (data && data.data && typeof data.data.count === 'number') {
+          console.log('[Header] Extracting count from data.data:', data.data);
+          return {
+            count: data.data.count,
+            maxAllowed: typeof data.data.max_allowed === 'number' ? data.data.max_allowed : MAX_ANONYMOUS_VIDEOS
+          };
+        } else if (data && typeof data.count === 'number') {
+          console.log('[Header] Extracting count directly from data:', data);
           return {
             count: data.count,
             maxAllowed: typeof data.max_allowed === 'number' ? data.max_allowed : MAX_ANONYMOUS_VIDEOS
@@ -122,13 +130,40 @@ export function Header() {
     setIsLoading(isVideoCountLoading);
     
     if (!user && videoCountData) {
+      console.log('[Header] Got video count data:', videoCountData);
+      
+      // There seems to be inconsistency in how the data is structured 
+      // We need to handle both formats
       if (typeof videoCountData.count === 'number') {
-        console.log('[Header] Anonymous video count from server:', videoCountData.count);
+        console.log('[Header] Using count directly:', videoCountData.count);
         setAnonymousVideoCount(videoCountData.count);
         
         // Update max allowed videos if available from server
         if (typeof videoCountData.maxAllowed === 'number') {
           setMaxAllowedVideos(videoCountData.maxAllowed);
+        }
+      } 
+      // Data is available but count is not directly a number property
+      else {
+        console.log('[Header] Trying to find count in nested data structure');
+        
+        try {
+          // For safety, handle and log each attempt to extract the number
+          if (videoCountData && videoCountData.data && typeof videoCountData.data.count === 'number') {
+            const count = videoCountData.data.count;
+            console.log('[Header] Found count in videoCountData.data.count:', count);
+            setAnonymousVideoCount(count);
+            
+            // Max allowed might also be nested
+            if (typeof videoCountData.data.max_allowed === 'number') {
+              setMaxAllowedVideos(videoCountData.data.max_allowed);
+            }
+          }
+          else {
+            console.warn('[Header] Could not find valid count in response');
+          }
+        } catch (error) {
+          console.error('[Header] Error processing video count data:', error);
         }
       }
     } else if (user) {
