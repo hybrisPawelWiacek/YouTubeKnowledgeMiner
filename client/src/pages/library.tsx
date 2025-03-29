@@ -249,7 +249,7 @@ export default function Library() {
       setSelectedVideos([]);
       // Invalidate both the videos query and the anonymous video count query
       queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/anonymous/videos/count"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/videos/count"] });
     },
     onError: () => {
       toast({

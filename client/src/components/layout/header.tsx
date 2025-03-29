@@ -72,7 +72,7 @@ export function Header() {
 
   // Fetch anonymous session video count from server when not authenticated
   const { data: videoCountData, isLoading: isVideoCountLoading } = useQuery({
-    queryKey: ['/api/anonymous/videos/count'],
+    queryKey: ['/api/videos/count'],
     queryFn: async () => {
       try {
         // Import to avoid circular dependencies

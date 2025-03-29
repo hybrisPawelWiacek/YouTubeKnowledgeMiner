@@ -40,7 +40,9 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           // Get count from API
           const headers = { 'x-anonymous-session': sessionId };
           console.log('[VideoInput] Fetching video count with session:', sessionId);
-          const response = await fetch('/api/anonymous/videos/count', {
+          // Add cache-busting query parameter to prevent 304 responses
+          const cacheBuster = `?_t=${Date.now()}`;
+          const response = await fetch(`/api/videos/count${cacheBuster}`, {
             method: 'GET',
             headers,
             credentials: 'include'
@@ -95,7 +97,9 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
             const sessionId = getOrCreateAnonymousSessionId();
             const headers = { 'x-anonymous-session': sessionId };
             console.log('[VideoInput] Refreshing video count with session:', sessionId);
-            const response = await fetch('/api/anonymous/videos/count', {
+            // Add cache-busting query parameter to prevent 304 responses
+            const cacheBuster = `?_t=${Date.now()}`;
+            const response = await fetch(`/api/videos/count${cacheBuster}`, {
               method: 'GET',
               headers,
               credentials: 'include'
