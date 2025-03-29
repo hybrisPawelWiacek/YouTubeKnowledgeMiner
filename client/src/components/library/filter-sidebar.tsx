@@ -189,7 +189,7 @@ export function FilterSidebar({
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
                     <SelectItem value="all">All Collections</SelectItem>
-                    {collections?.map((collection) => (
+                    {Array.isArray(collections) && collections.length > 0 && collections.map((collection) => (
                       <SelectItem key={collection.id} value={collection.id.toString()}>
                         {collection.name}
                       </SelectItem>

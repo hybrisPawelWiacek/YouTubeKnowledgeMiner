@@ -13,7 +13,20 @@ export async function apiRequest(
   data?: unknown | undefined,
   customHeaders?: HeadersInit,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // Add cache-busting for anonymous sessions
+  let finalUrl = url;
+  try {
+    const { hasAnonymousSession } = await import('./anonymous-session');
+    if (hasAnonymousSession()) {
+      const urlObj = new URL(url, window.location.origin);
+      urlObj.searchParams.set('_t', Date.now().toString());
+      finalUrl = urlObj.toString();
+    }
+  } catch (error) {
+    console.error('Error processing URL in apiRequest:', error);
+  }
+
+  const res = await fetch(finalUrl, {
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
@@ -21,6 +34,8 @@ export async function apiRequest(
     },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
+    // Ensure we're not using cached responses for GET requests to anonymous APIs
+    cache: method === 'GET' ? 'no-store' : 'default'
   });
 
   await throwIfResNotOk(res);
@@ -46,9 +61,20 @@ export const getQueryFn: <T>(options: {
       console.error('Error getting anonymous session for query:', error);
     }
 
-    const res = await fetch(queryKey[0] as string, {
+    // Add a timestamp to avoid browser caching when using anonymous sessions
+    const url = new URL(queryKey[0] as string, window.location.origin);
+    
+    // Add a cache-busting parameter for anonymous sessions
+    const { hasAnonymousSession } = await import('./anonymous-session');
+    if (hasAnonymousSession()) {
+      url.searchParams.set('_t', Date.now().toString());
+    }
+    
+    const res = await fetch(url.toString(), {
       credentials: "include",
-      headers
+      headers,
+      // Ensure we're not using cached responses for anonymous sessions
+      cache: hasAnonymousSession() ? 'no-store' : 'default'
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
