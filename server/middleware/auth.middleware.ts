@@ -97,14 +97,24 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
       }
     }
     
-    // Check for anonymous session cookie if not authenticated
+    // Check for anonymous session from cookie or header if not authenticated
     if (!req.isAuthenticated) {
-      const anonymousSessionId = req.cookies['anonymousSessionId'];
+      // First check cookie
+      let anonymousSessionId = req.cookies['anonymousSessionId'];
+      
+      // If no cookie, check for header
+      if (!anonymousSessionId) {
+        const headerSessionId = req.headers['x-anonymous-session'];
+        if (headerSessionId) {
+          anonymousSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+          logger.debug('Found anonymous session in header', { anonymousSessionId });
+        }
+      } else {
+        logger.debug('Found anonymous session in cookie', { anonymousSessionId });
+      }
       
       if (anonymousSessionId) {
         try {
-          logger.debug('Found anonymous session cookie', { anonymousSessionId });
-          
           // Get session and update last active time
           const session = await sessionService.getAnonymousSession(anonymousSessionId);
           
@@ -120,10 +130,22 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
             
             // Update session last active time
             await sessionService.updateAnonymousSessionActivity(anonymousSessionId);
+            
+            // Set cookie if it came from header for future requests
+            if (!req.cookies['anonymousSessionId']) {
+              res.cookie('anonymousSessionId', anonymousSessionId, { 
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+              });
+              logger.debug('Set anonymous session cookie from header');
+            }
           } else {
-            // Invalid anonymous session ID, clear the cookie
-            logger.debug('Invalid anonymous session, clearing cookie');
-            res.clearCookie('anonymousSessionId');
+            // Invalid anonymous session ID, clear the cookie if exists
+            if (req.cookies['anonymousSessionId']) {
+              logger.debug('Invalid anonymous session, clearing cookie');
+              res.clearCookie('anonymousSessionId');
+            }
           }
         } catch (error) {
           logger.error('Error processing anonymous session', { 
