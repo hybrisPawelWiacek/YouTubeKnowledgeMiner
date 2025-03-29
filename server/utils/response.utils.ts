@@ -1,241 +1,84 @@
-/**
- * API Response Utilities
- * 
- * This module provides standardized functions for API responses
- * to ensure consistent response formats throughout the application.
- */
-
 import { Response } from 'express';
-import { AuthError } from '../services/auth.service';
-import { createLogger } from '../services/logger';
-
-const logger = createLogger('api-response');
+import { ApiError, normalizeError } from './error.utils';
 
 /**
- * Standard error response interface
- */
-export interface ErrorResponse {
-  error: {
-    message: string;
-    code: string;
-    details?: any;
-  };
-}
-
-/**
- * Standard success response interface
- */
-export interface SuccessResponse<T = any> {
-  data: T;
-  message?: string;
-}
-
-/**
- * Send a standardized success response
+ * Standard success response
  * 
  * @param res Express response object
- * @param data Data to include in the response
- * @param message Optional success message
- * @param statusCode HTTP status code (default: 200)
+ * @param data Data to send in the response
+ * @param status HTTP status code (default: 200)
  */
-export function apiSuccess<T = any>(
-  res: Response,
-  data: T,
-  message?: string,
-  statusCode: number = 200
-): Response {
-  const response: SuccessResponse<T> = {
-    data,
-    ...(message && { message })
-  };
-
-  return res.status(statusCode).json(response);
+export function sendSuccess(res: Response, data: any, status: number = 200) {
+  return res.status(status).json(data);
 }
 
-// Alias for backward compatibility
-export const sendSuccess = apiSuccess;
-
 /**
- * Send a standardized error response
+ * Standard error response
  * 
  * @param res Express response object
- * @param error Error object or message
- * @param code Error code
- * @param statusCode HTTP status code (default: 400)
- * @param details Additional error details
+ * @param message Error message
+ * @param status HTTP status code (default: 500)
+ * @param code Optional error code for client handling
+ * @param details Optional error details for debugging
  */
-export function apiError(
-  res: Response,
-  error: Error | string,
-  code: string = 'INTERNAL_ERROR',
-  statusCode: number = 400,
-  details?: any
-): Response {
-  // Extract message from error object if provided
-  const message = typeof error === 'string' ? error : error.message;
+export function sendError(
+  res: Response, 
+  message: string, 
+  status: number = 500, 
+  code?: string,
+  details?: string
+) {
+  const response: { message: string; code?: string; details?: string } = { message };
   
-  // Handle AuthError errors with their predefined status codes
-  if (error instanceof AuthError) {
-    code = error.code;
-    statusCode = error.status;
+  if (code) {
+    response.code = code;
   }
-
-  const response: ErrorResponse = {
-    error: {
-      message,
-      code,
-      ...(details && { details })
-    }
-  };
-
-  // Log error responses (except validation errors which are common)
-  if (statusCode >= 500 || (statusCode >= 400 && code !== 'VALIDATION_ERROR')) {
-    logger.error('API error response', {
-      statusCode,
-      errorCode: code,
-      message,
-      ...(details && { details })
-    });
+  
+  if (details) {
+    response.details = details;
   }
-
-  return res.status(statusCode).json(response);
-}
-
-// Alias for backward compatibility
-export const sendError = apiError;
-
-/**
- * Send a not found response
- * 
- * @param res Express response object
- * @param message Custom not found message
- * @param code Error code (default: RESOURCE_NOT_FOUND)
- */
-export function apiNotFound(
-  res: Response,
-  message: string = 'Resource not found',
-  code: string = 'RESOURCE_NOT_FOUND'
-): Response {
-  return apiError(res, message, code, 404);
+  
+  return res.status(status).json(response);
 }
 
 /**
- * Send an unauthorized response
+ * Handle any error and send an appropriate response
  * 
  * @param res Express response object
- * @param message Custom unauthorized message
- * @param code Error code (default: UNAUTHORIZED)
+ * @param error Any error object
  */
-export function apiUnauthorized(
-  res: Response,
-  message: string = 'Unauthorized',
-  code: string = 'UNAUTHORIZED'
-): Response {
-  return apiError(res, message, code, 401);
-}
-
-/**
- * Send a forbidden response
- * 
- * @param res Express response object
- * @param message Custom forbidden message
- * @param code Error code (default: FORBIDDEN)
- */
-export function apiForbidden(
-  res: Response,
-  message: string = 'Forbidden',
-  code: string = 'FORBIDDEN'
-): Response {
-  return apiError(res, message, code, 403);
-}
-
-/**
- * Send a validation error response
- * 
- * @param res Express response object
- * @param errors Validation errors
- * @param message Custom validation error message
- */
-export function apiValidationError(
-  res: Response,
-  errors: any,
-  message: string = 'Validation error'
-): Response {
-  return apiError(res, message, 'VALIDATION_ERROR', 400, { errors });
-}
-
-/**
- * Send a server error response
- * 
- * @param res Express response object
- * @param error Error object or message
- * @param code Error code (default: SERVER_ERROR)
- */
-export function apiServerError(
-  res: Response,
-  error: Error | string,
-  code: string = 'SERVER_ERROR'
-): Response {
-  return apiError(res, error, code, 500);
-}
-
-/**
- * Send a redirect response with a message
- * 
- * @param res Express response object
- * @param url URL to redirect to
- * @param message Message to include
- * @param statusCode HTTP status code (default: 302)
- */
-export function apiRedirect(
-  res: Response,
-  url: string,
-  message: string = 'Redirect',
-  statusCode: number = 302
-): void {
-  res.status(statusCode).json({
-    redirect: url,
-    message
+export function handleApiError(res: Response, error: any) {
+  console.error('API Error:', error);
+  
+  // Normalize the error to ensure consistent format
+  const apiError = normalizeError(error);
+  
+  // Return the error response
+  return res.status(apiError.status).json({
+    message: apiError.message,
+    code: apiError.code,
+    ...(apiError.details ? { details: apiError.details } : {})
   });
 }
 
 /**
- * Send a success created response (201)
+ * Format a paginated response
  * 
- * @param res Express response object
- * @param data Data to include in the response
- * @param message Optional success message
+ * @param items Array of items
+ * @param totalCount Total count of items (before pagination)
+ * @param hasMore Whether there are more items
+ * @param nextCursor Optional cursor for the next page
  */
-export function apiCreated<T = any>(
-  res: Response,
-  data: T,
-  message: string = 'Resource created successfully'
-): Response {
-  return apiSuccess(res, data, message, 201);
+export function formatPaginatedResponse<T>(
+  items: T[], 
+  totalCount: number, 
+  hasMore: boolean, 
+  nextCursor?: number
+) {
+  return {
+    items,
+    totalCount,
+    hasMore,
+    ...(nextCursor !== undefined ? { nextCursor } : {})
+  };
 }
-
-/**
- * Send a success no content response (204)
- * 
- * @param res Express response object
- */
-export function apiNoContent(res: Response): Response {
-  return res.status(204).end();
-}
-
-// Export all response utilities
-export default {
-  apiSuccess,
-  apiError,
-  apiNotFound,
-  apiUnauthorized,
-  apiForbidden,
-  apiValidationError,
-  apiServerError,
-  apiRedirect,
-  apiCreated,
-  apiNoContent,
-  // Include aliases for backward compatibility
-  sendSuccess,
-  sendError
-};

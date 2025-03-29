@@ -27,7 +27,7 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Database Layer:** Neon PostgreSQL (native to Replit) with pgvector extension for semantic search
 - **Authentication:** Supabase Auth for Google OAuth with strategic account prompting
 - **AI Services:** OpenAI integration for transcript analysis and Q&A
-- **Anonymous Sessions:** Server-side session management with dedicated user ID (7) and database-backed session tracking
+- **Local Storage:** Temporary storage for anonymous users with migration path to persistent storage
 
 ## Technology Stack
 
@@ -58,23 +58,14 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **Schema Management:** Drizzle Schema with migration support
 - **Data Validation:** Zod schemas with strong typing
 - **Storage Architecture:** Simplified schema design with more integrated tables and fewer junction tables
-- **Anonymous Data:** 
-  - Dedicated `anonymous_sessions` table for tracking sessions
-  - Foreign key from `videos` table to sessions via `anonymous_session_id`
-  - Database queries filter using session IDs for anonymous users
-  - Automatic tracking of video counts for enforcing limits
-  - Dedicated `user_id=7` for all anonymous operations
+- **Anonymous Data:** Local storage for unauthenticated users with migration path to database
 
 ### Authentication & Security
 
 - **Auth Provider:** Supabase Auth for Google OAuth and user management
-- **Strategic Prompting:** Non-intrusive authentication prompts at key moments (e.g., when 3-video limit is reached)
+- **Strategic Prompting:** Non-intrusive authentication prompts at key moments
 - **Session Management:** Persistent login state with secure token storage
-- **Anonymous Users:** 
-  - Support for anonymous usage with optional account creation
-  - Dedicated user ID (7) for anonymous operations
-  - Session-based identification via custom `x-anonymous-session` header
-  - Automatic migration path to authenticated accounts
+- **Anonymous Users:** Support for anonymous usage with optional account creation
 - **Fallback System:** Application can function with or without Supabase configuration
 
 ### AI and Natural Language Processing
@@ -134,100 +125,20 @@ This is a full-stack web application called "YouTube Knowledge Miner" that allow
 - **API Service Layer:** Backend services organized by functionality
 - **Repository Pattern:** Database operations abstracted through storage interfaces
 - **Schema-Driven Development:** Strong typing with Zod and TypeScript
-- **Middleware-Based Processing:** Express middleware for request handling and session validation
+- **Middleware-Based Processing:** Express middleware for request handling
 - **Hybrid Storage Architecture:** PostgreSQL for primary data, pgvector for embeddings
 - **Dual-Mode Authentication:** Works with or without Supabase integration
-- **Server-Side Session Management:** Header-based session tracking with database persistence
-- **Progressive Data Migration:** Anonymous-to-authenticated user data transition with seamless experience
-- **Feature-Based Access Control:** Graceful degradation of features based on authentication status
+- **Progressive Data Migration:** Anonymous-to-authenticated user data transition
 
 ## Notable Implementation Details
 
 - **Vector Search:** Semantic search using text embeddings stored in pgvector
 - **AI Summary Generation:** Automatic summarization of video transcripts
 - **Q&A Conversations:** Interactive Q&A with AI based on video content
-- **Citation System:** Comprehensive citation tracking with source videos, timestamps, and content references
 - **Strategic Authentication:** Non-intrusive account creation prompts at key moments
-- **Anonymous User Support:** Server-side session management with unique session IDs and 3-video limit
+- **Anonymous User Support:** Temporary local storage with migration path to persistent storage
 - **Hybrid Database Approach:** Leverages Replit's native PostgreSQL while maintaining flexibility
 - **Performance Optimizations:** Batched processing and lazy loading for efficiency
-
-## Anonymous Session Architecture
-
-The application implements a robust session-based approach for anonymous users:
-
-- **Server-Side Sessions:** Unlike traditional client-side anonymous user tracking, all anonymous user state is managed on the server
-- **Database-Backed Storage:** Anonymous sessions are stored in the database with the following key attributes:
-  - Unique session ID (format: `anon_[timestamp]_[random]`)
-  - Creation timestamp
-  - Last active timestamp (updated on every interaction)
-  - Video count (for enforcing the 3-video limit)
-  - Optional metadata (user agent, IP address)
-
-- **Database Schema:**
-  - Dedicated `anonymous_sessions` table in PostgreSQL with fields:
-    - `id`: Serial primary key
-    - `session_id`: Unique text identifier (format: `anon_[timestamp]_[random]`)
-    - `created_at`: Timestamp when session was created
-    - `last_active_at`: Timestamp updated on every interaction
-    - `video_count`: Integer tracking number of videos saved (for limit enforcement)
-    - `user_agent`: Optional user agent string
-    - `ip_address`: Optional IP address
-
-- **Database Integration:**
-  - Anonymous videos are associated with user_id=7 (dedicated anonymous user) and a unique anonymous_session_id
-  - User identification is primarily done via anonymous_session_id for unregistered users
-  - Special handling in database queries to filter by session ID rather than user ID
-  - Session cleanup mechanism removes inactive sessions after a configurable time period
-
-- **Frontend-Backend Communication:**
-  - Session ID stored in browser's localStorage using key `ytk_anonymous_session_id`
-  - Session ID included in all API requests via the `x-anonymous-session` custom header
-  - Backend validates session existence and freshness with every request
-  - Automatic session creation for new users without existing sessions via `getOrCreateAnonymousSessionId()` function
-
-- **Authentication Middleware:**
-  - `getUserInfo` middleware extracts both authenticated and anonymous user information
-  - `requireSession` middleware enforces valid session existence (anonymous or authenticated)
-  - `requireAuth` middleware restricts certain routes to authenticated users only
-  - All routes supporting anonymous users include `requireSession` middleware
-
-- **Frontend Implementation:**
-  - Client-side session management in `anonymous-session.ts`:
-    - `generateSessionId()`: Creates unique session IDs
-    - `getOrCreateAnonymousSessionId()`: Returns existing ID or generates new one
-    - `hasAnonymousSession()`: Checks if session exists in localStorage
-    - `getAnonymousVideoCountInfo()`: Fetches count of videos from server
-    - `hasReachedAnonymousLimit()`: Checks if user has reached 3-video limit
-
-- **API Integration:**
-  - `apiRequest()` function automatically attaches anonymous session headers
-  - All client-side data fetching uses `apiRequest` to maintain session consistency
-  - Specialized endpoints for anonymous functionality:
-    - `/api/anonymous/videos/count`: Returns current video count and limit
-    - `/api/auth/migrate`: Migrates videos when anonymous user creates account
-
-- **Entitlements Management:**
-  - Strict enforcement of 3-video limit per anonymous session
-  - Video count incremented with each successful video save
-  - Count checked before allowing new video processing
-  - Strategic prompts when limit is reached to encourage account creation
-
-- **Error Handling:**
-  - Consistent error format for both anonymous and authenticated users
-  - Special error code `SESSION_REQUIRED` for missing/invalid sessions
-  - Special error code `ANONYMOUS_LIMIT_REACHED` when video limit is reached
-  - Clear, user-friendly error messages explaining limits and encouraging signup
-
-- **Migration Path:**
-  - When an anonymous user creates an account, their videos can be transferred to their new user account
-  - Content migration preserves all metadata and associated data (embeddings, etc.)
-  - Session cleanup after successful migration
-
-- **Type Safety:**
-  - Schema definition for anonymous sessions in shared schema
-  - Strong typing for all session-related operations
-  - Support for nullable user_id in application logic with runtime safety
 
 ## Conclusion
 

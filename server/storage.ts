@@ -4,7 +4,7 @@ import {
   type CollectionVideo, type InsertCollectionVideo, type SavedSearch,
   type InsertSavedSearch, type SearchParams, type QAConversation, type InsertQAConversation,
   type QAMessage, type QAQuestion, type ExportPreferences, type InsertExportPreferences,
-  type AnonymousSession, type InsertAnonymousSession, type UserSession, type InsertUserSession
+  type AnonymousSession, type InsertAnonymousSession
 } from "@shared/schema";
 import { dbStorage } from './database-storage';
 
@@ -75,18 +75,6 @@ export interface IStorage {
   incrementAnonymousSessionVideoCount(sessionId: string): Promise<number>;
   getVideosByAnonymousSessionId(sessionId: string): Promise<Video[]>;
   deleteInactiveAnonymousSessions(olderThanDays: number): Promise<number>;
-  
-  // User session methods
-  getUserSessionByToken(token: string): Promise<UserSession | undefined>;
-  createUserSession(session: InsertUserSession): Promise<UserSession>;
-  updateUserSessionLastActive(id: number): Promise<void>;
-  deleteUserSession(id: number): Promise<boolean>;
-  deleteUserSessionByToken(token: string): Promise<boolean>;
-  deleteUserSessionsByUserId(userId: number): Promise<number>;
-  
-  // User authentication methods
-  getUserByEmail(email: string): Promise<User | undefined>;
-  updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
 }
 
 // Export the database storage instance as the single source of truth

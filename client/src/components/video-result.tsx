@@ -450,44 +450,35 @@ export function VideoResult({ video }: VideoResultProps) {
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700">
                           {/* Global categories first */}
-                          {Array.isArray(categories) && 
-                            categories
-                              .filter((category: Category) => category.is_global)
-                              .map((category: Category) => {
-                                return (
-                                  <SelectItem 
-                                    key={category.id} 
-                                    value={category.id.toString()}
-                                    className="font-medium text-blue-400"
-                                  >
-                                    {category.name} (Global)
-                                  </SelectItem>
-                                );
-                              })
-                          }
+                          {categories
+                            .filter((category: Category) => category.is_global)
+                            .map((category: Category) => (
+                              <SelectItem 
+                                key={category.id} 
+                                value={category.id.toString()}
+                                className="font-medium text-blue-400"
+                              >
+                                {category.name} (Global)
+                              </SelectItem>
+                            ))}
 
                           {/* Separator if we have both global and user categories */}
-                          {Array.isArray(categories) && 
-                           categories.some((category: Category) => category.is_global) && 
+                          {categories.some((category: Category) => category.is_global) && 
                            categories.some((category: Category) => !category.is_global) && (
                             <SelectSeparator />
                           )}
 
                           {/* User categories */}
-                          {Array.isArray(categories) &&
-                            categories
-                              .filter((category: Category) => !category.is_global)
-                              .map((category: Category) => {
-                                return (
-                                  <SelectItem 
-                                    key={category.id} 
-                                    value={category.id.toString()}
-                                  >
-                                    {category.name}
-                                  </SelectItem>
-                                );
-                              })
-                          }
+                          {categories
+                            .filter((category: Category) => !category.is_global)
+                            .map((category: Category) => (
+                              <SelectItem 
+                                key={category.id} 
+                                value={category.id.toString()}
+                              >
+                                {category.name}
+                              </SelectItem>
+                            ))}
                           {/* Add option to create new category */}
                           <SelectItem value="create-new" className="border-t border-zinc-700 mt-1 pt-1">
                             <PlusCircle className="mr-2 h-4 w-4 inline-block" /> Create new category...

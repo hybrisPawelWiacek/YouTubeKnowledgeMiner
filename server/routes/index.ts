@@ -56,10 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/videos', videoRoutes);
   app.use('/api/collections', collectionRoutes);
   app.use('/api/categories', categoryRoutes);
-  app.use('/api/auth', authRoutes); // Main auth routes with new cookie-based authentication
-  app.use('/api/anonymous', authRoutes); // Legacy path for backward compatibility
-  // Register anonymous videos route
-  app.use('/api/anonymous/videos', videoRoutes);
+  app.use('/api/anonymous', authRoutes);
   app.use('/api/saved-searches', searchRoutes);
   app.use('/api/search', semanticSearchRoutes);
   app.use('/api/export', exportRoutes);

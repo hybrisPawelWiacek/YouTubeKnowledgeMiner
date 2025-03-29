@@ -127,7 +127,7 @@ export function FilterSidebar({
                   <SelectItem value="all">All Categories</SelectItem>
                   
                   {/* Global categories first */}
-                  {categories && categories.length > 0 && categories
+                  {categories
                     .filter((category: Category) => category.is_global)
                     .map((category: Category) => (
                       <SelectItem 
@@ -140,14 +140,13 @@ export function FilterSidebar({
                     ))}
                     
                   {/* Separator if we have both global and user categories */}
-                  {categories && categories.length > 0 && 
-                   categories.some((category: Category) => category.is_global) && 
+                  {categories.some((category: Category) => category.is_global) && 
                    categories.some((category: Category) => !category.is_global) && (
                     <SelectSeparator />
                   )}
                     
                   {/* User categories */}
-                  {categories && categories.length > 0 && categories
+                  {categories
                     .filter((category: Category) => !category.is_global)
                     .map((category: Category) => (
                       <SelectItem 
@@ -189,7 +188,7 @@ export function FilterSidebar({
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-800 border-zinc-700">
                     <SelectItem value="all">All Collections</SelectItem>
-                    {Array.isArray(collections) && collections.length > 0 && collections.map((collection) => (
+                    {collections?.map((collection) => (
                       <SelectItem key={collection.id} value={collection.id.toString()}>
                         {collection.name}
                       </SelectItem>

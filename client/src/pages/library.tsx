@@ -155,27 +155,17 @@ export default function Library() {
 
   // Handle query result data for pagination
   useEffect(() => {
-    console.log('VideosQuery data:', videosQuery.data);
-    console.log('VideosQuery status:', videosQuery.status);
-    console.log('VideosQuery error:', videosQuery.error);
-    
     if (videosQuery.data) {
-      // Use type assertion to handle potential nested structures
-      const responseData = videosQuery.data as any;
-      const videos = responseData.videos || (responseData.data?.videos || []);
-      console.log('🎯 Videos detected:', videos.length || 0);
-      console.log('📄 First video:', videos[0] || 'No videos');
-      
       // When filters change, we're on page 1 and replace videos
       if (page === 1 && cursor === undefined) {
-        setAllVideos(videos);
+        setAllVideos(videosQuery.data.videos);
       } else {
         // For pagination, append new videos to existing ones
-        setAllVideos(prev => [...prev, ...videos]);
+        setAllVideos(prev => [...prev, ...videosQuery.data.videos]);
       }
-      setHasMore(responseData.hasMore || false);
-      setTotalCount(responseData.totalCount || 0);
-      setCursor(responseData.nextCursor);
+      setHasMore(videosQuery.data.hasMore);
+      setTotalCount(videosQuery.data.totalCount);
+      setCursor(videosQuery.data.nextCursor);
       setIsLoadingMore(false);
     }
   }, [videosQuery.data, page, cursor]);
@@ -225,10 +215,6 @@ export default function Library() {
 
   const collectionsQuery = useQuery<Collection[]>({
     queryKey: ["/api/collections"],
-    select: (data) => {
-      // Ensure data is an array to prevent "map is not a function" errors
-      return Array.isArray(data) ? data : [];
-    }
   });
 
   // Mutations
@@ -253,7 +239,7 @@ export default function Library() {
       setSelectedVideos([]);
       // Invalidate both the videos query and the anonymous video count query
       queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/videos/count"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/anonymous/videos/count"] });
     },
     onError: () => {
       toast({
@@ -494,60 +480,14 @@ export default function Library() {
         setShowedPrompt(true);
       }
       
-      // For anonymous users, fetch videos from server (not local storage)
-      // since local storage might not have all videos or be up to date
-      // We'll make a direct API call to get the videos
-      const loadAnonymousVideos = async () => {
-        try {
-          const sessionId = getOrCreateAnonymousSessionId();
-          const headers = { 'x-anonymous-session': sessionId };
-          
-          // Add cache-busting to prevent 304 responses
-          const cacheBuster = `?_t=${Date.now()}`;
-          
-          console.log('[Library] Fetching anonymous videos with session:', sessionId);
-          const response = await fetch(`/api/videos${cacheBuster}`, {
-            method: 'GET',
-            headers,
-            credentials: 'include'
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Error fetching videos: ${response.status}`);
-          }
-          
-          const data = await response.json();
-          console.log('[Library] Anonymous videos from server:', data);
-          
-          if (data && Array.isArray(data.data)) {
-            setAllVideos(data.data);
-            setTotalCount(data.data.length);
-          } else if (data && Array.isArray(data)) {
-            setAllVideos(data);
-            setTotalCount(data.length);
-          } else {
-            // Fallback to local storage if API fails
-            const localData = getLocalData();
-            console.warn('[Library] Using local storage fallback for videos');
-            setAllVideos(localData.videos || []);
-            setTotalCount(localData.videos?.length || 0);
-          }
-          
-          setHasMore(false);
-          setIsLoadingMore(false);
-        } catch (error) {
-          console.error('[Library] Error fetching anonymous videos:', error);
-          
-          // Fallback to local storage
-          const localData = getLocalData();
-          setAllVideos(localData.videos || []);
-          setTotalCount(localData.videos?.length || 0);
-          setHasMore(false);
-          setIsLoadingMore(false);
-        }
-      };
-      
-      loadAnonymousVideos();
+      // Load videos from local storage
+      const localData = getLocalData();
+      if (localData.videos.length > 0) {
+        setAllVideos(localData.videos);
+        setTotalCount(localData.videos.length);
+        setHasMore(false);
+        setIsLoadingMore(false);
+      }
     } else if (user) {
       // Load videos for logged in users
       // Send user ID as a number to API

@@ -40,9 +40,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           // Get count from API
           const headers = { 'x-anonymous-session': sessionId };
           console.log('[VideoInput] Fetching video count with session:', sessionId);
-          // Add cache-busting query parameter to prevent 304 responses
-          const cacheBuster = `?_t=${Date.now()}`;
-          const response = await fetch(`/api/videos/count${cacheBuster}`, {
+          const response = await fetch('/api/anonymous/videos/count', {
             method: 'GET',
             headers,
             credentials: 'include'
@@ -69,26 +67,20 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
-      console.log('[VideoInput] Starting API request to analyze video:', videoUrl);
       const response = await apiRequest("POST", "/api/videos/analyze", { url: videoUrl });
-      const data = await response.json();
-      console.log('[VideoInput] API response data:', data);
-      return data;
+      return response.json();
     },
     onSuccess: async (data) => {
-      console.log('[VideoInput] onSuccess called with data:', data);
       setPendingVideo(data);
       
       if (!user) {
         // Check if we've reached the limit
         const limitReached = await hasReachedAnonymousLimit();
-        console.log('[VideoInput] Anonymous user limit reached?', limitReached);
         if (limitReached) {
           promptAuth('analyze_again');
         } else {
           // This will be processed by the server on the backend
           // We only need to update the local UI state
-          console.log('[VideoInput] About to call handleVideoProcessed with data:', data);
           handleVideoProcessed(data);
           
           // Refresh count to get latest from server
@@ -97,9 +89,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
             const sessionId = getOrCreateAnonymousSessionId();
             const headers = { 'x-anonymous-session': sessionId };
             console.log('[VideoInput] Refreshing video count with session:', sessionId);
-            // Add cache-busting query parameter to prevent 304 responses
-            const cacheBuster = `?_t=${Date.now()}`;
-            const response = await fetch(`/api/videos/count${cacheBuster}`, {
+            const response = await fetch('/api/anonymous/videos/count', {
               method: 'GET',
               headers,
               credentials: 'include'
@@ -122,7 +112,6 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           }
         }
       } else {
-        console.log('[VideoInput] Authenticated user, calling handleVideoProcessed with data:', data);
         handleVideoProcessed(data);
       }
     },
@@ -153,14 +142,8 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     },
   });
 
-  const handleVideoProcessed = (videoData: any) => {
-    // Check if the video data is wrapped in a data property (API format)
-    const video = videoData.data ? videoData.data : videoData;
-    console.log('[VideoInput] Processing video with extracted data:', video);
-    
-    // Now call the parent component's handler with the properly structured data
+  const handleVideoProcessed = (video: YoutubeVideo) => {
     onVideoProcessed(video);
-    
     toast({
       title: "Video analyzed",
       description: "Successfully processed video information and transcript",
@@ -169,7 +152,6 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const handleContinueAsGuest = () => {
     if (pendingVideo) {
-      // Pass the pending video through the same processor that handles the data structure
       handleVideoProcessed(pendingVideo);
     }
   };

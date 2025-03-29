@@ -1,5 +1,4 @@
 import { useSupabase } from "@/hooks/use-supabase";
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { FolderOpen, Home, User, LogOut, ChevronDown, Search } from "lucide-react";
@@ -20,109 +19,33 @@ import { useQuery } from "@tanstack/react-query";
 const MAX_ANONYMOUS_VIDEOS = 3;
 
 export function Header() {
-  const { user: supabaseUser, signOut: supabaseSignOut } = useSupabase();
-  const { user: authUser, isAuthenticated, logout: authLogout } = useAuth();
+  const { user, signOut } = useSupabase();
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
   const [maxAllowedVideos, setMaxAllowedVideos] = useState(MAX_ANONYMOUS_VIDEOS);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Get the active user from either auth system
-  // Get the active user from either auth system, with type checking
-  const user = authUser || supabaseUser;
-  
-  // Helper function to safely check for metadata
-  const getUserName = () => {
-    if (supabaseUser?.user_metadata?.full_name) {
-      return supabaseUser.user_metadata.full_name;
-    } else if (authUser?.username) {
-      return authUser.username;
-    } else if (supabaseUser?.email) {
-      return supabaseUser.email;
-    } else if (authUser?.email) {
-      return authUser.email;
-    }
-    return 'User';
-  };
-  
-  // Helper function to safely get avatar
-  const getUserAvatar = () => {
-    return supabaseUser?.user_metadata?.avatar_url || null;
-  };
-  
-  // Helper function to get email
-  const getUserEmail = () => {
-    return authUser?.email || supabaseUser?.email || '';
-  };
-  
-  // Helper function to get first letter for avatar
-  const getAvatarLetter = () => {
-    const email = getUserEmail();
-    return email ? email[0].toUpperCase() : 'U';
-  };
-  
-  // Helper function to get auth provider
-  const getAuthProvider = () => {
-    if (supabaseUser?.app_metadata?.provider) {
-      return supabaseUser.app_metadata.provider;
-    }
-    return authUser ? 'Custom' : 'Email';
-  };
 
   // Fetch anonymous session video count from server when not authenticated
   const { data: videoCountData, isLoading: isVideoCountLoading } = useQuery({
-    queryKey: ['/api/videos/count'],
+    queryKey: ['/api/anonymous/videos/count'],
     queryFn: async () => {
       try {
         // Import to avoid circular dependencies
         const { getAnonymousVideoCountInfo } = await import('@/lib/anonymous-session');
         
-        // Get count info using our utility function with a direct API call
-        const sessionId = getOrCreateAnonymousSessionId();
-        const headers = { 'x-anonymous-session': sessionId };
-        
-        // Add cache-busting to prevent 304 responses
-        const cacheBuster = `?_t=${Date.now()}`;
-        const response = await fetch(`/api/videos/count${cacheBuster}`, {
-          method: 'GET',
-          headers,
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Error fetching video count: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('[Header] Video count response:', data);
-        
-        // Parse the response - server returns data wrapped in a 'data' property
-        if (data && data.data && typeof data.data.count === 'number') {
-          console.log('[Header] Extracting count from data.data:', data.data);
-          return {
-            count: data.data.count,
-            maxAllowed: typeof data.data.max_allowed === 'number' ? data.data.max_allowed : MAX_ANONYMOUS_VIDEOS
-          };
-        } else if (data && typeof data.count === 'number') {
-          console.log('[Header] Extracting count directly from data:', data);
-          return {
-            count: data.count,
-            maxAllowed: typeof data.max_allowed === 'number' ? data.max_allowed : MAX_ANONYMOUS_VIDEOS
-          };
-        }
-        
-        return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
+        // Get count info using our utility function
+        const countInfo = await getAnonymousVideoCountInfo();
+        return countInfo;
       } catch (error) {
         console.error('Error fetching anonymous video count:', error);
         return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
       }
     },
     enabled: !user, // Only run this query for anonymous users
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
     refetchOnWindowFocus: true,
-    staleTime: 5000, // Consider data stale after 5 seconds
-    retry: 2
+    retry: 1
   });
 
   // Track anonymous video count using session-based approach
@@ -130,40 +53,13 @@ export function Header() {
     setIsLoading(isVideoCountLoading);
     
     if (!user && videoCountData) {
-      console.log('[Header] Got video count data:', videoCountData);
-      
-      // There seems to be inconsistency in how the data is structured 
-      // We need to handle both formats
       if (typeof videoCountData.count === 'number') {
-        console.log('[Header] Using count directly:', videoCountData.count);
+        console.log('[Header] Anonymous video count from server:', videoCountData.count);
         setAnonymousVideoCount(videoCountData.count);
         
         // Update max allowed videos if available from server
         if (typeof videoCountData.maxAllowed === 'number') {
           setMaxAllowedVideos(videoCountData.maxAllowed);
-        }
-      } 
-      // Data is available but count is not directly a number property
-      else {
-        console.log('[Header] Trying to find count in nested data structure');
-        
-        try {
-          // For safety, handle and log each attempt to extract the number
-          if (videoCountData && videoCountData.data && typeof videoCountData.data.count === 'number') {
-            const count = videoCountData.data.count;
-            console.log('[Header] Found count in videoCountData.data.count:', count);
-            setAnonymousVideoCount(count);
-            
-            // Max allowed might also be nested
-            if (typeof videoCountData.data.max_allowed === 'number') {
-              setMaxAllowedVideos(videoCountData.data.max_allowed);
-            }
-          }
-          else {
-            console.warn('[Header] Could not find valid count in response');
-          }
-        } catch (error) {
-          console.error('[Header] Error processing video count data:', error);
         }
       }
     } else if (user) {
@@ -178,13 +74,7 @@ export function Header() {
 
   const handleSignOut = async () => {
     try {
-      // Try to sign out using both auth systems
-      if (authUser) {
-        await authLogout();
-      } else if (supabaseUser) {
-        await supabaseSignOut();
-      }
-      
+      await signOut();
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
@@ -263,21 +153,21 @@ export function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2 px-2">
                     <div className="flex items-center">
-                      {getUserAvatar() ? (
+                      {user.user_metadata?.avatar_url ? (
                         <img 
-                          src={getUserAvatar()!} 
+                          src={user.user_metadata.avatar_url} 
                           alt="Profile" 
                           className="w-8 h-8 rounded-full object-cover border border-primary/30"
                         />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
                           <span className="text-white font-medium">
-                            {getAvatarLetter()}
+                            {user.email ? user.email[0].toUpperCase() : "U"}
                           </span>
                         </div>
                       )}
                       <span className="ml-2 text-sm text-gray-300 hidden sm:inline">
-                        {getUserName()}
+                        {user.user_metadata?.full_name || user.email}
                       </span>
                       <ChevronDown className="h-4 w-4 ml-1 text-gray-400" />
                     </div>
@@ -286,25 +176,25 @@ export function Header() {
                 <DropdownMenuContent align="end" className="w-64">
                   <div className="px-3 py-2">
                     <div className="flex items-center space-x-3">
-                      {getUserAvatar() ? (
+                      {user.user_metadata?.avatar_url ? (
                         <img 
-                          src={getUserAvatar()!} 
+                          src={user.user_metadata.avatar_url} 
                           alt="Profile" 
                           className="w-10 h-10 rounded-full"
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
                           <span className="text-white font-medium">
-                            {getAvatarLetter()}
+                            {user.email ? user.email[0].toUpperCase() : "U"}
                           </span>
                         </div>
                       )}
                       <div className="space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {getUserName()}
+                          {user.user_metadata?.full_name || 'User'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 leading-none">
-                          {getUserEmail()}
+                          {user.email}
                         </p>
                       </div>
                     </div>
@@ -313,7 +203,7 @@ export function Header() {
                   <DropdownMenuSeparator />
                   
                   <div className="px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Account Provider: {getAuthProvider()}
+                    Account Provider: {user.app_metadata?.provider || 'Email'}
                   </div>
                   
                   <DropdownMenuSeparator />

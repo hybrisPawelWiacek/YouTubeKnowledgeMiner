@@ -10,13 +10,10 @@ import Library from "@/pages/library";
 import Explorer from "@/pages/explorer";
 import VideoDetailPage from "@/pages/video/[id]";
 import { SupabaseProvider, useSupabase } from "@/hooks/use-supabase";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ErrorProvider } from "@/contexts/error-context";
 import ErrorBoundary from "@/components/ui/error-boundary";
 
 // Auth callback handler that processes OAuth redirects
-// Note: This is only for OAuth providers like Google, which we'll
-// integrate in a future update. For now, we keep this for backward compatibility.
 function AuthCallback() {
   const [, setLocation] = useLocation();
   const { supabase } = useSupabase();
@@ -60,12 +57,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SupabaseProvider>
-        <AuthProvider>
-          <ErrorProvider>
-            <Router />
-            <Toaster />
-          </ErrorProvider>
-        </AuthProvider>
+        <ErrorProvider>
+          <Router />
+          <Toaster />
+        </ErrorProvider>
       </SupabaseProvider>
     </QueryClientProvider>
   );

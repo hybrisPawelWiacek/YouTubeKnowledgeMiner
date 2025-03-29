@@ -20,10 +20,8 @@ export function VideoCard({ video, isSelected, onToggleSelect, categories }: Vid
   // Format date for display
   const formattedDate = new Date(video.created_at).toLocaleDateString();
   
-  // Get category name if category_id exists and categories is an array
-  const categoryName = Array.isArray(categories) 
-    ? categories.find(c => c.id === video.category_id)?.name 
-    : undefined;
+  // Get category name if category_id exists
+  const categoryName = categories?.find(c => c.id === video.category_id)?.name;
   
   return (
     <div 
