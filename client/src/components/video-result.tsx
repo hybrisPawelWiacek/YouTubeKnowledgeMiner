@@ -84,9 +84,16 @@ export function VideoResult({ video }: VideoResultProps) {
         // For anonymous users, add session header using the helper function
         if (!user) {
           try {
-            // Use the helper function that correctly handles Promise resolution and typing
-            headers = await getAnonymousSessionHeaders();
-            console.log('📡 Anonymous user - using session headers for video save:', headers);
+            // First ensure we're checking localStorage to see if the session already exists
+            const existingSessionId = localStorage.getItem('ytk_anon_session_id');
+            if (existingSessionId) {
+              console.log('📡 Using existing localStorage session ID:', existingSessionId);
+              headers = { 'x-anonymous-session': existingSessionId };
+            } else {
+              // Use the helper function that correctly handles Promise resolution and typing
+              headers = await getAnonymousSessionHeaders();
+              console.log('📡 Anonymous user - using session headers for video save:', headers);
+            }
           } catch (error) {
             console.error('📡 Error getting anonymous session headers:', error);
           }
@@ -97,6 +104,13 @@ export function VideoResult({ video }: VideoResultProps) {
         const response = await apiRequest("POST", "/api/videos", videoData, headers);
         const result = await response.json();
         console.log('✅ SAVE VIDEO RESPONSE:', result);
+        
+        // After a successful save, ensure we store the session ID used
+        if (!user && result && result.video && result.video.anonymous_session_id) {
+          console.log('📡 Saving anonymous session ID to localStorage:', result.video.anonymous_session_id);
+          localStorage.setItem('ytk_anon_session_id', result.video.anonymous_session_id);
+        }
+        
         return result;
       } catch (err) {
         console.error('❌ ERROR SAVING VIDEO:', err);

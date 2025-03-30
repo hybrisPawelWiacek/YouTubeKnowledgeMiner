@@ -140,10 +140,32 @@ export default function Library() {
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
-        // Use the helper function that properly handles the async nature of session IDs
-        headers = await getAnonymousSessionHeaders();
-        // Use a type assertion to access the header value
-        console.log('Library - Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
+        try {
+          // Log all cookies first to see what's happening
+          console.log('Library - All cookies before getAnonymousSessionHeaders():', document.cookie);
+          
+          // Use the helper function that properly handles the async nature of session IDs
+          headers = await getAnonymousSessionHeaders();
+          
+          // Use a type assertion to access the header value
+          const sessionId = (headers as Record<string, string>)['x-anonymous-session'];
+          console.log('Library - Adding anonymous session header:', sessionId);
+          
+          // Verify that the same session ID is being consistently used
+          if (sessionId) {
+            // Make a direct call to check the video count for this session
+            const response = await fetch('/api/anonymous/videos/count', {
+              headers: { 'x-anonymous-session': sessionId }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Library - Check video count for this session:', data);
+            }
+          }
+        } catch (error) {
+          console.error('Library - Error getting anonymous session headers:', error);
+        }
       }
       
       // Use our API request function which handles all the auth header logic for us
@@ -560,12 +582,12 @@ export default function Library() {
             if (localData && localData.collections) {
               setSelectedCollection(localData.collections);
             } else {
-              // Initialize with empty array to avoid undefined errors
-              setSelectedCollection([]);
+              // Initialize with undefined to match type signature
+              setSelectedCollection(undefined);
             }
           } catch (error) {
             console.error('[Library] Error loading collections from local storage:', error);
-            setSelectedCollection([]);
+            setSelectedCollection(undefined);
           }
           return;
         }
