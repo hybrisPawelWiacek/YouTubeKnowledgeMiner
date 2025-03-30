@@ -450,14 +450,14 @@ export async function performSemanticSearch(
  * Save a search query to the user's search history
  * @param userId User ID
  * @param query Search query text
- * @param filterParams Optional filter parameters used in the search
  * @param resultsCount Number of results returned
+ * @param filterParams Optional filter parameters used in the search
  */
 export async function saveSearchHistory(
   userId: number | null,
   query: string,
-  filterParams: Record<string, any> = {},
-  resultsCount: number = 0
+  resultsCount: number = 0,
+  filterParams: Record<string, any> = {}
 ): Promise<void> {
   try {
     // Don't save search history for anonymous users
@@ -465,7 +465,7 @@ export async function saveSearchHistory(
       await db.insert(search_history).values({
         user_id: userId,
         query,
-        filter_params: filterParams,
+        filter_params: JSON.stringify(filterParams),
         results_count: resultsCount,
       });
     }
