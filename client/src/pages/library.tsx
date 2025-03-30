@@ -112,6 +112,10 @@ export default function Library() {
     nextCursor?: number;
   }>({
     queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery, page, cursor],
+    // Force refetch when navigating back to this page or when component remounts
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0, // Consider data stale immediately to force refetch
     queryFn: async (): Promise<{
       videos: Video[];
       totalCount: number;
@@ -560,29 +564,32 @@ export default function Library() {
         checkAnonymousLimit();
       }
       
-      // Load videos from local storage
+      // When the component mounts, we'll check local storage as a fallback
+      // but prioritize API data via React Query
       try {
         const localData = getLocalData() || {};
         
         // Initialize with empty array to avoid undefined errors
         const videosData = Array.isArray(localData.videos) ? localData.videos : [];
         
-        // Only update state if we haven't loaded videos from the query
-        if (videosData.length > 0 && (allVideos.length === 0 || page === 1)) {
-          console.log('[Library] Loaded videos from local storage:', videosData.length);
+        // Log for debugging purposes
+        console.log('[Library] Found videos in local storage:', videosData.length);
+        
+        // Only use local storage data as a fallback while API data is loading
+        // This provides a smoother initial render experience
+        if (videosData.length > 0 && allVideos.length === 0 && videosQuery.isLoading) {
+          console.log('[Library] Using local storage videos as temporary data while API loads');
           setAllVideos(videosData);
           setTotalCount(videosData.length);
           setHasMore(false);
-          setIsLoadingMore(false);
-        } else if (allVideos.length === 0) {
-          console.log('[Library] No videos found in local storage or format is invalid');
-          // Ensure we have an empty array, not undefined
+        } else if (allVideos.length === 0 && !videosQuery.isLoading && !videosQuery.data) {
+          // If the API returned no data and we're not loading, ensure we have an empty array
+          console.log('[Library] No videos found in local storage or from API');
           setAllVideos([]);
         }
       } catch (error) {
-        console.error('[Library] Error loading videos from local storage:', error);
-        // Initialize with empty array to avoid undefined errors
-        setAllVideos([]);
+        console.error('[Library] Error accessing local storage:', error);
+        // Don't update state here, let the API data handle it
       }
     } else if (user) {
       // Load videos for logged in users
