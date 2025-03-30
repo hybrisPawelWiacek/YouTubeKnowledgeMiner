@@ -101,8 +101,7 @@ export function VideoResult({ video }: VideoResultProps) {
         
         // Making the API request
         console.log('📡 Making POST request to /api/videos');
-        const response = await apiRequest("POST", "/api/videos", videoData, headers);
-        const result = await response.json();
+        const result = await apiRequest("POST", "/api/videos", videoData, headers);
         console.log('✅ SAVE VIDEO RESPONSE:', result);
         
         // After a successful save, ensure we store the session ID used

@@ -70,8 +70,8 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
 
   const { mutate: analyzeVideo, isPending } = useMutation({
     mutationFn: async (videoUrl: string) => {
-      const response = await apiRequest("POST", "/api/videos/analyze", { url: videoUrl });
-      return response.json();
+      // apiRequest already returns parsed JSON data, no need to call .json()
+      return await apiRequest("POST", "/api/videos/analyze", { url: videoUrl });
     },
     onSuccess: async (data) => {
       setPendingVideo(data);
