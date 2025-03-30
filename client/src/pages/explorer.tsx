@@ -116,13 +116,13 @@ export default function ExplorerPage() {
       }
       
       // Perform semantic search using the dedicated RAG endpoint
-      const data = await apiRequest<SearchResponse>('POST', '/api/search', {
+      const data = await apiRequest('POST', '/api/search', {
         query: searchQuery,
         filter: {
           content_types: activeFilters.contentTypes // Using snake_case for backend
         },
         limit: 20
-      });
+      }) as SearchResponse;
       
       console.log("Search response:", data);
       

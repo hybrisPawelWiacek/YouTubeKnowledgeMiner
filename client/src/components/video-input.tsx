@@ -126,11 +126,27 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
       // Clear any previous errors
       clearError();
       
-      // Try to identify if this is an anonymous limit error
-      if (error?.code === 'ANONYMOUS_LIMIT_REACHED') {
-        handleAnonymousError(error);
+      // Improved error detection with better logging
+      console.log("[VideoInput] Error details:", {
+        hasCode: !!error?.code,
+        code: error?.code,
+        hasResponseData: !!error?.response?.data,
+        responseData: error?.response?.data,
+        message: error?.message
+      });
+      
+      // Try to identify if this is an anonymous limit error - check multiple possible locations
+      if (error?.code === 'ANONYMOUS_LIMIT_REACHED' || 
+          error?.response?.data?.code === 'ANONYMOUS_LIMIT_REACHED') {
+        console.log("[VideoInput] Detected anonymous limit error");
+        handleAnonymousError({
+          message: "You've reached the limit of 3 videos as a guest user. Please sign in to analyze more videos.",
+          code: "ANONYMOUS_LIMIT_REACHED",
+          details: { limit: 3 }
+        });
       } else if (error?.response?.data) {
         // Handle standard API errors with response data
+        console.log("[VideoInput] Handling API error with response data");
         handleAnonymousError({
           message: error.response.data.message || "Failed to process video",
           code: error.response.data.code,
@@ -138,6 +154,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
         });
       } else {
         // Handle other errors
+        console.log("[VideoInput] Handling generic error");
         toast({
           title: "Processing failed",
           description: error.message || "Could not process this video. It may not have available transcripts.",
