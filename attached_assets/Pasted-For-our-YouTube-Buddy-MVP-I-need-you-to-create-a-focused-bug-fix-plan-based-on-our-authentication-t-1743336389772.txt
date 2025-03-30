@@ -1,0 +1,34 @@
+For our YouTube Buddy MVP, I need you to create a focused bug fix plan based on our authentication testing results. We're in sprint_1 and working to implement our direct database authentication system rather than using Supabase.
+
+Please review:
+- Authentication Testing Report.md for the detailed test results and identified issues
+- Auth Implementation Plan.md to understand our overall authentication architecture
+- The current state of our authentication implementation
+
+Based on these, please create a focused bug fix plan that:
+
+1. Prioritizes issues from the testing report:
+   - Address critical database schema incompatibility issues (e.g., "password" vs "password_hash"/"password_salt")
+   - Fix endpoint inconsistencies (login expecting "username" instead of "email")
+   - Resolve missing endpoint problems (particularly the migration endpoint)
+   - Repair authentication flow breakage to enable end-to-end testing
+
+2. Verifies implementation completeness:
+   - Assess whether all components from the Auth Implementation Plan are fully implemented
+   - Identify any missing endpoints or functionality from our planned API routes
+   - Check for any incomplete security measures (CSRF protection, token management)
+
+3. Provides a clear implementation approach:
+   - For each issue, outline the specific files that need modification
+   - Suggest concrete fixes with code examples where appropriate
+   - Consider potential side effects of each fix
+   - Emphasize minimal necessary changes to align implementation with schema
+
+4. Defines a testing strategy:
+   - Explain how to verify each fix is working
+   - Suggest test cases to confirm issues are resolved
+   - Outline how to validate the complete authentication flow from registration through logout
+
+Please structure your plan with clear sections for each category of issues, and provide an overall implementation sequence that logically addresses dependencies between components. Focus on making the authentication system work with our existing database schema and anonymous user functionality.
+
+Do not implement any fixes yet - we want a comprehensive plan first that we can review before proceeding with implementation.
