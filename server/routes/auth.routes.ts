@@ -25,6 +25,7 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   verifyEmailSchema,
+  migrateAnonymousDataSchema,
 } from '../../shared/schema';
 import { requireAuth } from '../middleware/auth.middleware';
 import winston from 'winston';
@@ -410,6 +411,53 @@ router.post('/migrate', requireAuth, async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    logger.error('Migration error', { error });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Migration failed. Please try again later.',
+      error: {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        code: 'MIGRATION_ERROR',
+      },
+    });
+  }
+});
+
+/**
+ * POST /api/auth/migrate-anonymous-data
+ * Alias for /api/auth/migrate to maintain backward compatibility with client apps
+ */
+router.post('/migrate-anonymous-data', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user.id;
+    
+    // Validate request data
+    const validatedData = migrateAnonymousDataSchema.parse(req.body);
+    const sessionId = validatedData.anonymousSessionId;
+    
+    // Migrate the data
+    const result = await migrateAnonymousData(sessionId, userId);
+    
+    logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
+    
+    res.json({
+      success: true,
+      message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
+      data: {
+        migratedVideos: result.migratedVideos,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      logger.warn('Migration validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
     logger.error('Migration error', { error });
     
     res.status(500).json({

@@ -92,6 +92,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
           req.user = { 
             id: 7, // Dedicated anonymous user ID
             username: 'anonymous',
+            user_type: 'anonymous', // Explicitly set user type for anonymous users
             anonymous_session_id: sessionId
           };
           

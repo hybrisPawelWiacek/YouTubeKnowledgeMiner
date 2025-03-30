@@ -15,9 +15,12 @@ export const anonymous_sessions = pgTable("anonymous_sessions", {
   id: serial("id").primaryKey(),
   session_id: text("session_id").notNull().unique(),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
   last_active_at: timestamp("last_active_at").defaultNow().notNull(),
   video_count: integer("video_count").default(0).notNull(),
-  // Optional metadata
+  // Metadata for tracking and additional info
+  metadata: jsonb("metadata"),
+  // Optional tracking data
   user_agent: text("user_agent"),
   ip_address: text("ip_address"),
 });
@@ -58,6 +61,7 @@ export const users = pgTable("users", {
   display_name: text("display_name"),
   last_login: timestamp("last_login"),
   updated_at: timestamp("updated_at").defaultNow(),
+  user_type: userTypeEnum("user_type").default("registered").notNull(),
 });
 
 export const categories = pgTable("categories", {
@@ -91,6 +95,7 @@ export const videos = pgTable("videos", {
   is_favorite: boolean("is_favorite").default(false),
   timestamps: text("timestamps").array(), // For adding custom timestamps/highlights
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // New collections table for organizing videos
@@ -183,6 +188,7 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 export const insertVideoSchema = createInsertSchema(videos).omit({
   id: true,
   created_at: true,
+  updated_at: true,
 });
 
 export const insertCollectionSchema = createInsertSchema(collections).omit({
@@ -321,6 +327,7 @@ export const insertSearchHistorySchema = createInsertSchema(search_history).omit
 export const insertAnonymousSessionSchema = createInsertSchema(anonymous_sessions).omit({
   id: true,
   created_at: true,
+  updated_at: true,
   last_active_at: true,
   video_count: true,
 });
@@ -373,6 +380,14 @@ export const changePasswordSchema = z.object({
 
 export const verifyEmailSchema = z.object({
   token: z.string(),
+});
+
+export const migrateAnonymousDataSchema = z.object({
+  anonymousSessionId: z.string().startsWith('anon_', { message: 'Session ID must start with anon_' }),
+  // Optional fields that might be used in the future
+  options: z.object({
+    deleteAfterMigration: z.boolean().optional(),
+  }).optional(),
 });
 
 // Types

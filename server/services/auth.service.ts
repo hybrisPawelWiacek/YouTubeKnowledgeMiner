@@ -41,6 +41,7 @@ export async function registerUser(userData: RegisterUserRequest) {
       status: 'pending_verification' as const,
       display_name: userData.display_name || userData.username,
       email_verified: false,
+      user_type: 'registered' as const, // Explicitly set as a registered user
     };
     
     // Log the user data for debugging
@@ -447,10 +448,11 @@ export async function changePassword(
   const salt = generateSalt();
   const passwordHash = hashPassword(newPassword, salt);
   
-  // Update user's password
+  // Update user's password (both legacy and new formats)
   await db
     .update(users)
     .set({
+      password: newPassword, // Update the legacy password field
       password_hash: passwordHash,
       password_salt: salt,
       updated_at: new Date()

@@ -31,6 +31,8 @@ export async function createAnonymousUser() {
       email: 'anonymous@example.com',
       password: password, // Random password that won't be used
       created_at: new Date(),
+      user_type: 'anonymous',  // Explicitly set as anonymous user type
+      status: 'active',       // Set as active
     })
     .returning();
 
