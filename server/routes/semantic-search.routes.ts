@@ -3,7 +3,7 @@ import { ZodError } from 'zod';
 import { semanticSearchSchema } from '@shared/schema';
 import { performSemanticSearch, saveSearchHistory } from '../services/embeddings';
 import { initializeVectorFunctions } from '../services/supabase';
-import { getUserInfo, requireSession } from '../middleware/auth.middleware';
+import { getUserInfo, requireAnyUser } from '../middleware/auth.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { log } from '../vite';
 
@@ -17,7 +17,7 @@ router.use(getUserInfo);
  * Implements RAG-based search across video content with proper context retrieval
  * Supports both authenticated users and anonymous users with sessions
  */
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireAnyUser, async (req: Request, res: Response) => {
   try {
     // Validate request data using schema definition
     const { query, filter, limit } = semanticSearchSchema.parse(req.body);

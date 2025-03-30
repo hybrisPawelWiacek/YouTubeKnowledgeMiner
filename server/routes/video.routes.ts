@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { dbStorage } from '../database-storage';
 import { validateRequest, validateNumericParam } from '../middleware/validation.middleware';
-import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { requireAuth, requireAnyUser } from '../middleware/auth.middleware';
 import { 
   youtubeUrlSchema,
   videoMetadataSchema,
@@ -27,8 +27,17 @@ import {
 // Create router
 const router = Router();
 
-// Apply user info middleware to all routes
-router.use(getUserInfo);
+/**
+ * Helper function to get user information from request object
+ * This function adapts the new auth middleware format to the existing code
+ */
+function getUserInfoFromRequest(req: Request) {
+  return {
+    user_id: req.user?.id,
+    is_anonymous: req.isAnonymous,
+    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+  };
+}
 
 /**
  * Get the count of videos for an anonymous session
@@ -83,10 +92,10 @@ router.get('/anonymous/count', async (req: Request, res: Response) => {
  * Process a video from the front end - root /api/videos endpoint
  * This is to handle the client's POST request to /api/videos
  */
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireAnyUser, async (req: Request, res: Response) => {
   try {
-    // Get user information from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
     console.log("[video routes] Processing video (POST /) for user:", 
       userInfo.user_id, 
       "anonymous:", userInfo.is_anonymous, 
@@ -219,8 +228,8 @@ router.get('/', async (req: Request, res: Response) => {
     console.log(`Received ${req.method} ${req.path} request at ${new Date().toISOString()}`);
     console.log("Request query params:", req.query);
     
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
     console.log("================================================");
     console.log("🔑 User info extracted from request:", {
       user_id: userInfo.user_id,
@@ -408,13 +417,13 @@ router.post('/analyze', async (req: Request, res: Response) => {
 /**
  * Process a YouTube video URL and save it
  */
-router.post('/process', requireSession, async (req: Request, res: Response) => {
+router.post('/process', requireAnyUser, async (req: Request, res: Response) => {
   try {
     // Validate YouTube URL
     const { url } = youtubeUrlSchema.parse(req.body);
     
-    // Get user information from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
     console.log("[video routes] Processing video for user:", 
       userInfo.user_id, 
       "anonymous:", userInfo.is_anonymous, 
@@ -443,10 +452,8 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
     const videoData = await processYoutubeVideo(url);
     
     // Create the video in the database
-    // Extract just the YouTube ID from the URL (if it's a URL)
-    const extractedId = extractYoutubeId(videoData.youtubeId);
     const video = await dbStorage.insertVideo({
-      youtube_id: extractedId || videoData.youtubeId || '',
+      youtube_id: videoData.youtubeId,
       title: videoData.title,
       channel: videoData.channel,
       duration: videoData.duration,
@@ -459,15 +466,8 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
       description: videoData.description,
       tags: videoData.tags,
       user_id: userInfo.is_anonymous ? 1 : (userInfo.user_id as number), // Use user_id=1 for anonymous users
-      anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null,
-      // These are optional fields
-      notes: '',
-      category_id: null,
-      rating: null,
-      is_favorite: false
+      anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null
     });
-    
-    console.log("🔍 Saved with user_id:", video.user_id);
     
     // For anonymous users, increment their video count
     if (userInfo.is_anonymous && userInfo.anonymous_session_id) {
@@ -505,7 +505,7 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
       };
       return sendError(res, validationError.message, 400, validationError.code, validationError.details);
     }
-    console.error("Error processing video:", error);
+    console.error("Error processing video from URL:", error);
     return handleApiError(res, error);
   }
 });
@@ -513,56 +513,34 @@ router.post('/process', requireSession, async (req: Request, res: Response) => {
 /**
  * Bulk update videos
  */
-router.patch('/', requireSession, async (req: Request, res: Response) => {
+router.patch('/', requireAnyUser, async (req: Request, res: Response) => {
   try {
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
+    console.log("[video routes] Bulk updating videos for user:", userInfo.user_id);
     
-    // Validate required fields
+    // Extract data from request
     const { ids, data } = req.body;
     
+    // Validate inputs
     if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return sendError(res, "Valid video IDs array is required", 400, "VALIDATION_ERROR");
     }
     
     if (!data || typeof data !== 'object') {
-      return sendError(res, "You must provide update data object", 400, "VALIDATION_ERROR");
+      return sendError(res, "Valid update data is required", 400, "VALIDATION_ERROR");
     }
     
-    // For security, we need to make sure users can only update their own videos
-    // First, get all videos by ID
-    const promises = ids.map(id => dbStorage.getVideo(id));
-    const videos = await Promise.all(promises);
+    // Perform bulk update
+    const updatedCount = await dbStorage.bulkUpdateVideos(ids, data);
     
-    // Filter videos that don't exist or don't belong to the user
-    const validIds = videos
-      .filter(video => video !== undefined)  // Filter out undefined (videos not found)
-      .filter(video => {
-        if (!video) return false;
-        
-        // For authenticated users, check user_id
-        if (!userInfo.is_anonymous) {
-          return video.user_id === userInfo.user_id;
-        }
-        
-        // For anonymous users, check anonymous_session_id
-        return video.anonymous_session_id === userInfo.anonymous_session_id;
-      })
-      .map(video => video!.id);  // Extract just the IDs
-    
-    if (validIds.length === 0) {
-      return sendError(res, "No valid videos found to update", 404, "RESOURCE_NOT_FOUND");
-    }
-    
-    // Perform the update with validated IDs
-    const updateCount = await dbStorage.bulkUpdateVideos(validIds, data);
-    
+    // Return success response
     return sendSuccess(res, { 
-      message: `${updateCount} videos updated successfully`, 
-      updated_count: updateCount 
+      message: `Updated ${updatedCount} videos`,
+      updatedCount
     });
   } catch (error) {
-    console.error("Error updating videos:", error);
+    console.error("Error bulk updating videos:", error);
     return handleApiError(res, error);
   }
 });
@@ -570,57 +548,35 @@ router.patch('/', requireSession, async (req: Request, res: Response) => {
 /**
  * Bulk delete videos
  */
-router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
+router.delete('/bulk', requireAnyUser, async (req: Request, res: Response) => {
   try {
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
+    console.log("[video routes] Bulk deleting videos for user:", userInfo.user_id);
     
-    // Validate required fields
+    // Extract video IDs from request
     const { ids } = req.body;
     
+    // Validate input
     if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, "You must provide an array of video IDs", 400, "VALIDATION_ERROR");
+      return sendError(res, "Valid video IDs array is required", 400, "VALIDATION_ERROR");
     }
     
-    // For security, we need to make sure users can only delete their own videos
-    // First, get all videos by ID
-    const promises = ids.map(id => dbStorage.getVideo(id));
-    const videos = await Promise.all(promises);
-    
-    // Filter videos that don't exist or don't belong to the user
-    const validIds = videos
-      .filter(video => video !== undefined)  // Filter out undefined (videos not found)
-      .filter(video => {
-        if (!video) return false;
-        
-        // For authenticated users, check user_id
-        if (!userInfo.is_anonymous) {
-          return video.user_id === userInfo.user_id;
-        }
-        
-        // For anonymous users, check anonymous_session_id
-        return video.anonymous_session_id === userInfo.anonymous_session_id;
-      })
-      .map(video => video!.id);  // Extract just the IDs
-    
-    if (validIds.length === 0) {
-      return sendError(res, "No valid videos found to delete", 404, "RESOURCE_NOT_FOUND");
-    }
-    
-    // Delete embeddings first
-    for (const id of validIds) {
+    // Delete any associated embeddings first
+    for (const id of ids) {
       await deleteVideoEmbeddings(id);
     }
     
-    // Perform the delete with validated IDs
-    const deleteCount = await dbStorage.bulkDeleteVideos(validIds);
+    // Perform bulk delete
+    const deletedCount = await dbStorage.bulkDeleteVideos(ids);
     
+    // Return success response
     return sendSuccess(res, { 
-      message: `${deleteCount} videos deleted successfully`, 
-      deleted_count: deleteCount 
+      message: `Deleted ${deletedCount} videos`,
+      deletedCount
     });
   } catch (error) {
-    console.error("Error deleting videos:", error);
+    console.error("Error bulk deleting videos:", error);
     return handleApiError(res, error);
   }
 });
@@ -630,31 +586,38 @@ router.delete('/bulk', requireSession, async (req: Request, res: Response) => {
  * This route MUST be placed after all other GET routes with specific paths
  * as Express will match '/:id' for ANY path segment if placed earlier
  */
-router.get('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.get('/:id', validateNumericParam('id'), requireAnyUser, async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    // Get the video ID from the request parameters
+    const videoId = parseInt(req.params.id, 10);
     
-    // Get video from database
-    const video = await dbStorage.getVideo(id);
+    // Get user info from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
+    console.log(`[video routes] Fetching video ${videoId} for user:`, userInfo.user_id);
     
+    // Fetch the video from the database
+    const video = await dbStorage.getVideo(videoId);
+    
+    // Check if the video exists
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
     
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to this video
-    // Authenticated users can only access their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
+    // Check if this user has access to this video
+    // 1. For authenticated users, they should only see their own videos
+    // 2. For anonymous users, they should only see videos from their session
+    if (userInfo.is_anonymous) {
+      if (video.anonymous_session_id !== userInfo.anonymous_session_id) {
+        return sendError(res, "Video not found for this anonymous session", 404, "NOT_FOUND");
+      }
+    } else {
+      // Authenticated user
+      if (video.user_id !== userInfo.user_id) {
+        return sendError(res, "You don't have access to this video", 403, "FORBIDDEN");
+      }
     }
     
-    // Anonymous users can only access videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to access this video", 403, "FORBIDDEN");
-    }
-    
+    // Return the video data
     return sendSuccess(res, video);
   } catch (error) {
     console.error("Error fetching video:", error);
@@ -665,38 +628,45 @@ router.get('/:id', validateNumericParam('id'), requireSession, async (req: Reque
 /**
  * Update a video
  */
-router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.patch('/:id', validateNumericParam('id'), requireAnyUser, async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    // Get the video ID from the request parameters
+    const videoId = parseInt(req.params.id, 10);
     
-    // Get video from database to verify ownership
-    const video = await dbStorage.getVideo(id);
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
+    console.log(`[video routes] Updating video ${videoId} for user:`, userInfo.user_id);
     
+    // Fetch the video to check ownership
+    const video = await dbStorage.getVideo(videoId);
+    
+    // Check if the video exists
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
     
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to update this video
-    // Authenticated users can only update their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
-    }
-    
-    // Anonymous users can only update videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to update this video", 403, "FORBIDDEN");
+    // Check if this user has access to update this video
+    // 1. For authenticated users, they should only update their own videos
+    // 2. For anonymous users, they should only update videos from their session
+    if (userInfo.is_anonymous) {
+      if (video.anonymous_session_id !== userInfo.anonymous_session_id) {
+        return sendError(res, "Video not found for this anonymous session", 404, "NOT_FOUND");
+      }
+    } else {
+      // Authenticated user
+      if (video.user_id !== userInfo.user_id) {
+        return sendError(res, "You don't have access to update this video", 403, "FORBIDDEN");
+      }
     }
     
     // Update the video
-    const updatedVideo = await dbStorage.updateVideo(id, req.body);
+    const updatedVideo = await dbStorage.updateVideo(videoId, req.body);
     
     if (!updatedVideo) {
-      return sendError(res, "Failed to update video", 500);
+      return sendError(res, "Failed to update video", 500, "UPDATE_FAILED");
     }
     
+    // Return the updated video
     return sendSuccess(res, updatedVideo);
   } catch (error) {
     console.error("Error updating video:", error);
@@ -707,42 +677,52 @@ router.patch('/:id', validateNumericParam('id'), requireSession, async (req: Req
 /**
  * Delete a video
  */
-router.delete('/:id', validateNumericParam('id'), requireSession, async (req: Request, res: Response) => {
+router.delete('/:id', validateNumericParam('id'), requireAnyUser, async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    // Get the video ID from the request parameters
+    const videoId = parseInt(req.params.id, 10);
     
-    // Get video from database to verify ownership
-    const video = await dbStorage.getVideo(id);
+    // Get user information from auth middleware via helper function
+    const userInfo = getUserInfoFromRequest(req);
+    console.log(`[video routes] Deleting video ${videoId} for user:`, userInfo.user_id);
     
+    // Fetch the video to check ownership
+    const video = await dbStorage.getVideo(videoId);
+    
+    // Check if the video exists
     if (!video) {
-      return sendError(res, "Video not found", 404, "RESOURCE_NOT_FOUND");
+      return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
     
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    
-    // Check if user has access to delete this video
-    // Authenticated users can only delete their own videos
-    if (!userInfo.is_anonymous && video.user_id !== userInfo.user_id) {
-      return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
+    // Check if this user has access to delete this video
+    // 1. For authenticated users, they should only delete their own videos
+    // 2. For anonymous users, they should only delete videos from their session
+    if (userInfo.is_anonymous) {
+      if (video.anonymous_session_id !== userInfo.anonymous_session_id) {
+        return sendError(res, "Video not found for this anonymous session", 404, "NOT_FOUND");
+      }
+    } else {
+      // Authenticated user
+      if (video.user_id !== userInfo.user_id) {
+        return sendError(res, "You don't have access to delete this video", 403, "FORBIDDEN");
+      }
     }
     
-    // Anonymous users can only delete videos from their session
-    if (userInfo.is_anonymous && video.anonymous_session_id !== userInfo.anonymous_session_id) {
-      return sendError(res, "You don't have permission to delete this video", 403, "FORBIDDEN");
-    }
-    
-    // Delete embeddings first
-    await deleteVideoEmbeddings(id);
+    // Delete any associated embeddings first
+    await deleteVideoEmbeddings(videoId);
     
     // Delete the video
-    const success = await dbStorage.deleteVideo(id);
+    const success = await dbStorage.deleteVideo(videoId);
     
     if (!success) {
-      return sendError(res, "Failed to delete video", 500);
+      return sendError(res, "Failed to delete video", 500, "DELETE_FAILED");
     }
     
-    return sendSuccess(res, { message: "Video deleted successfully" });
+    // Return success response
+    return sendSuccess(res, { 
+      message: "Video deleted successfully",
+      id: videoId
+    });
   } catch (error) {
     console.error("Error deleting video:", error);
     return handleApiError(res, error);

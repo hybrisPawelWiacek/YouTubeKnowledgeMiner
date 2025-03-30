@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey, jsonb, pgEnum, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -7,6 +7,8 @@ import { sql } from "drizzle-orm";
 export const contentTypeEnum = pgEnum('content_type', ['transcript', 'summary', 'note', 'conversation']);
 export const exportFormatEnum = pgEnum('export_format', ['txt', 'csv', 'json']);
 export const userTypeEnum = pgEnum('user_type', ['registered', 'anonymous']);
+export const userStatusEnum = pgEnum('user_status', ['active', 'inactive', 'pending_verification']);
+export const tokenTypeEnum = pgEnum('token_type', ['refresh', 'reset_password', 'verification']);
 
 // Table for storing anonymous user sessions
 export const anonymous_sessions = pgTable("anonymous_sessions", {
@@ -46,9 +48,15 @@ export const search_history = pgTable("search_history", {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
   email: text("email").notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  password_salt: text("password_salt").notNull(),
+  status: userStatusEnum("status").default("active").notNull(),
+  email_verified: boolean("email_verified").default(false).notNull(),
+  last_login: timestamp("last_login"),
+  display_name: text("display_name"),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const categories = pgTable("categories", {
@@ -134,10 +142,37 @@ export const export_preferences = pgTable("export_preferences", {
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Authentication tokens (refresh, password reset, etc.)
+export const auth_tokens = pgTable("auth_tokens", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  token: text("token").notNull().unique(),
+  type: tokenTypeEnum("type").notNull(),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+  revoked: boolean("revoked").default(false).notNull(),
+  revoked_at: timestamp("revoked_at"),
+});
+
+// User sessions table
+export const auth_sessions = pgTable("auth_sessions", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  session_id: varchar("session_id", { length: 128 }).notNull().unique(),
+  ip_address: text("ip_address"),
+  user_agent: text("user_agent"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  expires_at: timestamp("expires_at").notNull(),
+  last_active_at: timestamp("last_active_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   created_at: true,
+  updated_at: true,
+  last_login: true,
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({
@@ -289,6 +324,51 @@ export const insertAnonymousSessionSchema = createInsertSchema(anonymous_session
   video_count: true,
 });
 
+export const insertAuthTokenSchema = createInsertSchema(auth_tokens).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+  revoked: true,
+  revoked_at: true,
+});
+
+export const insertAuthSessionSchema = createInsertSchema(auth_sessions).omit({
+  id: true,
+  created_at: true,
+  last_active_at: true,
+});
+
+// Authentication schemas
+export const registerUserSchema = z.object({
+  username: z.string().min(3).max(50),
+  email: z.string().email(),
+  password: z.string().min(8).max(100),
+  display_name: z.string().min(1).max(100).optional(),
+});
+
+export const loginUserSchema = z.object({
+  username: z.string(),
+  password: z.string(),
+  remember_me: z.boolean().optional().default(false),
+});
+
+export const resetPasswordRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string(),
+  password: z.string().min(8).max(100),
+});
+
+export const changePasswordSchema = z.object({
+  current_password: z.string(),
+  new_password: z.string().min(8).max(100),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string(),
+});
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -321,3 +401,15 @@ export type SearchParams = z.infer<typeof searchParamsSchema>;
 export type SemanticSearchParams = z.infer<typeof semanticSearchSchema>;
 export type ExportPreferences = typeof export_preferences.$inferSelect;
 export type ExportRequest = z.infer<typeof exportRequestSchema>;
+
+// Auth types
+export type AuthToken = typeof auth_tokens.$inferSelect;
+export type AuthSession = typeof auth_sessions.$inferSelect;
+export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
+export type InsertAuthSession = z.infer<typeof insertAuthSessionSchema>;
+export type RegisterUserRequest = z.infer<typeof registerUserSchema>;
+export type LoginUserRequest = z.infer<typeof loginUserSchema>;
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+export type ResetPasswordData = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordRequest = z.infer<typeof changePasswordSchema>;
+export type VerifyEmailRequest = z.infer<typeof verifyEmailSchema>;

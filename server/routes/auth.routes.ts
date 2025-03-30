@@ -1,163 +1,364 @@
+/**
+ * Authentication Routes
+ * 
+ * Handles all authentication-related API endpoints, including user registration,
+ * login, logout, password reset, and email verification.
+ */
+
 import { Router, Request, Response } from 'express';
-import { storage } from '../storage';
-import { getUserInfoFromRequest } from '../middleware/auth.middleware';
-import { sendSuccess, sendError } from '../utils/response.utils';
+import { 
+  registerUser, 
+  loginUser, 
+  logoutUser, 
+  generatePasswordResetToken,
+  resetPassword,
+  verifyEmail,
+  changePassword,
+  setSessionCookie,
+  clearSessionCookie
+} from '../services/auth.service';
+import { 
+  registerUserSchema, 
+  loginUserSchema, 
+  resetPasswordRequestSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  verifyEmailSchema,
+} from '../../shared/schema';
+import { requireAuth } from '../middleware/auth.middleware';
+import winston from 'winston';
+import { z } from 'zod';
+
+// Configure logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'auth-routes' },
+  transports: [
+    new winston.transports.File({ filename: 'logs/auth-routes.log' }),
+  ],
+});
+
+// If we're in development, also log to the console
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.simple(),
+  }));
+}
 
 const router = Router();
 
 /**
- * Get the count of videos for an anonymous session
+ * POST /api/auth/register
+ * Register a new user
  */
-router.get("/videos/count", async (req: Request, res: Response) => {
+router.post('/register', async (req: Request, res: Response) => {
   try {
-    // Get session ID from header
-    const sessionHeader = req.headers['x-anonymous-session'];
-    if (!sessionHeader) {
-      return sendSuccess(res, { count: 0 });
-    }
+    const validatedData = registerUserSchema.parse(req.body);
     
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+    const user = await registerUser(validatedData);
     
-    // Get session from database
-    const session = await storage.getAnonymousSessionBySessionId(sessionId);
+    logger.info(`User registered successfully: ${user.username}`);
     
-    if (!session) {
-      return sendSuccess(res, { count: 0 });
-    }
-    
-    // Get actual videos for verification
-    const actualVideos = await storage.getVideosByAnonymousSessionId(sessionId);
-    const actualCount = actualVideos.length;
-    
-    // If there's a discrepancy, update the count to match reality
-    if (session.video_count !== actualCount) {
-      console.log(`[Auth] Fixing video count discrepancy for session ${sessionId}: DB=${session.video_count}, Actual=${actualCount}`);
-      await storage.updateAnonymousSession(sessionId, { video_count: actualCount });
-    }
-    
-    // Update last active timestamp for the session
-    await storage.updateAnonymousSessionLastActive(sessionId);
-    
-    return sendSuccess(res, { 
-      count: actualCount, // Use actual count instead of session.video_count
-      session_id: sessionId,
-      max_allowed: 3 // Hard-coded limit for now, could move to config
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully. Please verify your email.',
+      user,
     });
   } catch (error) {
-    console.error("Error getting anonymous video count:", error);
-    return sendError(res, "Failed to get anonymous video count", 500);
-  }
-});
-
-/**
- * Migrate videos from anonymous session to authenticated user
- * Used when a user registers after using the app anonymously
- */
-router.post("/migrate", async (req: Request, res: Response) => {
-  try {
-    // Get session ID from header
-    const sessionHeader = req.headers['x-anonymous-session'];
-    if (!sessionHeader) {
-      return sendError(res, "No anonymous session ID provided", 400);
+    if (error instanceof z.ZodError) {
+      logger.warn('Registration validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
     }
     
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
-    const { userId } = req.body;
-    
-    if (!userId || typeof userId !== 'number') {
-      return sendError(res, "Invalid user ID provided", 400);
-    }
-    
-    // Get videos attached to this anonymous session
-    const anonymousVideos = await storage.getVideosByAnonymousSessionId(sessionId);
-    
-    if (!anonymousVideos || anonymousVideos.length === 0) {
-      return sendSuccess(res, { message: "No videos to migrate", migratedCount: 0 });
-    }
-    
-    // Update the user_id on all these videos
-    let migratedCount = 0;
-    for (const video of anonymousVideos) {
-      await storage.updateVideo(video.id, { user_id: userId });
-      migratedCount++;
-    }
-    
-    console.log(`Successfully migrated ${migratedCount} videos from anonymous session ${sessionId} to user ${userId}`);
-    
-    return sendSuccess(res, { 
-      message: "Videos successfully migrated", 
-      migratedCount,
-      sessionId
-    });
-  } catch (error) {
-    console.error("Error migrating anonymous session:", error);
-    return sendError(res, "Failed to migrate anonymous session", 500);
-  }
-});
-
-/**
- * Legacy endpoint to import anonymous data from local storage
- * This is kept for backward compatibility with older clients
- */
-router.post("/import-data", async (req: Request, res: Response) => {
-  try {
-    const { userData, userId } = req.body;
-    
-    if (!userData || !userId) {
-      return sendError(res, "Missing user data or user ID", 400);
-    }
-    
-    let importedCount = 0;
-    
-    // Process videos if they exist
-    if (userData.videos && Array.isArray(userData.videos)) {
-      for (const video of userData.videos) {
-        if (video && video.youtube_id) {
-          try {
-            // Check if this video already exists for this user
-            const existingVideos = await storage.searchVideos(userId, {
-              query: video.youtube_id, // Use the query parameter instead of youtube_id directly
-              limit: 1,
-              page: 1
-            });
-            
-            if (existingVideos && existingVideos.videos.length === 0) {
-              // Create a new video entry
-              await storage.insertVideo({
-                youtube_id: video.youtube_id,
-                title: video.title || 'Imported Video',
-                channel: video.channel || 'Unknown Channel',
-                duration: video.duration || '0:00',
-                publish_date: video.publish_date || new Date().toISOString(),
-                thumbnail: video.thumbnail || '',
-                transcript: video.transcript || null,
-                summary: video.summary || null,
-                description: video.description || null,
-                tags: video.tags || null,
-                user_id: userId,
-                notes: video.notes || null,
-                category_id: video.category_id || null,
-                rating: video.rating || null,
-                is_favorite: video.is_favorite || false
-              });
-              
-              importedCount++;
-            }
-          } catch (videoError) {
-            console.error(`Error importing video ${video.youtube_id}:`, videoError);
-            // Continue with other videos even if one fails
-          }
-        }
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        logger.warn('Registration failed - already exists', { error: error.message });
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+        });
       }
     }
     
-    return sendSuccess(res, {
-      message: `Successfully imported ${importedCount} videos`,
-      importedCount
+    logger.error('Registration error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Registration failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/login
+ * Login a user
+ */
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const validatedData = loginUserSchema.parse(req.body);
+    
+    const result = await loginUser(validatedData, req);
+    
+    // Set session cookie
+    setSessionCookie(res, result.session.id, result.session.expires_at);
+    
+    logger.info(`User logged in: ${result.user.username}`);
+    
+    res.json({
+      success: true,
+      message: 'Login successful',
+      user: result.user,
+      // Only send refresh token to client if remember me was selected
+      refresh_token: result.refresh_token,
     });
   } catch (error) {
-    console.error("Error importing anonymous data:", error);
-    return sendError(res, "Failed to import anonymous data", 500);
+    if (error instanceof z.ZodError) {
+      logger.warn('Login validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    if (error instanceof Error) {
+      // For security, always use the same message for invalid credentials
+      if (error.message.includes('Invalid username or password') || 
+          error.message.includes('Account is not active')) {
+        logger.warn('Login failed', { error: error.message });
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid username or password',
+        });
+      }
+    }
+    
+    logger.error('Login error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Login failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Logout a user
+ */
+router.post('/logout', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (req.sessionId) {
+      await logoutUser(req.sessionId);
+      clearSessionCookie(res);
+      
+      logger.info(`User logged out: ${req.user.username}`);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Logout successful',
+    });
+  } catch (error) {
+    logger.error('Logout error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Logout failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/reset-password-request
+ * Request a password reset
+ */
+router.post('/reset-password-request', async (req: Request, res: Response) => {
+  try {
+    const validatedData = resetPasswordRequestSchema.parse(req.body);
+    
+    await generatePasswordResetToken(validatedData.email);
+    
+    // For security, always return success even if email doesn't exist
+    // This prevents user enumeration
+    logger.info(`Password reset requested for: ${validatedData.email}`);
+    
+    res.json({
+      success: true,
+      message: 'If the email exists, a password reset link has been sent.',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      logger.warn('Reset password validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    logger.error('Reset password request error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Password reset request failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Reset a password using a token
+ */
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const validatedData = resetPasswordSchema.parse(req.body);
+    
+    const success = await resetPassword(validatedData.token, validatedData.password);
+    
+    if (success) {
+      logger.info('Password reset successful');
+      
+      res.json({
+        success: true,
+        message: 'Password reset successful. You can now login with your new password.',
+      });
+    } else {
+      logger.warn('Password reset failed - invalid or expired token');
+      
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired password reset token.',
+      });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      logger.warn('Reset password validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    logger.error('Reset password error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Password reset failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/verify-email
+ * Verify a user's email address
+ */
+router.post('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const validatedData = verifyEmailSchema.parse(req.body);
+    
+    const success = await verifyEmail(validatedData.token);
+    
+    if (success) {
+      logger.info('Email verification successful');
+      
+      res.json({
+        success: true,
+        message: 'Email verification successful. You can now login to your account.',
+      });
+    } else {
+      logger.warn('Email verification failed - invalid or expired token');
+      
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired email verification token.',
+      });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      logger.warn('Email verification validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    logger.error('Email verification error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Email verification failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/change-password
+ * Change a user's password (requires authentication)
+ */
+router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const validatedData = changePasswordSchema.parse(req.body);
+    
+    const success = await changePassword(
+      req.user.id, 
+      validatedData.current_password, 
+      validatedData.new_password
+    );
+    
+    if (success) {
+      logger.info(`Password changed for user: ${req.user.username}`);
+      
+      res.json({
+        success: true,
+        message: 'Password changed successfully.',
+      });
+    } else {
+      logger.warn(`Password change failed for user: ${req.user.username} - invalid current password`);
+      
+      res.status(400).json({
+        success: false,
+        message: 'Current password is incorrect.',
+      });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      logger.warn('Change password validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    logger.error('Change password error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Password change failed. Please try again later.',
+    });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Get the current user's profile
+ */
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    res.json({
+      success: true,
+      user: req.user,
+    });
+  } catch (error) {
+    logger.error('Get user profile error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve user profile.',
+    });
   }
 });
 

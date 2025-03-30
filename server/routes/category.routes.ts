@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { dbStorage } from '../database-storage';
-import { getUserInfo, requireAuth, getUserIdFromRequest } from '../middleware/auth.middleware';
+import { requireAuth, requireAnyUser } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { insertCategorySchema } from '../../shared/schema';
 import { sendSuccess, sendError } from '../utils/response.utils';
@@ -9,8 +9,20 @@ import { sendSuccess, sendError } from '../utils/response.utils';
 // Create router
 const router = Router();
 
-// Apply user info middleware to all routes
-router.use(getUserInfo);
+/**
+ * Helper function to get user information from request object
+ * This function adapts the new auth middleware format to the existing code
+ */
+function getUserInfoFromRequest(req: Request) {
+  return {
+    user_id: req.user?.id,
+    is_anonymous: req.isAnonymous,
+    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+  };
+}
+
+// In the new auth system, we don't need to apply a separate middleware
+// as the user info is attached to the request by the auth middleware
 
 /**
  * Get all categories (both global and user-specific)
@@ -19,7 +31,7 @@ router.use(getUserInfo);
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Get user ID using our helper function
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     const userId = userInfo.user_id;
     
     console.log("CATEGORIES: Using user ID from request:", userId);
@@ -65,7 +77,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Get user ID from middleware
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     const userId = userInfo.user_id;
     
     console.log("CREATE CATEGORY: Using user ID from request:", userId);
@@ -106,7 +118,7 @@ router.patch('/:id', requireAuth, validateNumericParam('id'), async (req: Reques
     }
 
     // Check if user owns this category or if it's a global category
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     if (category.is_global || (userInfo.user_id !== category.user_id)) {
       return sendError(res, "You don't have permission to update this category", 403, "FORBIDDEN");
     }
@@ -139,7 +151,7 @@ router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Reque
     }
 
     // Check if user owns this category or if it's a global category
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     if (category.is_global || (userInfo.user_id !== category.user_id)) {
       return sendError(res, "You don't have permission to delete this category", 403, "FORBIDDEN");
     }

@@ -3,10 +3,12 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
 // Import and immediately configure environment variables
 import { config } from "dotenv";
+import cookieParser from "cookie-parser";
 import { createLogger } from "./services/logger";
 import { httpLoggerMiddleware } from "./middleware/http-logger-new";
 import { errorHandlerMiddleware } from "./middleware/error-handler";
 import { performanceMonitorMiddleware, setupSystemMetricsLogging } from "./middleware/performance-monitor";
+import { authMiddleware } from "./middleware/auth.middleware";
 import logsRouter from "./routes/logs";
 import { info, warn, error, debug } from "./utils/logger";
 
@@ -19,6 +21,8 @@ const app = express();
 // JSON middleware with increased size limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Cookie parser middleware for authentication
+app.use(cookieParser());
 
 // Apply our custom HTTP request logger middleware
 app.use(httpLoggerMiddleware);
@@ -32,6 +36,9 @@ app.use('/api', (req, res, next) => {
   res.setHeader('X-API-Route', 'true'); // Add marker header for API routes
   next();
 });
+
+// Apply authentication middleware for all routes
+app.use(authMiddleware);
 
 // Register client logs endpoint
 app.use('/api/logs', logsRouter);

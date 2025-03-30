@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { dbStorage } from '../database-storage';
-import { getUserInfo, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { requireAuth, requireAnyUser } from '../middleware/auth.middleware';
 import { validateNumericParam, validateRequest } from '../middleware/validation.middleware';
 import { insertCollectionSchema } from '../../shared/schema';
 import { sendSuccess, sendError } from '../utils/response.utils';
@@ -9,8 +9,20 @@ import { sendSuccess, sendError } from '../utils/response.utils';
 // Create router
 const router = Router();
 
-// Apply user info middleware to all routes
-router.use(getUserInfo);
+/**
+ * Helper function to get user information from request object
+ * This function adapts the new auth middleware format to the existing code
+ */
+function getUserInfoFromRequest(req: Request) {
+  return {
+    user_id: req.user?.id,
+    is_anonymous: req.isAnonymous,
+    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+  };
+}
+
+// In the new auth system, we don't need to apply a separate middleware
+// as the user info is attached to the request by the auth middleware
 
 /**
  * Get all collections for the authenticated user

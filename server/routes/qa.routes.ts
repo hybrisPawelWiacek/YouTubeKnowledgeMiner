@@ -8,7 +8,7 @@ import { storage } from '../storage';
 import { generateAnswer } from '../services/openai';
 import { performSemanticSearch } from '../services/embeddings';
 import { initializeVectorFunctions } from '../services/supabase';
-import { getUserIdFromRequest, requireAuth, requireSession } from '../middleware/auth.middleware';
+import { getUserIdFromRequest, requireAuth, requireAnyUser } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 
@@ -35,7 +35,7 @@ router.get('/:videoId/qa', validateNumericParam('videoId'), async (req: Request,
  * POST /api/videos/:videoId/qa
  * Supports both authenticated users and anonymous sessions
  */
-router.post('/:videoId/qa', requireSession, validateNumericParam('videoId'), async (req: Request, res: Response) => {
+router.post('/:videoId/qa', requireAnyUser, validateNumericParam('videoId'), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.videoId);
     
@@ -135,7 +135,7 @@ router.get('/:id([0-9]+)', validateNumericParam('id'), async (req: Request, res:
  * Create a new Q&A conversation for a specific video
  * Supports both authenticated users and anonymous sessions
  */
-router.post('/video/:id', requireSession, validateNumericParam('id'), async (req: Request, res: Response) => {
+router.post('/video/:id', requireAnyUser, validateNumericParam('id'), async (req: Request, res: Response) => {
   try {
     const videoId = parseInt(req.params.id);
     
