@@ -1,80 +1,87 @@
 /**
  * Migration Service
  * 
- * This service handles the migration of data from anonymous sessions 
- * to registered user accounts. It provides functions to:
- * 
- * - Migrate videos from anonymous sessions to registered users
- * - Handle the migration process in a transaction-safe way
- * - Clean up anonymous sessions after successful migration
+ * Handles migration of user data, especially when converting from anonymous
+ * to registered user after registration/login.
  */
 
-import { storage } from '../storage';
-import { createLogger } from './logger';
+import { db } from '../db';
+import { videos, anonymous_sessions } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
+import winston from 'winston';
 
-const logger = createLogger('migration');
+// Configure logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'migration' },
+  transports: [
+    new winston.transports.File({ filename: 'logs/migration.log' }),
+  ],
+});
+
+// If we're in development, also log to the console
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.simple(),
+  }));
+}
 
 /**
- * Migrate anonymous user data to a newly registered user
- * @param sessionId Anonymous session ID
- * @param userId User ID to migrate data to
- * @returns Object with migration results
+ * Migrate videos from an anonymous session to a registered user
+ * @param anonymousSessionId The anonymous session ID
+ * @param userId The user ID to migrate to
+ * @returns Object containing the number of migrated items
  */
-export async function migrateAnonymousUserData(
-  sessionId: string,
+export async function migrateAnonymousData(
+  anonymousSessionId: string,
   userId: number
-): Promise<{ success: boolean; migratedVideos: number; error?: string }> {
-  logger.info('Starting migration process', { sessionId, userId });
+): Promise<{ migratedVideos: number }> {
+  logger.info(`Starting migration from session ${anonymousSessionId} to user ${userId}`);
   
   try {
-    // Check if the anonymous session exists
-    const session = await storage.getAnonymousSessionBySessionId(sessionId);
-    if (!session) {
-      logger.warn('No anonymous session found for migration', { sessionId });
-      return { success: false, migratedVideos: 0, error: 'Anonymous session not found' };
-    }
-
-    // Check if the user exists
-    const user = await storage.getUser(userId);
-    if (!user) {
-      logger.warn('User not found for migration', { userId });
-      return { success: false, migratedVideos: 0, error: 'User not found' };
-    }
-
     // Get videos from the anonymous session
-    const videos = await storage.getVideosByAnonymousSessionId(sessionId);
-    if (!videos.length) {
-      logger.info('No videos to migrate', { sessionId });
-      return { success: true, migratedVideos: 0 };
+    const results = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.anonymous_session_id, anonymousSessionId));
+    
+    if (results.length === 0) {
+      logger.info('No videos found to migrate');
+      return { migratedVideos: 0 };
     }
-
-    // Migrate the videos in a transaction
-    const migratedVideos = await storage.migrateVideosFromAnonymousSession(sessionId, userId);
     
-    // Clear the anonymous session data
-    await storage.clearAnonymousSessionData(sessionId);
+    logger.info(`Found ${results.length} videos to migrate`);
     
-    logger.info('Migration completed successfully', { 
-      sessionId, 
-      userId, 
-      migratedVideos 
-    });
+    // Update videos to be associated with the registered user
+    const updateResults = await db
+      .update(videos)
+      .set({
+        user_id: userId,
+        anonymous_session_id: null,
+        user_type: 'registered'
+      })
+      .where(eq(videos.anonymous_session_id, anonymousSessionId))
+      .returning();
     
-    return {
-      success: true,
-      migratedVideos
-    };
+    // Update anonymous session (optional - to track that it was migrated)
+    // This assumes we add a migrated_to_user_id column to the anonymous_sessions table
+    // We'll leave this commented for now until we add that column if needed
+    /*
+    await db
+      .update(anonymous_sessions)
+      .set({ migrated_to_user_id: userId })
+      .where(eq(anonymous_sessions.session_id, anonymousSessionId));
+    */
+    
+    logger.info(`Successfully migrated ${updateResults.length} videos`);
+    
+    return { migratedVideos: updateResults.length };
   } catch (error) {
-    logger.error('Error during anonymous data migration', {
-      error: error instanceof Error ? error.message : String(error),
-      sessionId,
-      userId
-    });
-    
-    return {
-      success: false,
-      migratedVideos: 0,
-      error: 'Failed to migrate anonymous user data'
-    };
+    logger.error('Migration error:', error);
+    throw new Error(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

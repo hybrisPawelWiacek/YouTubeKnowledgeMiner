@@ -17,6 +17,7 @@ import {
   setSessionCookie,
   clearSessionCookie
 } from '../services/auth.service';
+import { migrateAnonymousData } from '../services/migration.service';
 import { 
   registerUserSchema, 
   loginUserSchema, 
@@ -61,7 +62,7 @@ router.post('/register', async (req: Request, res: Response) => {
     
     const user = await registerUser(validatedData);
     
-    logger.info(`User registered successfully: ${user.username}`);
+    logger.info(`User registered successfully: ${user.username || validatedData.username}`);
     
     res.status(201).json({
       success: true,
@@ -358,6 +359,66 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve user profile.',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/migrate
+ * Migrate data from anonymous session to authenticated user
+ */
+router.post('/migrate', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user.id;
+    
+    // Get anonymous session ID from request header or body
+    const sessionId = req.body.anonymousSessionId || 
+                      req.body.sessionId || 
+                      (req.headers['x-anonymous-session'] ? 
+                        (Array.isArray(req.headers['x-anonymous-session']) ? 
+                          req.headers['x-anonymous-session'][0] : 
+                          req.headers['x-anonymous-session']) : 
+                        null);
+    
+    if (!sessionId) {
+      logger.warn(`Migration failed: No session ID provided for user ${req.user.username}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Anonymous session ID is required',
+      });
+    }
+    
+    // Validate that the sessionId has the expected format (anon_*)
+    if (!sessionId.startsWith('anon_')) {
+      logger.warn(`Migration failed: Invalid session ID format for user ${req.user.username}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid anonymous session ID format',
+      });
+    }
+    
+    // Migrate the data
+    const result = await migrateAnonymousData(sessionId, userId);
+    
+    logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
+    
+    res.json({
+      success: true,
+      message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
+      data: {
+        migratedVideos: result.migratedVideos,
+      },
+    });
+  } catch (error) {
+    logger.error('Migration error', { error });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Migration failed. Please try again later.',
+      error: {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        code: 'MIGRATION_ERROR',
+      },
     });
   }
 });

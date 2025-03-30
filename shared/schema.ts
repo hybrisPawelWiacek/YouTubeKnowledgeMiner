@@ -48,15 +48,16 @@ export const search_history = pgTable("search_history", {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
+  password: text("password").notNull(),
   email: text("email").notNull().unique(),
-  password_hash: text("password_hash").notNull(),
-  password_salt: text("password_salt").notNull(),
-  status: userStatusEnum("status").default("active").notNull(),
-  email_verified: boolean("email_verified").default(false).notNull(),
-  last_login: timestamp("last_login"),
-  display_name: text("display_name"),
   created_at: timestamp("created_at").defaultNow().notNull(),
-  updated_at: timestamp("updated_at").defaultNow().notNull(),
+  password_hash: text("password_hash"),
+  password_salt: text("password_salt"),
+  status: userStatusEnum("status").default("active"),
+  email_verified: boolean("email_verified").default(false),
+  display_name: text("display_name"),
+  last_login: timestamp("last_login"),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 export const categories = pgTable("categories", {
@@ -347,9 +348,13 @@ export const registerUserSchema = z.object({
 });
 
 export const loginUserSchema = z.object({
-  username: z.string(),
+  username: z.string().optional(),
+  email: z.string().email().optional(),
   password: z.string(),
   remember_me: z.boolean().optional().default(false),
+}).refine(data => data.username || data.email, {
+  message: "Either username or email must be provided",
+  path: ["username"]
 });
 
 export const resetPasswordRequestSchema = z.object({

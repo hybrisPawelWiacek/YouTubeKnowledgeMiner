@@ -3,6 +3,7 @@
  * 
  * Handles password hashing, verification, and security-related functions.
  * Uses PBKDF2 for secure password hashing with random salt generation.
+ * Includes compatibility layer for different password storage formats.
  */
 
 import crypto from 'crypto';
@@ -45,12 +46,53 @@ export function hashPassword(password: string, salt: string): string {
  * @returns True if the password matches, false otherwise
  */
 export function verifyPassword(password: string, storedHash: string, salt: string): boolean {
+  // For temporary_salt, we're using direct comparison for legacy passwords
+  if (salt === 'temporary_salt') {
+    // Direct comparison for legacy passwords (this is for migration only)
+    return password === storedHash;
+  }
+  
+  // Normal case: use proper PBKDF2 verification
   const calculatedHash = hashPassword(password, salt);
+  
   // Use a constant-time comparison to prevent timing attacks
-  return crypto.timingSafeEqual(
-    Buffer.from(calculatedHash, 'hex'),
-    Buffer.from(storedHash, 'hex')
-  );
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(calculatedHash, 'hex'),
+      Buffer.from(storedHash, 'hex')
+    );
+  } catch (error) {
+    // If buffers are of different lengths, this will throw an error
+    // In this case, we know the password is wrong
+    return false;
+  }
+}
+
+/**
+ * Compatibility function to extract password data from a user object
+ * Handles both legacy format (password only) and new format (password_hash and password_salt)
+ * 
+ * @param user User object from database
+ * @returns Object with hash and salt properties
+ */
+export function getPasswordData(user: any): { hash: string, salt: string } {
+  // Handle the new format first (password_hash and password_salt)
+  if (user.password_hash && user.password_salt) {
+    return { 
+      hash: user.password_hash, 
+      salt: user.password_salt 
+    };
+  }
+  
+  // Legacy format - password field only
+  if (user.password) {
+    return { 
+      hash: user.password, 
+      salt: 'temporary_salt' 
+    };
+  }
+  
+  throw new Error('Invalid user password data');
 }
 
 /**
