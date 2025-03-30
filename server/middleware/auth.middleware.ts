@@ -13,6 +13,7 @@ import { anonymous_sessions } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import winston from 'winston';
 import { dbStorage } from '../database-storage';
+import { SYSTEM } from '../../shared/config';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -66,8 +67,8 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     if (sessionId) {
       req.sessionId = sessionId;
       
-      // Check if it's a registered user session (format: not starting with 'anon_')
-      if (!sessionId.startsWith('anon_')) {
+      // Check if it's a registered user session (format: not starting with ANONYMOUS_SESSION_PREFIX)
+      if (!sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
         const userId = await validateSession(sessionId);
         
         if (userId) {
@@ -92,7 +93,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
         if (anonSession.length > 0) {
           // Session exists in the database, use it
           req.user = { 
-            id: 7, // Dedicated anonymous user ID
+            id: SYSTEM.ANONYMOUS_USER_ID, // Dedicated anonymous user ID from config
             username: 'anonymous',
             user_type: 'anonymous', // Explicitly set user type for anonymous users
             anonymous_session_id: sessionId
@@ -122,7 +123,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
             
             // Set up the user object with the anonymous user ID
             req.user = { 
-              id: 7, // Dedicated anonymous user ID
+              id: SYSTEM.ANONYMOUS_USER_ID, // Dedicated anonymous user ID from config
               username: 'anonymous',
               user_type: 'anonymous',
               anonymous_session_id: sessionId
@@ -200,7 +201,7 @@ export function requireAnyUser(req: Request, res: Response, next: NextFunction) 
   }
   
   // Allow anonymous users with a valid session ID (even if session creation is pending)
-  if (req.isAnonymous && req.sessionId && req.sessionId.startsWith('anon_')) {
+  if (req.isAnonymous && req.sessionId && req.sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
     // Even if the user object isn't fully populated yet (async creation might be in progress)
     // we allow the request to proceed as long as there's a valid anonymous session ID format
     return next();

@@ -8,6 +8,7 @@
  */
 
 import axios from 'axios';
+import { SYSTEM } from '../../../shared/config';
 
 // Anonymous session cookie name
 const SESSION_COOKIE_NAME = 'anonymous_session_id';
@@ -43,7 +44,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
   
   try {
     // Generate a new session ID format that matches what the backend expects
-    const newSessionId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const newSessionId = `${SYSTEM.ANONYMOUS_SESSION_PREFIX}${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     
     // Store it in a cookie for persistence
     const expirationDate = new Date();
@@ -64,7 +65,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     console.error('[Anonymous Session] Error creating session:', error);
     
     // Fallback to client-side only if there's an error
-    const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const fallbackId = `${SYSTEM.ANONYMOUS_SESSION_PREFIX}${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
     document.cookie = `${SESSION_COOKIE_NAME}=${fallbackId}; expires=${new Date(Date.now() + 30*24*60*60*1000).toUTCString()}; path=/; SameSite=Lax`;
     
     console.log('[Anonymous Session] Created fallback session due to error:', fallbackId);
@@ -91,7 +92,7 @@ export async function getAnonymousVideoCountInfo(): Promise<VideoCountInfo> {
     
     if (!sessionId) {
       console.log('[Anonymous Session] No session found, returning default values');
-      return { count: 0, maxAllowed: 3 };
+      return { count: 0, maxAllowed: SYSTEM.ANONYMOUS_VIDEO_LIMIT };
     }
     
     // Call the backend API to get the actual count
@@ -106,14 +107,14 @@ export async function getAnonymousVideoCountInfo(): Promise<VideoCountInfo> {
     
     return {
       count: response.data.count || 0,
-      maxAllowed: response.data.max_allowed || 3
+      maxAllowed: response.data.max_allowed || SYSTEM.ANONYMOUS_VIDEO_LIMIT
     };
   } catch (error) {
     console.error('Error getting anonymous video count:', error);
     // Default values if something goes wrong
     return {
       count: 0,
-      maxAllowed: 3
+      maxAllowed: SYSTEM.ANONYMOUS_VIDEO_LIMIT
     };
   }
 }
