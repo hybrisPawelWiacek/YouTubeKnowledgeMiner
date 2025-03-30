@@ -108,7 +108,7 @@ export default function ExplorerPage() {
     try {
       // Ensure anonymous users have a session ID
       if (!hasAnonymousSession()) {
-        getOrCreateAnonymousSessionId();
+        await getOrCreateAnonymousSessionId();
       }
       
       // Perform semantic search using the dedicated RAG endpoint

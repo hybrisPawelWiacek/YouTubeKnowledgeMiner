@@ -46,7 +46,8 @@ export function useLibraryQueryHeaders() {
         
         try {
           // First check if user already has an anonymous session
-          const hasSessionResult = await hasAnonymousSession();
+          // hasAnonymousSession is synchronous, no need to await
+          const hasSessionResult = hasAnonymousSession();
           
           // Get session ID (or create a new one if needed)
           // Use await here to ensure we get a string, not a Promise

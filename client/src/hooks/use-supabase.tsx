@@ -441,6 +441,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       
       // Check for both legacy local storage data and newer anonymous session data
       const localData = getLocalData();
+      // hasAnonymousSession is synchronous, no need to await
       const hasAnonymousSessionData = hasAnonymousSession();
 
       // Handle old format local data (previous implementation)
@@ -475,7 +476,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         
         // Get the current session ID
         const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+        const sessionId = await getOrCreateAnonymousSessionId();
         
         // Call the server endpoint to migrate videos from anonymous session to user account
         const response = await fetch('/api/migrate-anonymous-session', {
@@ -533,16 +534,15 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const hasReachedAnonymousLimit = async () => {
     try {
       // Import here to avoid circular dependencies
-      const { hasReachedAnonymousLimit: checkAnonymousLimit, hasReachedAnonymousLimitSync } = await import('@/lib/anonymous-session');
+      const { hasReachedAnonymousLimit: checkAnonymousLimit } = await import('@/lib/anonymous-session');
       
       // Use the async function that checks with server first
       return await checkAnonymousLimit();
     } catch (error) {
       console.error("Error checking anonymous limit:", error);
       
-      // Fall back to sync version that uses only local cache if async version fails
-      const { hasReachedAnonymousLimitSync } = require('@/lib/anonymous-session');
-      return hasReachedAnonymousLimitSync();
+      // Since there's no sync version available, return false as a safe default
+      return false;
     }
   };
 
