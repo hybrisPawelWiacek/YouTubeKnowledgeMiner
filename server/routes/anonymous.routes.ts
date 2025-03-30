@@ -57,9 +57,20 @@ router.get('/videos/count', async (req: Request, res: Response) => {
     // Update last active timestamp for the session
     await dbStorage.updateAnonymousSessionLastActive(sessionId);
     
-    logger.info(`Found session with video count: ${session.video_count}`);
+    // Get the actual video count from the database for accuracy
+    const actualVideos = await dbStorage.getVideosByAnonymousSessionId(sessionId);
+    const actualCount = actualVideos.length;
+    
+    // If the counts don't match, update the session with the correct count
+    if (session.video_count !== actualCount) {
+      logger.info(`[Count Mismatch] Session ${sessionId} has counter=${session.video_count} but actual=${actualCount} videos. Fixing...`);
+      await dbStorage.updateAnonymousSession(sessionId, { video_count: actualCount });
+      logger.info(`Updated session counter to match actual video count: ${actualCount}`);
+    }
+    
+    logger.info(`Found session with video count: ${actualCount} (from DB query)`);
     return sendSuccess(res, { 
-      count: session.video_count || 0,
+      count: actualCount,
       session_id: sessionId,
       max_allowed: ANONYMOUS_VIDEO_LIMIT
     });
