@@ -41,31 +41,37 @@ router.post('/', requireAnyUser, async (req: Request, res: Response) => {
       userId,
       validatedData.query,
       {
-        videoId: validatedData.videoId,
-        contentTypes: validatedData.contentTypes,
-        limit: validatedData.limit || 10,
-        offset: validatedData.offset || 0,
-        categoryId: validatedData.categoryId,
-        startDate: validatedData.startDate,
-        endDate: validatedData.endDate,
-        exactMatch: validatedData.exactMatch
-      }
+        videoId: validatedData.filter?.video_id,
+        contentTypes: validatedData.filter?.content_types,
+        categoryId: validatedData.filter?.category_id,
+        collectionId: validatedData.filter?.collection_id,
+        isFavorite: validatedData.filter?.is_favorite,
+        anonymous_session_id: req.isAnonymous ? req.anonymousSessionId : undefined
+      },
+      validatedData.limit || 10
     );
     
     // Save search history (non-blocking, won't affect response)
-    if (validatedData.saveHistory !== false) {
-      try {
-        saveSearchHistory(
-          userId,
-          validatedData.query,
-          results?.length || 0,
-          validatedData
-        ).catch(err => {
-          console.error("Failed to save search history:", err);
-        });
-      } catch (historyError) {
-        console.error("Error saving search history:", historyError);
-      }
+    try {
+      // Extract filter data from validatedData for search history
+      const filterData = {
+        content_types: validatedData.filter?.content_types,
+        video_id: validatedData.filter?.video_id,
+        category_id: validatedData.filter?.category_id,
+        collection_id: validatedData.filter?.collection_id,
+        is_favorite: validatedData.filter?.is_favorite
+      };
+      
+      saveSearchHistory(
+        userId,
+        validatedData.query,
+        results?.length || 0,
+        filterData
+      ).catch(err => {
+        console.error("Failed to save search history:", err);
+      });
+    } catch (historyError) {
+      console.error("Error saving search history:", historyError);
     }
     
     return sendSuccess(res, {
@@ -74,11 +80,9 @@ router.post('/', requireAnyUser, async (req: Request, res: Response) => {
       meta: {
         query: validatedData.query,
         filters: {
-          contentTypes: validatedData.contentTypes,
-          videoId: validatedData.videoId,
-          categoryId: validatedData.categoryId,
-          startDate: validatedData.startDate,
-          endDate: validatedData.endDate
+          content_types: validatedData.filter?.content_types,
+          video_id: validatedData.filter?.video_id,
+          category_id: validatedData.filter?.category_id
         }
       }
     });
