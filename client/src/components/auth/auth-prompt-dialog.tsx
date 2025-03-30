@@ -1,7 +1,17 @@
+/**
+ * Authentication Prompt Dialog
+ * 
+ * A strategic dialog that prompts anonymous users to create an account 
+ * at key moments in the user journey. This component is shown when users:
+ * 1. Reach 2 videos (warning about 3-video limit)
+ * 2. Attempt to access library management features
+ * 3. Try to use premium features like export
+ */
+
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { FcGoogle } from 'react-icons/fc';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronRight } from 'lucide-react';
 import { 
   Dialog, 
   DialogContent, 
@@ -11,9 +21,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useSupabase } from '@/hooks/use-supabase';
+import { useAuth } from '@/contexts/auth-context';
+import { getAnonymousVideoCountInfo } from '@/lib/anonymous-session';
 
-export type AuthPromptType = 'save_video' | 'analyze_again' | 'access_library';
+export type AuthPromptType = 'save_video' | 'analyze_again' | 'access_library' | 'export';
 
 interface AuthPromptDialogProps {
   isOpen: boolean;
@@ -22,6 +33,7 @@ interface AuthPromptDialogProps {
   onContinueAsGuest?: () => void;
 }
 
+// Prompt content customized by prompt type
 const promptMessages = {
   save_video: {
     title: "Save Your Knowledge",
@@ -55,6 +67,17 @@ const promptMessages = {
     ],
     buttonText: "Create Your Library",
     icon: "📚"
+  },
+  export: {
+    title: "Enhanced Export Options",
+    description: "Create an account to unlock advanced export options and save your insights in multiple formats.",
+    benefits: [
+      "Export to PDF, Markdown, and more formats",
+      "Include custom formatting and branding",
+      "Share insights with your team or colleagues"
+    ],
+    buttonText: "Unlock Export Features",
+    icon: "📤"
   }
 };
 
@@ -66,26 +89,20 @@ export function AuthPromptDialog({
 }: AuthPromptDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
-  const { signInWithGoogle, hasReachedAnonymousLimit } = useSupabase();
+  const { user, isAuthenticated, login } = useAuth();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
   const [maxAllowedVideos, setMaxAllowedVideos] = useState(3);
 
+  // Fetch video count when dialog opens
   useEffect(() => {
-    // Update video count from server when dialog opens
     if (isOpen) {
-      // Fetch the anonymous video count from the server
       const fetchVideoCount = async () => {
         try {
-          // Import session utilities to avoid circular dependencies
-          const { getAnonymousVideoCountInfo } = await import('@/lib/anonymous-session');
-          
-          // Get count info from the server
           const { count, maxAllowed } = await getAnonymousVideoCountInfo();
           setAnonymousVideoCount(count);
           setMaxAllowedVideos(maxAllowed);
         } catch (error) {
           console.error('Error fetching anonymous video count:', error);
-          // Set to zero if we couldn't get the count from the server
           setAnonymousVideoCount(0);
         }
       };
@@ -94,32 +111,46 @@ export function AuthPromptDialog({
     }
   }, [isOpen]);
 
+  // Handle Google Sign In (placeholder - needs to be replaced with your implementation)
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signInWithGoogle();
-      // The auth state change handler in useSupabase will trigger data migration
+      // This would need to be replaced with your Google OAuth implementation
+      console.log('Google sign-in clicked - not implemented in this basic version');
+      
+      // Redirect to auth page as fallback
+      setLocation('/auth');
+      onClose();
     } catch (error) {
-      console.error('Error signing in with Google:', error);
+      console.error('Error with sign in:', error);
+    } finally {
       setIsLoading(false);
     }
   };
 
+  // Navigate to auth page
   const handleGoToAuth = () => {
     setLocation('/auth');
     onClose();
   };
 
+  // Handle "remind me later" option
   const handleRemindLater = async () => {
     // Only allow "remind later" if they haven't reached the limit
-    const limitReached = await hasReachedAnonymousLimit();
+    const { count, maxAllowed } = await getAnonymousVideoCountInfo();
+    const limitReached = count >= maxAllowed;
+    
     if (!limitReached) {
-      const suppressUntil = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+      // Suppress prompts for 24 hours
+      const suppressUntil = Date.now() + 24 * 60 * 60 * 1000;
       localStorage.setItem('suppress_auth_prompts_until', suppressUntil.toString());
+      
+      // Call the continue callback if provided
       if (onContinueAsGuest) {
         onContinueAsGuest();
       }
     }
+    
     onClose();
   };
 
@@ -130,8 +161,8 @@ export function AuthPromptDialog({
   useEffect(() => {
     const checkVideoLimit = async () => {
       try {
-        const limitReached = await hasReachedAnonymousLimit();
-        setReachedLimit(limitReached);
+        const { count, maxAllowed } = await getAnonymousVideoCountInfo();
+        setReachedLimit(count >= maxAllowed);
       } catch (error) {
         console.error("Error checking anonymous limit:", error);
         setReachedLimit(false);
@@ -141,7 +172,7 @@ export function AuthPromptDialog({
     if (isOpen) {
       checkVideoLimit();
     }
-  }, [isOpen, hasReachedAnonymousLimit]);
+  }, [isOpen]);
   
   // Customize message based on limit status
   let description = promptMessages[promptType].description;
@@ -154,10 +185,12 @@ export function AuthPromptDialog({
     }
   }
 
+  // If user is already authenticated, don't show the dialog
   useEffect(() => {
-    // Debug log when dialog state changes
-    console.log('[AuthPromptDialog] Dialog open state changed:', isOpen);
-  }, [isOpen]);
+    if (isAuthenticated && user && isOpen) {
+      onClose();
+    }
+  }, [isAuthenticated, user, isOpen, onClose]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -172,6 +205,29 @@ export function AuthPromptDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Video Usage Indicator */}
+        {promptType === 'analyze_again' && (
+          <div className="mb-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span>Anonymous videos</span>
+              <span className="font-medium">{anonymousVideoCount}/{maxAllowedVideos}</span>
+            </div>
+            <div className={`relative rounded-full overflow-hidden h-2 bg-muted ${reachedLimit ? "bg-destructive/20" : ""}`}>
+              <div 
+                className={`h-full bg-primary ${reachedLimit ? "bg-destructive" : ""}`}
+                style={{ width: `${(anonymousVideoCount / maxAllowedVideos) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {reachedLimit 
+                ? "You've reached the video limit for anonymous users" 
+                : `${maxAllowedVideos - anonymousVideoCount} more videos available before reaching limit`
+              }
+            </p>
+          </div>
+        )}
+
+        {/* Benefits Section */}
         <div className="bg-muted/50 p-4 rounded-lg mb-4">
           <p className="text-sm font-medium mb-2">Benefits:</p>
           <ul className="space-y-2">
@@ -184,7 +240,9 @@ export function AuthPromptDialog({
           </ul>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex flex-col gap-4 py-2">
+          {/* Google Sign In Button */}
           <Button
             variant="outline"
             className="w-full bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 h-10"
@@ -199,14 +257,20 @@ export function AuthPromptDialog({
             <span>{isLoading ? "Signing in..." : "Continue with Google"}</span>
           </Button>
 
-          {!reachedLimit && (
-            <Button variant="default" className="w-full" onClick={handleGoToAuth}>
-              {promptMessages[promptType].buttonText}
-            </Button>
-          )}
+          {/* Create Account Button */}
+          <Button 
+            variant="default" 
+            className="w-full"
+            onClick={handleGoToAuth}
+          >
+            <span>{promptMessages[promptType].buttonText}</span>
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
         </div>
 
+        {/* Footer */}
         <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+          {/* Continue as Guest Option */}
           {onContinueAsGuest && !reachedLimit && (
             <Button
               variant="ghost"
@@ -216,11 +280,15 @@ export function AuthPromptDialog({
               Continue as Guest
             </Button>
           )}
+          
+          {/* Video Limit Indicator */}
           {reachedLimit && promptType === 'analyze_again' && (
-            <div className="text-xs text-muted-foreground mb-2 sm:mb-0">
+            <div className="text-xs text-destructive mb-2 sm:mb-0">
               You've used {anonymousVideoCount}/{maxAllowedVideos} free videos
             </div>
           )}
+          
+          {/* Already have an account link */}
           <Button
             variant="link"
             onClick={handleGoToAuth}

@@ -1,160 +1,123 @@
 /**
- * Anonymous session management utilities
+ * Anonymous Session Management Utilities
  * 
- * This module handles the creation, storage, and management of anonymous user sessions.
- * Each anonymous user gets their own unique session ID that persists across visits.
+ * This module provides utilities for working with anonymous sessions including:
+ * - Getting the current anonymous session ID
+ * - Checking video counts and limits
+ * - Managing session cookies
  */
 
-import { apiRequest } from './api';
+import axios from 'axios';
 
-// LocalStorage key for anonymous session ID
-const ANONYMOUS_SESSION_KEY = 'ytk_anonymous_session_id';
-// LocalStorage key for video count cache
-const ANONYMOUS_VIDEO_COUNT_KEY = 'ytk_anonymous_video_count';
-// Maximum videos per anonymous session
-const ANONYMOUS_VIDEO_LIMIT = 3;
+// Anonymous session cookie name
+const SESSION_COOKIE_NAME = 'anonymous_session_id';
 
 /**
- * Generate a unique session ID for anonymous users
- * 
- * The format is 'anon_[timestamp]_[random]' to ensure uniqueness
+ * Get the current anonymous session ID from cookies
+ * @returns The session ID if available, null otherwise
  */
-export function generateSessionId(): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 11);
-  return `anon_${timestamp}_${random}`;
-}
-
-/**
- * Get the current anonymous session ID from localStorage or create a new one
- */
-export function getOrCreateAnonymousSessionId(): string {
-  let sessionId = localStorage.getItem(ANONYMOUS_SESSION_KEY);
+export async function getAnonymousSessionId(): Promise<string | null> {
+  const cookies = document.cookie.split(';');
   
-  // If no session exists, create one
-  if (!sessionId) {
-    sessionId = generateSessionId();
-    localStorage.setItem(ANONYMOUS_SESSION_KEY, sessionId);
-    console.log('[Anonymous Session] Created new session:', sessionId);
-  } else {
-    console.log('[Anonymous Session] Using existing session:', sessionId);
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === SESSION_COOKIE_NAME) {
+      return value;
+    }
   }
   
-  return sessionId;
+  return null;
 }
 
 /**
- * Clear the anonymous session
- * Call this when a user logs in to ensure they don't keep using the anonymous session
+ * Gets an existing anonymous session ID or creates a new one if none exists
+ * @returns The session ID, either existing or newly created
  */
-export function clearAnonymousSession(): void {
-  localStorage.removeItem(ANONYMOUS_SESSION_KEY);
-  // Video count is no longer stored in localStorage, it's tracked on the server
-  console.log('[Anonymous Session] Session cleared');
-}
-
-/**
- * Check if user has an anonymous session
- */
-export function hasAnonymousSession(): boolean {
-  return !!localStorage.getItem(ANONYMOUS_SESSION_KEY);
-}
-
-/**
- * Get the current video count from server or return 0 if not available
- * This is a deprecated function that now just returns 0 because we no longer store counts in local storage
- * @deprecated Use server API calls directly instead
- */
-export function getLocalAnonymousVideoCount(): number {
-  return 0;
-}
-
-/**
- * This function is deprecated as we no longer store video counts in local storage
- * @deprecated Use server API calls instead
- */
-export function setLocalAnonymousVideoCount(count: number): void {
-  console.warn('setLocalAnonymousVideoCount is deprecated - server now tracks video counts');
-}
-
-/**
- * Get the current video count and maximum allowed videos from the server
- * @returns A promise that resolves to an object with the current count and max allowed videos
- */
-export async function getAnonymousVideoCountInfo(): Promise<{ count: number; maxAllowed: number }> {
+export async function getOrCreateAnonymousSessionId(): Promise<string> {
+  // First check if we already have a session ID
+  const existingId = await getAnonymousSessionId();
+  if (existingId) {
+    console.log('[Anonymous Session] Using existing session:', existingId);
+    return existingId;
+  }
+  
+  // If no session exists, create a new one
   try {
-    if (!hasAnonymousSession()) {
-      return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
-    }
+    const response = await axios.post('/api/anonymous/session');
+    const sessionId = response.data.sessionId;
     
-    const sessionId = getOrCreateAnonymousSessionId();
-    const headers = {
-      'x-anonymous-session': sessionId
-    };
-    
-    // Use fetch directly to avoid circular dependencies
-    const response = await fetch('/api/anonymous/videos/count', {
-      method: 'GET',
-      headers,
-      credentials: 'include'
-    });
-    
-    if (!response.ok) {
-      console.warn(`[Anonymous] Error getting video count: ${response.status}`);
-      return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
-    }
-    
-    const data = await response.json();
-    
-    if (data && typeof data.count === 'number') {
-      // Get max_allowed from response or use default
-      const maxAllowed = typeof data.max_allowed === 'number' 
-        ? data.max_allowed 
-        : ANONYMOUS_VIDEO_LIMIT;
-      
-      console.log('[Anonymous Session] Video count info from server:', { count: data.count, maxAllowed });
-      return { count: data.count, maxAllowed };
-    }
-    
-    return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
+    // The API should set the cookie, but we'll log confirmation
+    console.log('[Anonymous Session] Created new session:', sessionId);
+    return sessionId;
   } catch (error) {
-    console.error('[Anonymous] Error fetching video count info:', error);
-    return { count: 0, maxAllowed: ANONYMOUS_VIDEO_LIMIT };
+    console.error('[Anonymous Session] Failed to create session:', error);
+    // Generate a fallback local session ID in case of API failure
+    const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    console.log('[Anonymous Session] Using fallback session ID:', fallbackId);
+    return fallbackId;
   }
 }
 
 /**
- * Check if anonymous user has reached their video limit
- * This makes a server call to check the current count for this anonymous session
- * @returns A promise that resolves to a boolean indicating whether the limit has been reached
+ * Interface for video count information 
+ */
+interface VideoCountInfo {
+  count: number;
+  maxAllowed: number;
+}
+
+/**
+ * Get information about anonymous video count and limits
+ * @returns Object with video count and max allowed videos
+ */
+export async function getAnonymousVideoCountInfo(): Promise<VideoCountInfo> {
+  try {
+    const response = await axios.get('/api/anonymous/videos/count');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting anonymous video count:', error);
+    // Default values if the request fails
+    return {
+      count: 0,
+      maxAllowed: 3
+    };
+  }
+}
+
+/**
+ * Check if the user has reached the anonymous video limit
+ * @returns True if limit reached, false otherwise
  */
 export async function hasReachedAnonymousLimit(): Promise<boolean> {
   try {
-    console.log('[Anonymous] Checking if video limit reached');
-    
-    // Use the getAnonymousVideoCountInfo function to avoid duplicating code
     const { count, maxAllowed } = await getAnonymousVideoCountInfo();
-    
-    const hasReached = count >= maxAllowed;
-    console.log(`[Anonymous] Video count: ${count}/${maxAllowed} - Limit reached: ${hasReached}`);
-    
-    return hasReached;
+    return count >= maxAllowed;
   } catch (error) {
-    console.error('[Anonymous] Error checking anonymous limit:', error);
-    
-    // If we can't check the limit due to an error, assume they haven't reached it
-    // This errs on the side of letting users continue rather than blocking them incorrectly
+    console.error('Error checking anonymous limit:', error);
     return false;
   }
 }
 
 /**
- * Synchronous version that always assumes the user hasn't reached the limit
- * This is a fallback for UI components that need immediate responses
- * The proper way is to use the async version and handle loading states
+ * Check if authentication prompts should be suppressed based on user preference
+ * @returns True if prompts should be suppressed, false otherwise
  */
-export function hasReachedAnonymousLimitSync(): boolean {
-  // We no longer store this information locally, so this function 
-  // now only provides a safe fallback for components that can't wait for async
+export function shouldSuppressAuthPrompts(): boolean {
+  const suppressUntil = localStorage.getItem('suppress_auth_prompts_until');
+  
+  if (suppressUntil) {
+    const suppressUntilTime = parseInt(suppressUntil, 10);
+    return Date.now() < suppressUntilTime;
+  }
+  
   return false;
+}
+
+/**
+ * Check if the user has an anonymous session
+ * @returns True if an anonymous session exists, false otherwise
+ */
+export async function hasAnonymousSession(): Promise<boolean> {
+  const sessionId = await getAnonymousSessionId();
+  return !!sessionId;
 }

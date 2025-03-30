@@ -1,31 +1,27 @@
 import { Switch, Route, useLocation } from "wouter";
 import { useEffect } from "react";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Auth from "@/pages/auth";
 import Library from "@/pages/library";
 import Explorer from "@/pages/explorer";
 import VideoDetailPage from "@/pages/video/[id]";
-import { SupabaseProvider, useSupabase } from "@/hooks/use-supabase";
+import { AppProvider } from "@/components/providers/app-provider";
+import { useAuth } from "@/contexts/auth-context";
 import { ErrorProvider } from "@/contexts/error-context";
 import ErrorBoundary from "@/components/ui/error-boundary";
 
 // Auth callback handler that processes OAuth redirects
 function AuthCallback() {
   const [, setLocation] = useLocation();
-  const { supabase } = useSupabase();
+  const { isAuthenticated } = useAuth();
   
   useEffect(() => {
-    // Handle the OAuth callback
-    if (supabase) {
-      // Supabase will automatically handle the token exchange
-      // Just redirect back to home page or profile page
-      setLocation("/");
-    }
-  }, [supabase, setLocation]);
+    // Redirect to home page when authentication is processed
+    // This is a placeholder for the OAuth callback handling
+    // The auth context will handle the actual authentication
+    setLocation("/");
+  }, [setLocation]);
   
   return (
     <div className="flex items-center justify-center h-screen">
@@ -55,14 +51,11 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SupabaseProvider>
-        <ErrorProvider>
-          <Router />
-          <Toaster />
-        </ErrorProvider>
-      </SupabaseProvider>
-    </QueryClientProvider>
+    <AppProvider>
+      <ErrorProvider>
+        <Router />
+      </ErrorProvider>
+    </AppProvider>
   );
 }
 
