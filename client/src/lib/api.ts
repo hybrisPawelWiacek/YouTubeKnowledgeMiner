@@ -25,7 +25,7 @@ export async function apiRequest(
   url: string,
   data?: any,
   headers?: HeadersInit
-): Promise<Response> {
+): Promise<any> {
   console.log(`[API] ${method} request to ${url} starting`);
   console.log(`[API] Current headers:`, headers);
   

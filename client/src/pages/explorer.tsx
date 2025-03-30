@@ -122,7 +122,7 @@ export default function ExplorerPage() {
           content_types: activeFilters.contentTypes // Using snake_case for backend
         },
         limit: 20
-      }) as SearchResponse;
+      }) as SearchResponse; // The apiRequest function already returns the parsed JSON
       
       console.log("Search response:", data);
       

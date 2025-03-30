@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,7 @@ import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { useLocation } from "wouter";
 import { useError } from "@/contexts/error-context";
 import { ApiErrorDisplay } from "@/components/ui/api-error-display";
+import { hasReachedAnonymousLimit, getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 
 interface VideoInputProps {
   onVideoProcessed: (video: YoutubeVideo) => void;
@@ -164,10 +165,7 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
     },
   });
 
-  const handleVideoProcessed = (video: YoutubeVideo) => {
-    // Import queryClient for cache invalidation
-    const { queryClient } = require("@/lib/queryClient");
-    
+  const handleVideoProcessed = (video: YoutubeVideo) => {    
     // Invalidate the videos query to ensure the Library page shows the new video
     queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
     
