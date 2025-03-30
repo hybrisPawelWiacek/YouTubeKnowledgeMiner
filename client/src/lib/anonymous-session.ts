@@ -41,21 +41,17 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     return existingId;
   }
   
-  // If no session exists, create a new one
-  try {
-    const response = await axios.post('/api/anonymous/session');
-    const sessionId = response.data.sessionId;
-    
-    // The API should set the cookie, but we'll log confirmation
-    console.log('[Anonymous Session] Created new session:', sessionId);
-    return sessionId;
-  } catch (error) {
-    console.error('[Anonymous Session] Failed to create session:', error);
-    // Generate a fallback local session ID in case of API failure
-    const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    console.log('[Anonymous Session] Using fallback session ID:', fallbackId);
-    return fallbackId;
-  }
+  // For our MVP implementation, we'll use a client-side generated ID
+  // rather than making an API call that doesn't exist yet
+  const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  
+  // Store it in a cookie for persistence
+  const expirationDate = new Date();
+  expirationDate.setDate(expirationDate.getDate() + 30); // 30 days expiration
+  document.cookie = `${SESSION_COOKIE_NAME}=${fallbackId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
+  
+  console.log('[Anonymous Session] Created new client-side session:', fallbackId);
+  return fallbackId;
 }
 
 /**
@@ -72,11 +68,21 @@ interface VideoCountInfo {
  */
 export async function getAnonymousVideoCountInfo(): Promise<VideoCountInfo> {
   try {
-    const response = await axios.get('/api/anonymous/videos/count');
-    return response.data;
+    // For development/MVP, we'll use localStorage to track video count
+    // In a real implementation, this would call the backend API
+    const countStr = localStorage.getItem('anonymous_video_count') || '0';
+    const count = parseInt(countStr, 10);
+    
+    // Log for debugging
+    console.log('[Anonymous Session] Video count from localStorage:', count);
+    
+    return {
+      count,
+      maxAllowed: 3 // Hardcoded limit for anonymous users
+    };
   } catch (error) {
     console.error('Error getting anonymous video count:', error);
-    // Default values if the request fails
+    // Default values if something goes wrong
     return {
       count: 0,
       maxAllowed: 3
@@ -120,4 +126,24 @@ export function shouldSuppressAuthPrompts(): boolean {
 export async function hasAnonymousSession(): Promise<boolean> {
   const sessionId = await getAnonymousSessionId();
   return !!sessionId;
+}
+
+/**
+ * Increment the anonymous video count when a new video is analyzed
+ * @returns The new count after incrementing
+ */
+export function incrementAnonymousVideoCount(): number {
+  // Get current count
+  const countStr = localStorage.getItem('anonymous_video_count') || '0';
+  const currentCount = parseInt(countStr, 10);
+  
+  // Increment
+  const newCount = currentCount + 1;
+  
+  // Save back to localStorage
+  localStorage.setItem('anonymous_video_count', newCount.toString());
+  
+  console.log('[Anonymous Session] Incremented video count to:', newCount);
+  
+  return newCount;
 }
