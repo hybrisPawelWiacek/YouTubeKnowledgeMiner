@@ -30,8 +30,8 @@ function getUserInfoFromRequest(req: Request) {
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Get user ID from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user info from the request object where auth middleware sets it
+    const userInfo = getUserInfoFromRequest(req);
     const userId = userInfo.user_id;
     
     console.log("COLLECTIONS: Using user ID from request:", userId);
@@ -74,8 +74,8 @@ router.post('/', requireAuth, validateRequest(insertCollectionSchema), async (re
   try {
     const validatedData = req.body;
 
-    // Get user ID from middleware
-    const userInfo = res.locals.userInfo;
+    // Get user info from request using helper function
+    const userInfo = getUserInfoFromRequest(req);
     const userId = userInfo.user_id;
     
     console.log("CREATE COLLECTION: Using user ID from request:", userId);
@@ -116,7 +116,7 @@ router.patch('/:id', requireAuth, validateNumericParam('id'), async (req: Reques
     }
 
     // Check if user owns this collection
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     if (userInfo.user_id !== collection.user_id) {
       return sendError(res, "You don't have permission to update this collection", 403, "FORBIDDEN");
     }
@@ -153,7 +153,7 @@ router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Reque
     }
 
     // Check if user owns this collection
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     if (userInfo.user_id !== collection.user_id) {
       return sendError(res, "You don't have permission to delete this collection", 403, "FORBIDDEN");
     }
@@ -213,7 +213,7 @@ router.post('/:id/videos', requireAuth, validateNumericParam('id'), async (req: 
     }
 
     // Check if user owns this collection
-    const userInfo = res.locals.userInfo;
+    const userInfo = getUserInfoFromRequest(req);
     if (userInfo.user_id !== collection.user_id) {
       return sendError(res, "You don't have permission to modify this collection", 403, "FORBIDDEN");
     }

@@ -175,12 +175,19 @@ export default function Library() {
             try {
               // Use apiRequest with type assertion for our response
               const data = await apiRequest("GET", '/api/anonymous/videos/count', null, 
-                { 'x-anonymous-session': sessionId }) as unknown as VideoCountResponse;
-              console.log('Library - Check video count for this session:', data);
+                { 'x-anonymous-session': sessionId });
               
-              // Now we can safely access the properties with proper typing
-              console.log('Library - Confirmed video count:', data.count, 
-                'with session ID:', data.session_id || sessionId);
+              // Make sure we're getting a properly parsed response
+              if (data && typeof data === 'object') {
+                console.log('Library - Check video count for this session:', data);
+                
+                // Now we can safely access the properties with proper typing
+                const typedData = data as VideoCountResponse;
+                console.log('Library - Confirmed video count:', typedData.count, 
+                  'with session ID:', typedData.session_id || sessionId);
+              } else {
+                console.error('Library - Invalid response format from video count API:', data);
+              }
             } catch (error) {
               console.error('Library - Error checking video count:', error);
             }
