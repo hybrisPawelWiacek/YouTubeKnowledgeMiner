@@ -171,10 +171,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       
       if (response.data.success) {
+        // Import the clearAnonymousSession function to avoid circular dependencies
+        const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+        
+        // Clear the anonymous session after successful migration
+        clearAnonymousSession();
+        
         toast({
           title: "Content migrated successfully",
           description: `${response.data.data.migratedVideos} videos have been added to your library.`,
         });
+        
+        // Refresh user data to reflect any changes
+        await refreshUser();
+        
         return {
           success: true,
           message: `${response.data.data.migratedVideos} videos migrated successfully`

@@ -122,12 +122,15 @@ export default function ExplorerPage() {
       
       console.log("Search response:", response);
       
+      // Parse the JSON response
+      const data = await response.json();
+      
       // Handle the structured response from the semantic search API
-      if (response && response.results && Array.isArray(response.results) && response.results.length > 0) {
-        setSearchResults(response.results);
-        console.log(`Found ${response.results.length} search results`);
+      if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
+        setSearchResults(data.results);
+        console.log(`Found ${data.results.length} search results`);
       } else {
-        console.log("No results found in response:", response);
+        console.log("No results found in response:", data);
         setSearchResults([]);
         toast({
           title: "No results found",

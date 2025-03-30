@@ -42,6 +42,21 @@ export async function getAnonymousSessionId(): Promise<string | null> {
 // Local storage key for anonymous session
 const LOCAL_STORAGE_SESSION_KEY = 'ytk_anon_session_id';
 
+/**
+ * Clears the anonymous session data from localStorage and cookies
+ * Used when logging in, registering, or after migration
+ */
+export function clearAnonymousSession(): void {
+  console.log('[Anonymous Session] Clearing anonymous session data');
+  // Remove from localStorage
+  localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+  
+  // Remove from cookie by setting an expired date
+  document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  
+  console.log('[Anonymous Session] Anonymous session cleared successfully');
+}
+
 export async function getOrCreateAnonymousSessionId(): Promise<string> {
   // First check if we have a session ID in localStorage (more reliable than cookies)
   const storedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
