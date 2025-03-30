@@ -376,12 +376,31 @@ export default function Library() {
 
   // Toggle select all videos
   const toggleSelectAll = () => {
+    // Make sure allVideos is defined and an array
+    if (!Array.isArray(allVideos)) {
+      console.warn('[Library] Cannot select all: videos array is not available');
+      return;
+    }
+    
     if (selectedVideos.length === allVideos.length) {
       setSelectedVideos([]);
     } else {
-      setSelectedVideos(allVideos.map((video: Video) => video.id));
-      // Track engagement when user selects all videos
-      if (!user) trackEngagement();
+      try {
+        // Safely map over videos and extract IDs
+        const videoIds = allVideos.map((video: Video) => video.id);
+        setSelectedVideos(videoIds);
+        
+        // Track engagement when user selects all videos
+        if (!user) trackEngagement();
+      } catch (err) {
+        console.error('[Library] Error selecting all videos:', err);
+        // Provide user feedback
+        toast({
+          title: "Operation failed",
+          description: "There was a problem selecting videos. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -485,12 +504,24 @@ export default function Library() {
       }
       
       // Load videos from local storage
-      const localData = getLocalData();
-      if (localData.videos.length > 0) {
-        setAllVideos(localData.videos);
-        setTotalCount(localData.videos.length);
-        setHasMore(false);
-        setIsLoadingMore(false);
+      try {
+        const localData = getLocalData();
+        
+        // Check if localData exists and has a videos property that's an array
+        if (localData && Array.isArray(localData.videos) && localData.videos.length > 0) {
+          setAllVideos(localData.videos);
+          setTotalCount(localData.videos.length);
+          setHasMore(false);
+          setIsLoadingMore(false);
+        } else {
+          console.log('[Library] No videos found in local storage or format is invalid');
+          // Initialize with empty array to avoid undefined errors
+          setAllVideos([]);
+        }
+      } catch (error) {
+        console.error('[Library] Error loading videos from local storage:', error);
+        // Initialize with empty array to avoid undefined errors
+        setAllVideos([]);
       }
     } else if (user) {
       // Load videos for logged in users
@@ -523,8 +554,19 @@ export default function Library() {
       try {
         if (!user) {
           // For anonymous users, get collections from local storage
-          const localData = getLocalData();
-          setSelectedCollection(localData.collections || []);
+          try {
+            const localData = getLocalData();
+            // Safely access collections property
+            if (localData && localData.collections) {
+              setSelectedCollection(localData.collections);
+            } else {
+              // Initialize with empty array to avoid undefined errors
+              setSelectedCollection([]);
+            }
+          } catch (error) {
+            console.error('[Library] Error loading collections from local storage:', error);
+            setSelectedCollection([]);
+          }
           return;
         }
         const response = await apiRequest("GET", '/api/collections');

@@ -1,6 +1,6 @@
 // Import needed authentication modules
 import { useSupabase } from '@/hooks/use-supabase';
-import { getOrCreateAnonymousSessionId, hasAnonymousSession } from './anonymous-session';
+import { getOrCreateAnonymousSessionId, hasAnonymousSession, getAnonymousSessionId } from './anonymous-session';
 
 // Create a helper to get the current user session without hooks
 // This is necessary because we can't use React hooks outside of components
@@ -92,20 +92,25 @@ export async function apiRequest(
     
     // Handle anonymous user sessions
     if (!currentSession?.user) {
-      // Get or create an anonymous session ID
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      
-      if (hasAnonymousSession()) {
-        console.log('[API] Using anonymous session:', anonymousSessionId);
-      } else {
-        console.log('[API] Created new anonymous session:', anonymousSessionId);
+      try {
+        // Get or create an anonymous session ID - ensuring we await the Promise
+        const anonymousSessionId = await getOrCreateAnonymousSessionId();
+        
+        // Safety check in case the session is null
+        if (anonymousSessionId) {
+          console.log('[API] Using anonymous session:', anonymousSessionId);
+          
+          // Add anonymous session header
+          (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
+          
+          // Log the headers being sent
+          console.log('[API] Request headers for anonymous user:', options.headers);
+        } else {
+          console.warn('[API] Failed to get a valid anonymous session ID');
+        }
+      } catch (err) {
+        console.error('[API] Error getting anonymous session ID:', err);
       }
-      
-      // Add anonymous session header
-      (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
-      
-      // Log the headers being sent
-      console.log('[API] Request headers for anonymous user:', options.headers);
     }
   }
 
