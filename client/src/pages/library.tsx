@@ -98,7 +98,12 @@ export default function Library() {
     nextCursor?: number;
   }>({
     queryKey: ["/api/videos", selectedCategory, selectedCollection, selectedRating, showFavoritesOnly, sortBy, sortOrder, searchQuery, page, cursor],
-    queryFn: async () => {
+    queryFn: async (): Promise<{
+      videos: Video[];
+      totalCount: number;
+      hasMore: boolean;
+      nextCursor?: number;
+    }> => {
       setIsLoadingMore(page > 1 || cursor !== undefined);
       let url = "/api/videos?";
 
@@ -153,14 +158,13 @@ export default function Library() {
           
           // Verify that the same session ID is being consistently used
           if (sessionId) {
-            // Make a direct call to check the video count for this session
-            const response = await fetch('/api/anonymous/videos/count', {
-              headers: { 'x-anonymous-session': sessionId }
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
+            try {
+              // Use apiRequest instead of fetch directly
+              const data = await apiRequest("GET", '/api/anonymous/videos/count', null, 
+                { 'x-anonymous-session': sessionId });
               console.log('Library - Check video count for this session:', data);
+            } catch (error) {
+              console.error('Library - Error checking video count:', error);
             }
           }
         } catch (error) {
@@ -169,10 +173,8 @@ export default function Library() {
       }
       
       // Use our API request function which handles all the auth header logic for us
-      const response = await apiRequest("GET", url, undefined, headers);
-      
-      if (!response.ok) throw new Error("Failed to fetch videos");
-      return response.json();
+      // The apiRequest function already returns parsed JSON data
+      return await apiRequest("GET", url, undefined, headers);
     }
   });
 
@@ -252,8 +254,8 @@ export default function Library() {
         console.log('[bulkDeleteMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
-      const response = await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
-      return response.json();
+      // The apiRequest function already returns parsed JSON data
+      return await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
     },
     onSuccess: () => {
       toast({
@@ -285,11 +287,11 @@ export default function Library() {
         console.log('[bulkToggleFavoriteMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
-      const response = await apiRequest("PATCH", "/api/videos/bulk", { 
+      // The apiRequest function already returns parsed JSON data
+      return await apiRequest("PATCH", "/api/videos/bulk", { 
         ids, 
         data: { is_favorite: isFavorite } 
       }, headers);
-      return response.json();
     },
     onSuccess: (_, variables) => {
       toast({
@@ -318,10 +320,10 @@ export default function Library() {
         console.log('[addToCollectionMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
-      const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
+      // The apiRequest function already returns parsed JSON data
+      return await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 
         video_ids: videoIds
       }, headers);
-      return response.json();
     },
     onSuccess: (_, variables) => {
       const collection = collectionsQuery.data?.find((c: Collection) => c.id === variables.collectionId);
@@ -566,10 +568,11 @@ export default function Library() {
           setSelectedCategory(undefined);
           return;
         }
-        const response = await apiRequest("GET", '/api/categories');
-        if (response.ok) {
-          const data = await response.json();
-          setSelectedCategory(data);
+        // The apiRequest function already returns parsed JSON data
+        const data = await apiRequest("GET", '/api/categories');
+        // Ensure correct type when setting state
+        if (data && Array.isArray(data) && data.length > 0) {
+          setSelectedCategory(data[0].id);
         }
       } catch (error) {
         console.error('Failed to load categories:', error);
@@ -597,10 +600,11 @@ export default function Library() {
           }
           return;
         }
-        const response = await apiRequest("GET", '/api/collections');
-        if (response.ok) {
-          const data = await response.json();
-          setSelectedCollection(data);
+        // The apiRequest function already returns parsed JSON data
+        const data = await apiRequest("GET", '/api/collections');
+        // Ensure correct type when setting state
+        if (data && Array.isArray(data) && data.length > 0) {
+          setSelectedCollection(data[0].id);
         }
       } catch (error) {
         console.error('Failed to load collections:', error);
@@ -616,10 +620,11 @@ export default function Library() {
           // We're not changing the search query here
           return;
         }
-        const response = await apiRequest("GET", '/api/saved-searches');
-        if (response.ok) {
-          const data = await response.json();
-          setSearchQuery(data);
+        // The apiRequest function already returns parsed JSON data
+        const data = await apiRequest("GET", '/api/saved-searches');
+        // Use the first saved search as the search query if available
+        if (data && Array.isArray(data) && data.length > 0 && data[0].query) {
+          setSearchQuery(data[0].query);
         }
       } catch (error) {
         console.error('Failed to load saved searches:', error);
