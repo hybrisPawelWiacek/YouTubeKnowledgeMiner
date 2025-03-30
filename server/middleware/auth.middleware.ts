@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import winston from 'winston';
 import { dbStorage } from '../database-storage';
 import { SYSTEM } from '../../shared/config';
+import { isPromiseLike } from '../../shared/promise-utils';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -194,19 +195,85 @@ export function requireRoles(roles: string[]) {
  * Middleware that ensures a user is either authenticated or has an anonymous session
  * This allows access to routes that require some form of user context
  */
-export function requireAnyUser(req: Request, res: Response, next: NextFunction) {
+export async function requireAnyUser(req: Request, res: Response, next: NextFunction) {
   // Allow authenticated users
   if (req.isAuthenticated) {
     return next();
   }
   
-  // Allow anonymous users with a valid session ID (even if session creation is pending)
-  if (req.isAnonymous && req.sessionId && req.sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
-    // Even if the user object isn't fully populated yet (async creation might be in progress)
-    // we allow the request to proceed as long as there's a valid anonymous session ID format
+  // Also check for anonymous session in headers (not just in req.sessionId from auth middleware)
+  const headerSessionId = req.headers['x-anonymous-session'];
+  
+  // Check if we have a header session and it starts with the anonymous prefix
+  let hasHeaderSession = false;
+  let sessionIdToUse: string | null = null;
+  
+  if (headerSessionId) {
+    // Handle both string and array cases
+    const rawSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+    
+    // Use the shared isPromiseLike utility function
+    
+    if (isPromiseLike(rawSessionId)) {
+      logger.info(`Found Promise-like session ID in requireAnyUser middleware`);
+      // We need to handle this async, will do that in the next section
+      hasHeaderSession = true; // Assume valid for now, will check after resolving
+    } else {
+      // It's a regular string
+      sessionIdToUse = rawSessionId as string;
+      hasHeaderSession = sessionIdToUse.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX);
+    }
+  }
+  
+  // If the request has a valid anonymous session ID format
+  if (req.isAnonymous && 
+     (req.sessionId?.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX) || hasHeaderSession)) {
+    
+    // If req.user is not set yet, but we have a valid anonymous session ID in headers,
+    // let's set up the anonymous user now:
+    if (!req.user && hasHeaderSession) {
+      if (sessionIdToUse) {
+        logger.info(`Setting up anonymous user from header session: ${sessionIdToUse}`);
+        
+        // We have a resolved session ID string
+        req.user = { 
+          id: SYSTEM.ANONYMOUS_USER_ID,
+          username: 'anonymous',
+          user_type: 'anonymous',
+          anonymous_session_id: sessionIdToUse
+        };
+      } else {
+        // We need to handle a Promise-like session ID
+        const rawSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+        
+        logger.info(`Using default anonymous user while Promise resolves`);
+        // Set up a basic anonymous user for now
+        req.user = { 
+          id: SYSTEM.ANONYMOUS_USER_ID,
+          username: 'anonymous',
+          user_type: 'anonymous'
+        };
+        
+        // Asynchronously resolve and update the session ID
+        // This ensures the middleware doesn't block
+        (async () => {
+          try {
+            // Cast and resolve the Promise
+            const resolvedSessionId = await (rawSessionId as unknown as Promise<string>);
+            if (resolvedSessionId && resolvedSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+              // Update the request user object if still processing
+              req.user.anonymous_session_id = resolvedSessionId;
+            }
+          } catch (err) {
+            logger.error(`Failed to resolve Promise session ID in middleware:`, err);
+          }
+        })();
+      }
+    }
+    
     return next();
   }
   
-  logger.info(`Access denied by requireAnyUser: isAnonymous=${req.isAnonymous}, hasSessionId=${!!req.sessionId}, hasUser=${!!req.user}`);
+  logger.info(`Access denied by requireAnyUser: isAnonymous=${req.isAnonymous}, hasSessionId=${!!req.sessionId}, hasHeaderSession=${hasHeaderSession}, hasUser=${!!req.user}`);
   return res.status(401).json({ error: 'Valid user session required' });
 }

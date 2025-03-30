@@ -2,10 +2,12 @@ import { Router, Request, Response } from 'express';
 import { dbStorage } from '../database-storage';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { createLogger } from '../services/logger';
+import { isPromiseLike } from '../../shared/promise-utils';
+import { SYSTEM } from '../../shared/config';
 
 const router = Router();
 const logger = createLogger('anonymous');
-const ANONYMOUS_VIDEO_LIMIT = 3; // Maximum videos allowed per anonymous session
+const ANONYMOUS_VIDEO_LIMIT = SYSTEM.ANONYMOUS_VIDEO_LIMIT; // Maximum videos allowed per anonymous session
 
 /**
  * Get video count for anonymous session
@@ -20,7 +22,29 @@ router.get('/videos/count', async (req: Request, res: Response) => {
       return sendSuccess(res, { count: 0, max_allowed: ANONYMOUS_VIDEO_LIMIT });
     }
     
-    const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader as string;
+    // Ensure we're working with a string, not a Promise object
+    // First handle if it's an array or single value
+    let rawSessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
+    
+    // Then ensure it's a string
+    let sessionId: string;
+    
+    // Using the shared isPromiseLike function
+    
+    if (isPromiseLike(rawSessionId)) {
+      logger.info(`Session ID is a Promise-like object, resolving...`);
+      try {
+        sessionId = await rawSessionId;
+      } catch (err) {
+        logger.error(`Failed to resolve session ID Promise:`, err);
+        return sendSuccess(res, { count: 0, max_allowed: ANONYMOUS_VIDEO_LIMIT });
+      }
+    } else {
+      sessionId = rawSessionId as string;
+    }
+    
+    // Log for debugging
+    logger.info(`Processing anonymous session request for ID: ${sessionId}`);
     
     // Get session from database
     const session = await dbStorage.getAnonymousSessionBySessionId(sessionId);
@@ -57,16 +81,36 @@ router.post('/migrate', async (req: Request, res: Response) => {
     }
 
     // Get session ID from header or body
-    const sessionId = req.body.sessionId || 
+    let rawSessionId = req.body.sessionId || 
                      (req.headers['x-anonymous-session'] ? 
                      (Array.isArray(req.headers['x-anonymous-session']) ? 
                       req.headers['x-anonymous-session'][0] : 
                       req.headers['x-anonymous-session']) : 
                      null);
 
-    if (!sessionId) {
+    if (!rawSessionId) {
       return sendError(res, 'Anonymous session ID is required', 400);
     }
+    
+    // Resolve session ID if it's a Promise-like object
+    let sessionId: string;
+    
+    // Using the shared isPromiseLike function
+      
+    if (isPromiseLike(rawSessionId)) {
+      logger.info(`Migrate: Session ID is a Promise-like object, resolving...`);
+      try {
+        sessionId = await rawSessionId;
+      } catch (err) {
+        logger.error(`Migrate: Failed to resolve session ID Promise:`, err);
+        return sendError(res, 'Invalid anonymous session ID', 400);
+      }
+    } else {
+      sessionId = rawSessionId as string;
+    }
+    
+    // Log the sessionId for debugging
+    logger.info(`Processing migration request for session: ${sessionId}`);
     
     // Get the user ID from the authenticated request
     const userId = req.user.id;
