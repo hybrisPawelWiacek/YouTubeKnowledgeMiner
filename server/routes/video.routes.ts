@@ -166,7 +166,7 @@ router.post('/', requireAnyUser, async (req: Request, res: Response) => {
       likes: likeCount,
       description,
       tags,
-      user_id: userInfo.is_anonymous ? 1 : (userInfo.user_id as number), // Use user_id=1 for anonymous users
+      user_id: userInfo.is_anonymous ? 7 : (userInfo.user_id as number), // Use user_id=7 for anonymous users
       anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null,
       notes,
       category_id,
@@ -465,7 +465,7 @@ router.post('/process', requireAnyUser, async (req: Request, res: Response) => {
       likes: videoData.likeCount,
       description: videoData.description,
       tags: videoData.tags,
-      user_id: userInfo.is_anonymous ? 1 : (userInfo.user_id as number), // Use user_id=1 for anonymous users
+      user_id: userInfo.is_anonymous ? 7 : (userInfo.user_id as number), // Use user_id=7 for anonymous users
       anonymous_session_id: userInfo.is_anonymous ? userInfo.anonymous_session_id : null
     });
     

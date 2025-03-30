@@ -1,64 +1,71 @@
+import { useEffect, useState } from 'react';
 import { useSupabase } from '@/hooks/use-supabase';
 import { getOrCreateAnonymousSessionId, hasAnonymousSession } from '@/lib/anonymous-session';
 
 export function useLibraryQueryHeaders() {
   const { user } = useSupabase();
+  const [headers, setHeaders] = useState<HeadersInit>({});
   
-  // Initialize headers
-  const headers: HeadersInit = {};
-  
-  // If a userId is available, add it to the headers
-  const userId = user?.id;
-  console.log('use-library-query trying to set x-user-id header with user ID:', userId, 'type:', typeof userId);
-  
-  if (userId) {
-    let headerValue;
-    
-    // Ensure userId is sent as a clean number in string format
-    if (typeof userId === 'number') {
-      headerValue = String(userId);
-    } else {
-      // For strings or other types, extract numeric portion if possible
-      const match = String(userId).match(/\d+/);
-      const extractedId = match ? parseInt(match[0], 10) : NaN;
-      console.log('Extracted numeric user ID from string:', extractedId);
+  useEffect(() => {
+    // Function to initialize headers
+    async function initializeHeaders() {
+      const newHeaders: HeadersInit = {};
       
-      if (!isNaN(extractedId)) {
-        headerValue = String(extractedId);
+      // If a userId is available, add it to the headers
+      const userId = user?.id;
+      console.log('[VideoInput] User ID for headers:', userId, 'type:', typeof userId);
+      
+      if (userId) {
+        let headerValue;
+        
+        // Ensure userId is sent as a clean number in string format
+        if (typeof userId === 'number') {
+          headerValue = String(userId);
+        } else {
+          // For strings or other types, extract numeric portion if possible
+          const match = String(userId).match(/\d+/);
+          const extractedId = match ? parseInt(match[0], 10) : NaN;
+          console.log('Extracted numeric user ID from string:', extractedId);
+          
+          if (!isNaN(extractedId)) {
+            headerValue = String(extractedId);
+          } else {
+            console.warn('Failed to extract valid user ID from:', userId);
+            setHeaders({}); // Set empty headers if no valid ID
+            return;
+          }
+        }
+        
+        newHeaders['x-user-id'] = headerValue;
+        console.log('[VideoInput] Setting x-user-id header to:', headerValue);
       } else {
-        console.warn('Failed to extract valid user ID from:', userId);
-        return {}; // Return empty headers if no valid ID
+        console.log('[VideoInput] No authenticated user, using anonymous session');
+        
+        try {
+          // Always get or create the anonymous session
+          const hasSession = await hasAnonymousSession();
+          const anonymousSessionId = await getOrCreateAnonymousSessionId();
+          
+          console.log('[VideoInput] Fetching video count with session:', { anonymousSessionId, hasSession });
+          
+          if (anonymousSessionId) {
+            // Add anonymous session header
+            newHeaders['x-anonymous-session'] = anonymousSessionId;
+            
+            // Use the correct anonymous user ID (7)
+            newHeaders['x-user-id'] = '7';
+          }
+        } catch (error) {
+          console.error('[VideoInput] Error setting up anonymous session:', error);
+        }
       }
+      
+      setHeaders(newHeaders);
     }
     
-    headers['x-user-id'] = headerValue;
-    console.log('Setting x-user-id header in library query to:', headerValue);
-  } else {
-    console.log('No authenticated user found, checking for anonymous session');
-    
-    // If no authenticated user, handle anonymous session
-    if (hasAnonymousSession()) {
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      console.log('Using anonymous session ID for library query:', anonymousSessionId);
-      
-      // Add anonymous session header
-      headers['x-anonymous-session'] = anonymousSessionId;
-      
-      // Also add default user ID for backward compatibility
-      headers['x-user-id'] = '1';
-    } else {
-      console.log('Creating new anonymous session for library query');
-      
-      // Create new anonymous session
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      
-      // Add anonymous session header
-      headers['x-anonymous-session'] = anonymousSessionId;
-      
-      // Also add default user ID for backward compatibility
-      headers['x-user-id'] = '1';
-    }
-  }
+    // Call the async function
+    initializeHeaders();
+  }, [user]); // Re-run effect when user changes
   
   return headers;
 }

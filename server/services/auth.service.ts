@@ -481,12 +481,24 @@ export async function cleanupExpiredSessions(): Promise<number> {
 // Helpers for Express middleware
 
 /**
- * Extract session ID from cookie
+ * Extract session ID from cookie or header
  * @param req - Express request object
  * @returns Session ID if present, null otherwise
  */
 export function extractSessionId(req: Request): string | null {
-  return req.cookies?.auth_session || null;
+  // First check for cookie-based auth session (registered users)
+  const cookieSession = req.cookies?.auth_session;
+  if (cookieSession) {
+    return cookieSession;
+  }
+  
+  // Then check for anonymous session in headers
+  const anonymousSession = req.headers['x-anonymous-session'];
+  if (anonymousSession && typeof anonymousSession === 'string') {
+    return anonymousSession;
+  }
+  
+  return null;
 }
 
 /**

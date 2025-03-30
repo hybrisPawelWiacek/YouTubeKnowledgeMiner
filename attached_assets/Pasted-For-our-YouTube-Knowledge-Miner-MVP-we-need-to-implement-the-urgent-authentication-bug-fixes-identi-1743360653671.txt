@@ -1,0 +1,39 @@
+For our YouTube Knowledge Miner MVP, we need to implement the urgent authentication bug fixes identified in our testing report. This task is part of Sprint 1 as detailed in docs/sprint_1/sprint1-progress-report.md.
+
+Before implementation, please review:
+- docs/sprint_1/Auth Bug Fix Plan.md for the detailed bug fix plan
+- docs/sprint_1/Authentication Testing Report 1 Update.md for latest test results
+- authentication-test-results.md for specific issues identified
+- authentication-testing-plan.md to understand the expected behavior
+
+Focus on fixing these critical issues in order:
+
+1. Anonymous Session Management:
+   - Update auth middleware to create anonymous sessions when they don't exist in the database
+   - Ensure proper session persistence and retrieval
+
+2. Authentication Middleware:
+   - Fix the requireAnyUser middleware to properly handle anonymous sessions
+   - Make sure it accepts requests with valid session IDs even without a full user object
+
+3. Session Header Transmission:
+   - Correct client-side code to properly include session headers in all API requests
+   - Focus specifically on the hooks/use-library-query.ts implementation
+
+4. User ID Consistency:
+   - Update video routes to use the correct anonymous user ID (7) instead of hardcoded ID (1)
+   - Ensure consistent user identification across the application
+
+Implementation considerations:
+- Focus on minimal, targeted changes to fix the immediate issues
+- Maintain the existing architecture patterns
+- Add appropriate logging to track session creation and validation
+- Ensure backward compatibility with existing frontend code
+
+When complete, provide:
+- Summary of changes made to each component
+- Testing instructions to verify the fixes
+- Any database schema changes required
+- Explanation of how the anonymous session flow now works end-to-end
+
+Let's focus on getting the anonymous user flow working first, so users can save videos without authentication. Once that's fixed, we'll move on to testing the full registration and migration process.

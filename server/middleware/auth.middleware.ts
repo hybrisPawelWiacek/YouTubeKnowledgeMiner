@@ -12,6 +12,7 @@ import { db } from '../db';
 import { anonymous_sessions } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import winston from 'winston';
+import { dbStorage } from '../database-storage';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -89,6 +90,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
           .where(eq(anonymous_sessions.session_id, sessionId));
         
         if (anonSession.length > 0) {
+          // Session exists in the database, use it
           req.user = { 
             id: 7, // Dedicated anonymous user ID
             username: 'anonymous',
@@ -97,6 +99,39 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
           };
           
           logger.debug(`Anonymous session validated: ${sessionId}`);
+          
+          // Update the session's last active timestamp
+          try {
+            await dbStorage.updateAnonymousSessionLastActive(sessionId);
+            logger.debug(`Updated last active timestamp for session: ${sessionId}`);
+          } catch (err) {
+            logger.error(`Failed to update last active timestamp for session: ${sessionId}`, err);
+          }
+        } 
+        // Session doesn't exist in the database yet, create it
+        else {
+          try {
+            logger.info(`Creating new anonymous session: ${sessionId}`);
+            
+            // Create the anonymous session in the database
+            const newSession = await dbStorage.createAnonymousSession({
+              session_id: sessionId,
+              user_agent: req.headers['user-agent'] || null,
+              ip_address: req.ip || null
+            });
+            
+            // Set up the user object with the anonymous user ID
+            req.user = { 
+              id: 7, // Dedicated anonymous user ID
+              username: 'anonymous',
+              user_type: 'anonymous',
+              anonymous_session_id: sessionId
+            };
+            
+            logger.debug(`Created and validated new anonymous session: ${sessionId}`);
+          } catch (error) {
+            logger.error(`Failed to create anonymous session: ${sessionId}`, error);
+          }
         }
       }
     }
@@ -159,9 +194,18 @@ export function requireRoles(roles: string[]) {
  * This allows access to routes that require some form of user context
  */
 export function requireAnyUser(req: Request, res: Response, next: NextFunction) {
-  if (req.isAuthenticated || (req.isAnonymous && req.user)) {
+  // Allow authenticated users
+  if (req.isAuthenticated) {
     return next();
   }
   
+  // Allow anonymous users with a valid session ID (even if session creation is pending)
+  if (req.isAnonymous && req.sessionId && req.sessionId.startsWith('anon_')) {
+    // Even if the user object isn't fully populated yet (async creation might be in progress)
+    // we allow the request to proceed as long as there's a valid anonymous session ID format
+    return next();
+  }
+  
+  logger.info(`Access denied by requireAnyUser: isAnonymous=${req.isAnonymous}, hasSessionId=${!!req.sessionId}, hasUser=${!!req.user}`);
   return res.status(401).json({ error: 'Valid user session required' });
 }

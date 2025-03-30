@@ -48,19 +48,50 @@ The session is created client-side and sent to the backend, but the backend logs
 ### 1.2 Adding Videos and Tracking the Count
 
 **Test Steps Executed:**
-[To be completed during testing]
+1. With an anonymous session active, entered a YouTube URL (https://youtu.be/-BDq59Saii4)
+2. Clicked "Analyze" to process the video
+3. Video was processed and displayed analysis results
+4. Attempted to save the analyzed video to the library
 
 **Results:**
-[To be completed during testing]
+- ✅ Video URL was successfully processed and analyzed
+- ✅ Client correctly attempted to include anonymous session header in request
+- ❌ Failed to save video with error "401: valid user session required"
+- ❌ Anonymous session not recognized by the backend
 
-**Screenshot Evidence:**
-[To be completed during testing]
+**Console Logs:**
+```
+[VideoInput] Submit button clicked: {url:"https://youtu.be/-BDq59Saii4?si=WwlYmCATPuiUL8cy"}
+[VideoInput] Checking anonymous limit before analyzing
+[VideoInput] Anonymous limit reached: false
+[VideoInput] Proceeding to analyze video: https://youtu.be/-BDq59Saii4?si=WwlYmCATPuiUL8cy
+[VideoResult] Current anonymous video count: 0, Max allowed: 3
+[VideoResult] Not prompting, saving video silently
+🎥 SAVING VIDEO - USER CONTEXT: {userIsAuthenticated:false, userType:"undefined"}
+⚠️ NO USER SESSION FOUND - User not authenticated
+📡 Anonymous user - adding session header: {}
+📡 Making POST request to /api/videos
+❌ ERROR SAVING VIDEO: {}
+Error in saveVideo mutation: {}
+```
 
 **Network Details:**
-[To be completed during testing]
+- Request: `POST /api/videos`
+- Headers include anonymous session but appears to be missing or invalid
+- Response: 401 Unauthorized - "valid user session required"
+
+**Backend Logs:**
+```
+2025-03-30 18:17:25 info: [app] Anonymous session not found: anon_1743358644029_wykwoty6
+2025-03-30 18:17:25 info: [app] POST /api/videos
+2025-03-30 18:17:25 info: [app] 401 POST / (1.28ms)
+```
 
 **Issues:**
-[To be completed during testing]
+1. Despite creating an anonymous session ID on the client, the backend doesn't recognize it
+2. The anonymous session header appears to be empty (`adding session header: {}`) in the logs
+3. The backend continues to report "Anonymous session not found" for every request
+4. This causes authorization failures when attempting to save videos, as the system cannot associate the video with an anonymous session
 
 ### 1.3 Approaching and Hitting the 3-Video Limit
 
@@ -288,8 +319,34 @@ The session is created client-side and sent to the backend, but the backend logs
 
 ## Summary of Findings
 
-[Overall findings will be summarized after testing is completed]
+After testing the authentication system in the YouTube Knowledge Miner application, we've discovered several critical issues that prevent the anonymous user flow from functioning correctly:
+
+1. **Anonymous Session Management Issues**: The client-side code correctly generates anonymous session IDs, but these sessions aren't properly persisted in the backend database, leading to authentication failures.
+
+2. **Authentication Middleware Limitations**: The current middleware structure doesn't automatically create anonymous sessions when they don't exist, causing a disconnect between client-side and server-side session management.
+
+3. **Session Header Transmission Problems**: The session headers seem to be empty or improperly configured in client API requests, preventing the server from recognizing anonymous users.
+
+4. **Anonymous User ID Inconsistency**: The hardcoded anonymous user ID (1) in the video routes doesn't match the expected anonymous user ID (7) in the auth middleware.
+
+5. **Registration and Migration**: We couldn't test the registration and migration flows due to the fundamental issues with anonymous session handling. These features depend on a working anonymous user experience.
 
 ## Recommendations
 
-[Recommendations for improvements will be added after testing is completed]
+Based on our investigation, we recommend the following actions:
+
+1. **Fix the Auth Middleware**: Update the authentication middleware to automatically create anonymous sessions when they don't exist, ensuring a seamless user experience.
+
+2. **Update the requireAnyUser Middleware**: Modify this middleware to better handle anonymous sessions by accepting requests with a valid session ID even if the user object isn't fully populated yet.
+
+3. **Fix Client-Side Header Transmission**: Ensure that anonymous session IDs are correctly included in API request headers across all relevant components.
+
+4. **Align User IDs**: Update the video routes to use the correct anonymous user ID (7) instead of the hardcoded value (1).
+
+5. **Comprehensive Retesting**: After implementing these fixes, conduct thorough testing of the entire authentication flow, including anonymous usage, registration, login, and content migration.
+
+6. **Add Logging for Session Debugging**: Enhance logging throughout the authentication processes to better track session creation, validation, and usage.
+
+7. **Documentation Updates**: Update the project documentation to clearly explain the anonymous user flow, including how sessions are created, managed, and migrated.
+
+A detailed bug fix plan has been created in `docs/sprint_1/Auth Bug Fix Plan.md` that outlines specific code changes needed to address these issues.
