@@ -196,84 +196,136 @@ export function requireRoles(roles: string[]) {
  * This allows access to routes that require some form of user context
  */
 export async function requireAnyUser(req: Request, res: Response, next: NextFunction) {
-  // Allow authenticated users
-  if (req.isAuthenticated) {
-    return next();
-  }
-  
-  // Also check for anonymous session in headers (not just in req.sessionId from auth middleware)
-  const headerSessionId = req.headers['x-anonymous-session'];
-  
-  // Check if we have a header session and it starts with the anonymous prefix
-  let hasHeaderSession = false;
-  let sessionIdToUse: string | null = null;
-  
-  if (headerSessionId) {
-    // Handle both string and array cases
-    const rawSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+  try {
+    // Enhanced logging for debugging
+    logger.debug(`[requireAnyUser] Starting middleware check with isAuthenticated=${req.isAuthenticated}, isAnonymous=${req.isAnonymous}`);
+    logger.debug(`[requireAnyUser] Headers: ${JSON.stringify(req.headers)}`);
     
-    // Use the shared isPromiseLike utility function
-    
-    if (isPromiseLike(rawSessionId)) {
-      logger.info(`Found Promise-like session ID in requireAnyUser middleware`);
-      // We need to handle this async, will do that in the next section
-      hasHeaderSession = true; // Assume valid for now, will check after resolving
-    } else {
-      // It's a regular string
-      sessionIdToUse = rawSessionId as string;
-      hasHeaderSession = sessionIdToUse.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX);
+    // Allow authenticated users
+    if (req.isAuthenticated) {
+      logger.debug(`[requireAnyUser] User is authenticated, proceeding`);
+      return next();
     }
-  }
-  
-  // If the request has a valid anonymous session ID format
-  if (req.isAnonymous && 
-     (req.sessionId?.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX) || hasHeaderSession)) {
     
-    // If req.user is not set yet, but we have a valid anonymous session ID in headers,
-    // let's set up the anonymous user now:
-    if (!req.user && hasHeaderSession) {
-      if (sessionIdToUse) {
-        logger.info(`Setting up anonymous user from header session: ${sessionIdToUse}`);
-        
-        // We have a resolved session ID string
-        req.user = { 
-          id: SYSTEM.ANONYMOUS_USER_ID,
-          username: 'anonymous',
-          user_type: 'anonymous',
-          anonymous_session_id: sessionIdToUse
-        };
-      } else {
-        // We need to handle a Promise-like session ID
+    // Check for anonymous session in all possible locations
+    // 1. In req.sessionId (from auth middleware)
+    // 2. In x-anonymous-session header
+    // 3. In req.user.anonymous_session_id
+    
+    let anonymousSessionId: string | null = null;
+    
+    // First check if already in req.sessionId from auth middleware
+    if (req.sessionId && req.sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+      logger.debug(`[requireAnyUser] Found session ID in req.sessionId: ${req.sessionId}`);
+      anonymousSessionId = req.sessionId;
+    }
+    
+    // If not found, check the header
+    if (!anonymousSessionId) {
+      const headerSessionId = req.headers['x-anonymous-session'];
+      
+      if (headerSessionId) {
+        // Handle both string and array cases
         const rawSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
         
-        logger.info(`Using default anonymous user while Promise resolves`);
-        // Set up a basic anonymous user for now
-        req.user = { 
-          id: SYSTEM.ANONYMOUS_USER_ID,
-          username: 'anonymous',
-          user_type: 'anonymous'
-        };
-        
-        // Asynchronously resolve and update the session ID
-        // This ensures the middleware doesn't block
-        (async () => {
+        // Check if it's a promise or a string
+        if (isPromiseLike(rawSessionId)) {
+          logger.debug(`[requireAnyUser] Found Promise-like session ID in header`);
           try {
-            // Cast and resolve the Promise
+            // Resolve the promise
             const resolvedSessionId = await (rawSessionId as unknown as Promise<string>);
             if (resolvedSessionId && resolvedSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
-              // Update the request user object if still processing
-              req.user.anonymous_session_id = resolvedSessionId;
+              logger.debug(`[requireAnyUser] Resolved session ID: ${resolvedSessionId}`);
+              anonymousSessionId = resolvedSessionId;
             }
           } catch (err) {
-            logger.error(`Failed to resolve Promise session ID in middleware:`, err);
+            logger.error(`[requireAnyUser] Failed to resolve Promise session ID:`, err);
           }
-        })();
+        } else if (typeof rawSessionId === 'string' && rawSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+          logger.debug(`[requireAnyUser] Found string session ID in header: ${rawSessionId}`);
+          anonymousSessionId = rawSessionId;
+        }
       }
     }
     
-    return next();
+    // If not found in sessionId or header, check if it's in the user object
+    if (!anonymousSessionId && req.user?.anonymous_session_id) {
+      logger.debug(`[requireAnyUser] Found session ID in user object: ${req.user.anonymous_session_id}`);
+      anonymousSessionId = req.user.anonymous_session_id;
+    }
+    
+    // If we have an anonymous session ID from any source, verify it exists in the database
+    if (anonymousSessionId) {
+      logger.debug(`[requireAnyUser] Verifying anonymous session: ${anonymousSessionId}`);
+      
+      // Check if session exists in the database
+      const session = await db
+        .select()
+        .from(anonymous_sessions)
+        .where(eq(anonymous_sessions.session_id, anonymousSessionId));
+      
+      if (session.length > 0) {
+        logger.debug(`[requireAnyUser] Anonymous session verified in database`);
+        
+        // Set up the user object correctly if not already set
+        if (!req.user) {
+          req.user = {
+            id: SYSTEM.ANONYMOUS_USER_ID,
+            username: 'anonymous',
+            user_type: 'anonymous',
+            anonymous_session_id: anonymousSessionId
+          };
+        } else if (!req.user.anonymous_session_id) {
+          // Make sure the session ID is in the user object
+          req.user.anonymous_session_id = anonymousSessionId;
+        }
+        
+        // Set req.isAnonymous explicitly to true
+        req.isAnonymous = true;
+        
+        // Make sure the sessionId is set on the request
+        req.sessionId = anonymousSessionId;
+        
+        logger.debug(`[requireAnyUser] Anonymous user setup complete, proceeding`);
+        return next();
+      } else {
+        // Session ID is valid format but not in database, create it
+        logger.debug(`[requireAnyUser] Session not found in database, creating new session`);
+        try {
+          const newSession = await dbStorage.createAnonymousSession({
+            session_id: anonymousSessionId,
+            user_agent: req.headers['user-agent'] || null,
+            ip_address: req.ip || null
+          });
+          
+          // Set up the user object correctly
+          req.user = {
+            id: SYSTEM.ANONYMOUS_USER_ID,
+            username: 'anonymous',
+            user_type: 'anonymous',
+            anonymous_session_id: anonymousSessionId
+          };
+          
+          // Set req.isAnonymous explicitly to true
+          req.isAnonymous = true;
+          
+          // Make sure the sessionId is set on the request
+          req.sessionId = anonymousSessionId;
+          
+          logger.debug(`[requireAnyUser] New anonymous session created, proceeding`);
+          return next();
+        } catch (error) {
+          logger.error(`[requireAnyUser] Error creating new anonymous session:`, error);
+          // Fall through to authentication required
+        }
+      }
+    }
+    
+    // No authenticated user and no valid anonymous session
+    logger.debug(`[requireAnyUser] No valid authenticated user or anonymous session found`);
+    return res.status(401).json({ error: 'Authentication required' });
+  } catch (error) {
+    logger.error(`[requireAnyUser] Unexpected error in middleware:`, error);
+    return res.status(500).json({ error: 'Internal server error in authentication middleware' });
   }
-  
-  logger.info(`Access denied by requireAnyUser: isAnonymous=${req.isAnonymous}, hasSessionId=${!!req.sessionId}, hasHeaderSession=${hasHeaderSession}, hasUser=${!!req.user}`);
-  return res.status(401).json({ error: 'Valid user session required' });
 }

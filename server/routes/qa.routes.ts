@@ -19,10 +19,39 @@ const router = Router();
  * This function adapts the new auth middleware format to the existing code
  */
 function getUserInfoFromRequest(req: Request) {
+  // Get the anonymous session ID from multiple possible sources
+  let anonymousSessionId = null;
+  
+  // First check if it's in req.sessionId (from auth middleware)
+  if (req.isAnonymous && req.sessionId) {
+    anonymousSessionId = req.sessionId;
+    console.log(`[QA routes] Found session ID in req.sessionId: ${anonymousSessionId}`);
+  }
+  
+  // If not found, check the header
+  if (!anonymousSessionId && req.isAnonymous) {
+    const headerSessionId = req.headers['x-anonymous-session'];
+    if (headerSessionId) {
+      anonymousSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+      console.log(`[QA routes] Found session ID in headers: ${anonymousSessionId}`);
+    }
+  }
+  
+  // If a session ID is in the user object, use that (sometimes the middleware sets it there)
+  if (!anonymousSessionId && req.isAnonymous && req.user?.anonymous_session_id) {
+    anonymousSessionId = req.user.anonymous_session_id;
+    console.log(`[QA routes] Found session ID in user object: ${anonymousSessionId}`);
+  }
+  
+  // Log the auth properties and headers
+  console.log(`[QA routes] Auth properties: isAuthenticated=${req.isAuthenticated}, isAnonymous=${req.isAnonymous}`);
+  console.log(`[QA routes] User object:`, req.user || 'undefined');
+  console.log(`[QA routes] Using anonymous_session_id: ${anonymousSessionId}`);
+  
   return {
     user_id: req.user?.id,
     is_anonymous: req.isAnonymous,
-    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+    anonymous_session_id: anonymousSessionId
   };
 }
 

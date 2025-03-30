@@ -38,6 +38,7 @@ function getUserInfoFromRequest(req: Request) {
   // First check if it's in req.sessionId (from auth middleware)
   if (req.isAnonymous && req.sessionId) {
     anonymousSessionId = req.sessionId;
+    console.log(`[getUserInfoFromRequest] Found session ID in req.sessionId: ${anonymousSessionId}`);
   }
   
   // If not found, check the header
@@ -45,15 +46,24 @@ function getUserInfoFromRequest(req: Request) {
     const headerSessionId = req.headers['x-anonymous-session'];
     if (headerSessionId) {
       anonymousSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+      console.log(`[getUserInfoFromRequest] Found session ID in headers: ${anonymousSessionId}`);
     }
   }
   
   // If a session ID is in the user object, use that (sometimes the middleware sets it there)
   if (!anonymousSessionId && req.isAnonymous && req.user?.anonymous_session_id) {
     anonymousSessionId = req.user.anonymous_session_id;
+    console.log(`[getUserInfoFromRequest] Found session ID in user object: ${anonymousSessionId}`);
   }
   
+  // Log the auth properties and headers
+  console.log(`[getUserInfoFromRequest] Auth properties: isAuthenticated=${req.isAuthenticated}, isAnonymous=${req.isAnonymous}`);
+  console.log(`[getUserInfoFromRequest] User object:`, req.user || 'undefined');
   console.log(`[getUserInfoFromRequest] Using anonymous_session_id: ${anonymousSessionId}`);
+  
+  // Log all relevant headers for debugging
+  console.log(`[getUserInfoFromRequest] x-anonymous-session header: ${req.headers['x-anonymous-session'] || 'not set'}`);
+  console.log(`[getUserInfoFromRequest] cookie header: ${req.headers.cookie || 'not set'}`);
   
   return {
     user_id: req.user?.id,
@@ -616,7 +626,9 @@ router.get('/:id', validateNumericParam('id'), requireAnyUser, async (req: Reque
     
     // Get user info from auth middleware via helper function
     const userInfo = getUserInfoFromRequest(req);
-    console.log(`[video routes] Fetching video ${videoId} for user:`, userInfo.user_id);
+    console.log(`[video routes] Fetching video ${videoId} for user:`, userInfo);
+    console.log(`[video routes] Request headers:`, req.headers);
+    console.log(`[video routes] Anonymous session ID:`, userInfo.anonymous_session_id);
     
     // Fetch the video from the database
     const video = await dbStorage.getVideo(videoId);
@@ -626,18 +638,39 @@ router.get('/:id', validateNumericParam('id'), requireAnyUser, async (req: Reque
       return sendError(res, "Video not found", 404, "NOT_FOUND");
     }
     
+    console.log(`[video routes] Found video:`, {
+      id: video.id,
+      title: video.title,
+      user_id: video.user_id,
+      anonymous_session_id: video.anonymous_session_id
+    });
+    
     // Check if this user has access to this video
     // 1. For authenticated users, they should only see their own videos
     // 2. For anonymous users, they should only see videos from their session
     if (userInfo.is_anonymous) {
+      console.log(`[video routes] Checking anonymous access: 
+        Video session ID: ${video.anonymous_session_id} 
+        Request session ID: ${userInfo.anonymous_session_id}`);
+        
       if (video.anonymous_session_id !== userInfo.anonymous_session_id) {
+        console.log(`[video routes] Access denied for anonymous user - session mismatch`);
         return sendError(res, "Video not found for this anonymous session", 404, "NOT_FOUND");
       }
+      
+      console.log(`[video routes] Anonymous user access granted to video ${videoId}`);
     } else {
       // Authenticated user
+      console.log(`[video routes] Checking authenticated access: 
+        Video user_id: ${video.user_id} 
+        Request user_id: ${userInfo.user_id}`);
+        
       if (video.user_id !== userInfo.user_id) {
+        console.log(`[video routes] Access denied for authenticated user - user ID mismatch`);
         return sendError(res, "You don't have access to this video", 403, "FORBIDDEN");
       }
+      
+      console.log(`[video routes] Authenticated user access granted to video ${videoId}`);
     }
     
     // Return the video data

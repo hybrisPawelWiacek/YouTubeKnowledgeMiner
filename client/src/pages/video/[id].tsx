@@ -68,16 +68,30 @@ export default function VideoDetailPage() {
       try {
         // Import here to avoid circular dependencies
         const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Use await to ensure we get a string, not a Promise
+        const sessionId = await getOrCreateAnonymousSessionId();
         
         // Add session ID to headers if we have one
         if (sessionId) {
           console.log("[VideoDetailPage] Using anonymous session:", sessionId);
+          
+          // Add the anonymous session ID to the headers
           headers['x-anonymous-session'] = sessionId;
+          
+          // Add the anonymous user ID from system config
+          headers['x-user-id'] = String(SYSTEM.ANONYMOUS_USER_ID);
+          
+          console.log("[VideoDetailPage] Headers set:", {
+            'x-anonymous-session': sessionId,
+            'x-user-id': SYSTEM.ANONYMOUS_USER_ID
+          });
         }
       } catch (error) {
         console.error("[VideoDetailPage] Error getting anonymous session:", error);
       }
+      
+      console.log("[VideoDetailPage] Fetching video with headers:", headers);
       
       const response = await fetch(`/api/videos/${videoId}`, { 
         headers, 
@@ -86,6 +100,7 @@ export default function VideoDetailPage() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error("[VideoDetailPage] Error fetching video:", errorData);
         throw new Error(errorData.message || "Failed to fetch video");
       }
       
@@ -102,16 +117,30 @@ export default function VideoDetailPage() {
       try {
         // Import here to avoid circular dependencies
         const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Use await to ensure we get a string, not a Promise
+        const sessionId = await getOrCreateAnonymousSessionId();
         
         // Add session ID to headers if we have one
         if (sessionId) {
           console.log("[VideoDetailPage] Using anonymous session for categories:", sessionId);
+          
+          // Add the anonymous session ID to the headers
           headers['x-anonymous-session'] = sessionId;
+          
+          // Add the anonymous user ID from system config
+          headers['x-user-id'] = String(SYSTEM.ANONYMOUS_USER_ID);
+          
+          console.log("[VideoDetailPage] Category headers set:", {
+            'x-anonymous-session': sessionId,
+            'x-user-id': SYSTEM.ANONYMOUS_USER_ID
+          });
         }
       } catch (error) {
         console.error("[VideoDetailPage] Error getting anonymous session for categories:", error);
       }
+      
+      console.log("[VideoDetailPage] Fetching categories with headers:", headers);
       
       const response = await fetch(`/api/categories`, { 
         headers, 
@@ -120,6 +149,7 @@ export default function VideoDetailPage() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error("[VideoDetailPage] Error fetching categories:", errorData);
         throw new Error(errorData.message || "Failed to fetch categories");
       }
       
@@ -135,16 +165,30 @@ export default function VideoDetailPage() {
       try {
         // Import here to avoid circular dependencies
         const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-        const sessionId = getOrCreateAnonymousSessionId();
+        
+        // Use await to ensure we get a string, not a Promise
+        const sessionId = await getOrCreateAnonymousSessionId();
         
         // Add session ID to headers if we have one
         if (sessionId) {
           console.log("[VideoDetailPage] Using anonymous session for update:", sessionId);
-          headers = { 'x-anonymous-session': sessionId };
+          
+          // Add the anonymous session ID to the headers
+          headers['x-anonymous-session'] = sessionId;
+          
+          // Add the anonymous user ID from system config
+          headers['x-user-id'] = String(SYSTEM.ANONYMOUS_USER_ID);
+          
+          console.log("[VideoDetailPage] Update headers set:", {
+            'x-anonymous-session': sessionId,
+            'x-user-id': SYSTEM.ANONYMOUS_USER_ID
+          });
         }
       } catch (error) {
         console.error("[VideoDetailPage] Error getting anonymous session for update:", error);
       }
+      
+      console.log("[VideoDetailPage] Updating video with headers:", headers);
       
       const response = await apiRequest("PATCH", `/api/videos/${videoId}`, data, headers);
       return response.json();

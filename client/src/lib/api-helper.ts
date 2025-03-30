@@ -32,10 +32,26 @@ export async function fetchAPI<T = any>(
 
     // Add anonymous session header if not already present
     if (!headers?.['x-anonymous-session']) {
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
-      if (anonymousSessionId) {
-        (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
-        console.log(`[API Helper] Added anonymous session: ${anonymousSessionId}`);
+      try {
+        // Use await to ensure we get a string, not a Promise
+        const anonymousSessionId = await getOrCreateAnonymousSessionId();
+        
+        if (anonymousSessionId) {
+          // Set the anonymous session ID
+          (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
+          
+          // Add the anonymous user ID from system config if not already set
+          if (!headers?.['x-user-id']) {
+            (options.headers as Record<string, string>)['x-user-id'] = String(7); // Anonymous user ID is 7
+          }
+          
+          console.log(`[API Helper] Added anonymous session headers:`, {
+            'x-anonymous-session': anonymousSessionId,
+            'x-user-id': (options.headers as Record<string, string>)['x-user-id']
+          });
+        }
+      } catch (error) {
+        console.error('[API Helper] Error getting anonymous session ID:', error);
       }
     }
 
