@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { StarRating } from "@/components/ui/star-rating";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
+import { getOrCreateAnonymousSessionId, getAnonymousSessionHeaders } from "@/lib/anonymous-session";
 import { SummarySection } from "@/components/summary-section";
 import { YoutubeVideo, VideoMetadata, Category } from "@/types";
 import { useSupabase } from "@/hooks/use-supabase";
@@ -78,12 +78,18 @@ export function VideoResult({ video }: VideoResultProps) {
       console.log('📤 VIDEO DATA BEING SENT TO API:', videoData);
       
       try {
-        // For anonymous users, add session header manually
+        // Initialize headers
         let headers: HeadersInit = {};
+        
+        // For anonymous users, add session header using the helper function
         if (!user) {
-          const sessionId = getOrCreateAnonymousSessionId();
-          headers = { 'x-anonymous-session': sessionId };
-          console.log('📡 Anonymous user - adding session header:', sessionId);
+          try {
+            // Use the helper function that correctly handles Promise resolution and typing
+            headers = await getAnonymousSessionHeaders();
+            console.log('📡 Anonymous user - using session headers for video save:', headers);
+          } catch (error) {
+            console.error('📡 Error getting anonymous session headers:', error);
+          }
         }
         
         // Making the API request
@@ -246,8 +252,13 @@ export function VideoResult({ video }: VideoResultProps) {
       // But in case we change this later, let's add the session headers
       let headers: HeadersInit = {};
       if (!user) {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
+        try {
+          // Use the helper function that correctly handles types
+          headers = await getAnonymousSessionHeaders({});
+          console.log('📡 Anonymous user - using session headers for category creation:', headers);
+        } catch (error) {
+          console.error('📡 Error getting anonymous session headers for category:', error);
+        }
       }
       
       await apiRequest("POST", "/api/categories", { name: categoryName }, headers);
