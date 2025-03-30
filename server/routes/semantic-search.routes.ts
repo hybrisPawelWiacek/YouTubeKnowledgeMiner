@@ -46,7 +46,7 @@ router.post('/', requireAnyUser, async (req: Request, res: Response) => {
         categoryId: validatedData.filter?.category_id,
         collectionId: validatedData.filter?.collection_id,
         isFavorite: validatedData.filter?.is_favorite,
-        anonymous_session_id: req.isAnonymous ? req.anonymousSessionId : undefined
+        anonymous_session_id: req.isAnonymous ? req.sessionId : undefined
       },
       validatedData.limit || 10
     );

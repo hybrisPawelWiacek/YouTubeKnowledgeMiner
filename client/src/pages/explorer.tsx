@@ -114,7 +114,9 @@ export default function ExplorerPage() {
       // Perform semantic search using the dedicated RAG endpoint
       const response = await apiRequest('POST', '/api/search', {
         query: searchQuery,
-        contentTypes: activeFilters.contentTypes, // Match the expected property in the backend
+        filter: {
+          content_types: activeFilters.contentTypes // Using snake_case for backend
+        },
         limit: 20
       });
       
