@@ -20,6 +20,20 @@ import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialo
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getOrCreateAnonymousSessionId, getAnonymousSessionHeaders, hasReachedAnonymousLimit } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
+
+// Define interfaces for API responses
+interface VideosResponse {
+  videos: Video[];
+  totalCount: number;
+  hasMore: boolean;
+  nextCursor?: number;
+}
+
+interface VideoCountResponse {
+  count: number;
+  max_allowed: number;
+  session_id?: string;
+}
 import {
   Filter,
   LayoutGrid,
@@ -159,10 +173,14 @@ export default function Library() {
           // Verify that the same session ID is being consistently used
           if (sessionId) {
             try {
-              // Use apiRequest instead of fetch directly
+              // Use apiRequest with type assertion for our response
               const data = await apiRequest("GET", '/api/anonymous/videos/count', null, 
-                { 'x-anonymous-session': sessionId });
+                { 'x-anonymous-session': sessionId }) as unknown as VideoCountResponse;
               console.log('Library - Check video count for this session:', data);
+              
+              // Now we can safely access the properties with proper typing
+              console.log('Library - Confirmed video count:', data.count, 
+                'with session ID:', data.session_id || sessionId);
             } catch (error) {
               console.error('Library - Error checking video count:', error);
             }
@@ -172,9 +190,17 @@ export default function Library() {
         }
       }
       
-      // Use our API request function which handles all the auth header logic for us
+      // Use our API request function with proper type assertion
       // The apiRequest function already returns parsed JSON data
-      return await apiRequest("GET", url, undefined, headers);
+      const response = await apiRequest("GET", url, undefined, headers) as unknown as VideosResponse;
+      
+      // Ensure we're returning the expected data structure
+      return {
+        videos: response.videos || [],
+        totalCount: response.totalCount || 0,
+        hasMore: response.hasMore || false,
+        nextCursor: response.nextCursor
+      };
     }
   });
 
@@ -569,7 +595,8 @@ export default function Library() {
           return;
         }
         // The apiRequest function already returns parsed JSON data
-        const data = await apiRequest("GET", '/api/categories');
+        // Use type assertion for proper type safety
+        const data = await apiRequest("GET", '/api/categories') as unknown as Category[];
         // Ensure correct type when setting state
         if (data && Array.isArray(data) && data.length > 0) {
           setSelectedCategory(data[0].id);
@@ -601,7 +628,8 @@ export default function Library() {
           return;
         }
         // The apiRequest function already returns parsed JSON data
-        const data = await apiRequest("GET", '/api/collections');
+        // Use type assertion for proper type safety
+        const data = await apiRequest("GET", '/api/collections') as unknown as Collection[];
         // Ensure correct type when setting state
         if (data && Array.isArray(data) && data.length > 0) {
           setSelectedCollection(data[0].id);
@@ -621,7 +649,8 @@ export default function Library() {
           return;
         }
         // The apiRequest function already returns parsed JSON data
-        const data = await apiRequest("GET", '/api/saved-searches');
+        // Use type assertion for proper type safety
+        const data = await apiRequest("GET", '/api/saved-searches') as unknown as { id: number; query: string }[];
         // Use the first saved search as the search query if available
         if (data && Array.isArray(data) && data.length > 0 && data[0].query) {
           setSearchQuery(data[0].query);

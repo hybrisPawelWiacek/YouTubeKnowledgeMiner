@@ -20,12 +20,20 @@ export function updateCurrentSession(session: any) {
   }
 }
 
-export async function apiRequest(
+/**
+ * Makes an API request to the backend
+ * @param method HTTP method (GET, POST, PUT, DELETE, PATCH)
+ * @param url API endpoint URL
+ * @param data Optional request body data
+ * @param headers Optional additional headers
+ * @returns Parsed JSON response data, not a Response object
+ */
+export async function apiRequest<T = any>(
   method: string,
   url: string,
   data?: any,
   headers?: HeadersInit
-): Promise<any> {
+): Promise<T> {
   console.log(`[API] ${method} request to ${url} starting`);
   console.log(`[API] Current headers:`, headers);
   
