@@ -173,7 +173,7 @@ export default function Library() {
           // Verify that the same session ID is being consistently used
           if (sessionId) {
             try {
-              // Use apiRequest with type assertion for our response
+              // Use apiRequest to get the JSON data directly (now that it parses the response)
               const data = await apiRequest("GET", '/api/anonymous/videos/count', null, 
                 { 'x-anonymous-session': sessionId });
               
@@ -181,10 +181,9 @@ export default function Library() {
               if (data && typeof data === 'object') {
                 console.log('Library - Check video count for this session:', data);
                 
-                // Now we can safely access the properties with proper typing
-                const typedData = data as VideoCountResponse;
-                console.log('Library - Confirmed video count:', typedData.count, 
-                  'with session ID:', typedData.session_id || sessionId);
+                // Now we can safely access the properties
+                console.log('Library - Confirmed video count:', data.count, 
+                  'with session ID:', data.session_id || sessionId);
               } else {
                 console.error('Library - Invalid response format from video count API:', data);
               }
@@ -197,9 +196,8 @@ export default function Library() {
         }
       }
       
-      // Use our API request function with proper type assertion
-      // The apiRequest function already returns parsed JSON data
-      const response = await apiRequest("GET", url, undefined, headers) as unknown as VideosResponse;
+      // Use our API request function which now returns parsed JSON data
+      const response = await apiRequest("GET", url, undefined, headers);
       
       // Ensure we're returning the expected data structure
       return {
@@ -601,9 +599,8 @@ export default function Library() {
           setSelectedCategory(undefined);
           return;
         }
-        // The apiRequest function already returns parsed JSON data
-        // Use type assertion for proper type safety
-        const data = await apiRequest("GET", '/api/categories') as unknown as Category[];
+        // The apiRequest function now returns parsed JSON data directly
+        const data = await apiRequest("GET", '/api/categories');
         // Ensure correct type when setting state
         if (data && Array.isArray(data) && data.length > 0) {
           setSelectedCategory(data[0].id);
@@ -634,9 +631,8 @@ export default function Library() {
           }
           return;
         }
-        // The apiRequest function already returns parsed JSON data
-        // Use type assertion for proper type safety
-        const data = await apiRequest("GET", '/api/collections') as unknown as Collection[];
+        // The apiRequest function now returns parsed JSON data directly
+        const data = await apiRequest("GET", '/api/collections');
         // Ensure correct type when setting state
         if (data && Array.isArray(data) && data.length > 0) {
           setSelectedCollection(data[0].id);
@@ -655,9 +651,8 @@ export default function Library() {
           // We're not changing the search query here
           return;
         }
-        // The apiRequest function already returns parsed JSON data
-        // Use type assertion for proper type safety
-        const data = await apiRequest("GET", '/api/saved-searches') as unknown as { id: number; query: string }[];
+        // The apiRequest function now returns parsed JSON data directly
+        const data = await apiRequest("GET", '/api/saved-searches');
         // Use the first saved search as the search query if available
         if (data && Array.isArray(data) && data.length > 0 && data[0].query) {
           setSearchQuery(data[0].query);

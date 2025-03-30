@@ -12,7 +12,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
   customHeaders?: HeadersInit,
-): Promise<Response> {
+): Promise<any> {
   const res = await fetch(url, {
     method,
     headers: {
@@ -24,7 +24,8 @@ export async function apiRequest(
   });
 
   await throwIfResNotOk(res);
-  return res;
+  // Parse and return the JSON data instead of the raw Response
+  return res.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
