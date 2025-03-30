@@ -8,7 +8,7 @@
  */
 
 import axios from 'axios';
-import { SYSTEM } from '../../../shared/config';
+import { SYSTEM } from './system-config';
 
 // Anonymous session cookie name
 const SESSION_COOKIE_NAME = 'anonymousSessionId';
