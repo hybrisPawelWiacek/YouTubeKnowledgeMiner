@@ -122,7 +122,7 @@ export function QASection() {
     queryKey: ["/api/videos", videoId, "qa"],
     queryFn: async () => {
       // Use our improved fetchAPI helper with better response handling
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -170,7 +170,7 @@ export function QASection() {
       if (!activeConversation) return null;
 
       // Use our improved fetchAPI helper with better response handling
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -228,7 +228,7 @@ export function QASection() {
   const createConversation = useMutation({
     mutationFn: async (title: string) => {
       // Use apiRequest instead of axios to include anonymous session headers
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -291,7 +291,7 @@ export function QASection() {
       content: string;
     }) => {
       // Use apiRequest instead of axios to include anonymous session headers
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -402,7 +402,7 @@ export function QASection() {
       console.log("Creating new conversation with title:", title);
 
       // Get the anonymous session ID
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -517,7 +517,7 @@ export function QASection() {
       setIsSubmitting(true);
 
       // Get the anonymous session ID for the request
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {
@@ -587,7 +587,7 @@ export function QASection() {
   const deleteConversation = useMutation({
     mutationFn: async (id: number) => {
       // Use improved fetchAPI helper with better error handling
-      const anonymousSessionId = getOrCreateAnonymousSessionId();
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
       const headers: Record<string, string> = {};
 
       if (anonymousSessionId) {

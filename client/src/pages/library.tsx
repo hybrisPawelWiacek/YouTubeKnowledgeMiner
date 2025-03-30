@@ -399,8 +399,8 @@ export default function Library() {
   // Toggle select all videos
   const toggleSelectAll = () => {
     // Make sure allVideos is defined and an array
-    if (!Array.isArray(allVideos)) {
-      console.warn('[Library] Cannot select all: videos array is not available');
+    if (!Array.isArray(allVideos) || allVideos.length === 0) {
+      console.warn('[Library] Cannot select all: videos array is not available or empty');
       return;
     }
     
