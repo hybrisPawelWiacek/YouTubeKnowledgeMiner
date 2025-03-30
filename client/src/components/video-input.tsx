@@ -31,13 +31,15 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   // Keep anonymous count updated
   useEffect(() => {
     if (!user) {
-      async function fetchAnonymousVideoCount() {
+      // Define the async function outside the effect
+      const fetchAnonymousVideoCount = async () => {
         try {
           // Import here to avoid circular dependencies
           const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-          const sessionId = getOrCreateAnonymousSessionId();
+          // Make sure to await the session ID
+          const sessionId = await getOrCreateAnonymousSessionId();
           
-          // Get count from API
+          // Get count from API with properly awaited session ID
           const headers = { 'x-anonymous-session': sessionId };
           console.log('[VideoInput] Fetching video count with session:', sessionId);
           const response = await fetch('/api/anonymous/videos/count', {
@@ -86,25 +88,28 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
           // Refresh count to get latest from server
           try {
             const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
-            const sessionId = getOrCreateAnonymousSessionId();
-            const headers = { 'x-anonymous-session': sessionId };
-            console.log('[VideoInput] Refreshing video count with session:', sessionId);
-            const response = await fetch('/api/anonymous/videos/count', {
-              method: 'GET',
-              headers,
-              credentials: 'include'
-            }).then(res => res.json());
-            
-            if (response && typeof response.count === 'number') {
-              setAnonymousCount(response.count);
+            // Make sure to await the session ID to get a string not a Promise
+            const sessionId = await getOrCreateAnonymousSessionId();
+            if (sessionId) {
+              const headers = { 'x-anonymous-session': sessionId };
+              console.log('[VideoInput] Refreshing video count with session:', sessionId);
+              const response = await fetch('/api/anonymous/videos/count', {
+                method: 'GET',
+                headers,
+                credentials: 'include'
+              }).then(res => res.json());
               
-              // Show toast if we've reached the limit
-              if (response.count >= 3) {
-                toast({
-                  title: "Video limit reached",
-                  description: "You've reached the limit of 3 videos. Sign in to analyze more videos.",
-                  variant: "default",
-                });
+              if (response && typeof response.count === 'number') {
+                setAnonymousCount(response.count);
+                
+                // Show toast if we've reached the limit
+                if (response.count >= 3) {
+                  toast({
+                    title: "Video limit reached",
+                    description: "You've reached the limit of 3 videos. Sign in to analyze more videos.",
+                    variant: "default",
+                  });
+                }
               }
             }
           } catch (error) {
@@ -143,6 +148,12 @@ export function VideoInput({ onVideoProcessed }: VideoInputProps) {
   });
 
   const handleVideoProcessed = (video: YoutubeVideo) => {
+    // Import queryClient for cache invalidation
+    const { queryClient } = require("@/lib/queryClient");
+    
+    // Invalidate the videos query to ensure the Library page shows the new video
+    queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+    
     onVideoProcessed(video);
     toast({
       title: "Video analyzed",

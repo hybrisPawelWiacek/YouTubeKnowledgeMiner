@@ -56,6 +56,10 @@ interface VideoInfo {
   youtube_id: string;
 }
 
+interface SearchResponse {
+  results: SearchResult[];
+}
+
 export default function ExplorerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<{
@@ -112,7 +116,7 @@ export default function ExplorerPage() {
       }
       
       // Perform semantic search using the dedicated RAG endpoint
-      const data = await apiRequest('POST', '/api/search', {
+      const data = await apiRequest<SearchResponse>('POST', '/api/search', {
         query: searchQuery,
         filter: {
           content_types: activeFilters.contentTypes // Using snake_case for backend
@@ -123,7 +127,8 @@ export default function ExplorerPage() {
       console.log("Search response:", data);
       
       // Handle the structured response from the semantic search API
-      if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
+      // The apiRequest function already returns the JSON data, not the Response object
+      if (data && 'results' in data && Array.isArray(data.results) && data.results.length > 0) {
         setSearchResults(data.results);
         console.log(`Found ${data.results.length} search results`);
       } else {
