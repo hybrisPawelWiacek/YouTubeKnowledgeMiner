@@ -467,7 +467,7 @@ export function QASection() {
           } catch (messageError) {
             console.error("Error sending initial message:", messageError);
             // Even if there's an error, keep the user message in the UI
-            qaLogger.error("Failed to send initial question", {
+            console.error("Failed to send initial question", {
               conversationId: data.id,
               error: messageError
             });
@@ -481,7 +481,7 @@ export function QASection() {
       }
     } catch (error) {
       console.error("Error in handleCreateNewConversation:", error);
-      qaLogger.error("Failed to create new conversation", { error });
+      console.error("Failed to create new conversation", { error });
     } finally {
       // Always reset the submitting state when done
       setIsSubmitting(false);
