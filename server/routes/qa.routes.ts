@@ -8,11 +8,31 @@ import { storage } from '../storage';
 import { generateAnswer } from '../services/openai';
 import { performSemanticSearch } from '../services/embeddings';
 import { initializeVectorFunctions } from '../services/supabase';
-import { getUserIdFromRequest, requireAuth, requireAnyUser } from '../middleware/auth.middleware';
+import { requireAuth, requireAnyUser } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 
 const router = Router();
+
+/**
+ * Helper function to get user information from request object
+ * This function adapts the new auth middleware format to the existing code
+ */
+function getUserInfoFromRequest(req: Request) {
+  return {
+    user_id: req.user?.id,
+    is_anonymous: req.isAnonymous,
+    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+  };
+}
+
+/**
+ * Helper function to get user ID from request
+ * Returns the user ID or null if anonymous
+ */
+function getUserIdFromRequest(req: Request): number | null {
+  return req.user?.id || null;
+}
 
 /**
  * Support the original route format that the frontend expects:
@@ -40,7 +60,7 @@ router.post('/:videoId/qa', requireAnyUser, validateNumericParam('videoId'), asy
     const videoId = parseInt(req.params.videoId);
     
     // Get user ID using our helper function (now returns 7 for anonymous users)
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
     console.log("Creating Q&A conversation with body:", req.body);
@@ -140,7 +160,7 @@ router.post('/video/:id', requireAnyUser, validateNumericParam('id'), async (req
     const videoId = parseInt(req.params.id);
     
     // Get user ID using our helper function (now returns 7 for anonymous users)
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("CREATE Q&A CONVERSATION: Using user ID from request:", userId);
     console.log("Creating Q&A conversation with body:", req.body);

@@ -2,15 +2,20 @@ import { Router, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { insertSavedSearchSchema } from '@shared/schema';
 import { storage } from '../storage';
-import { getUserIdFromRequest, getUserInfo, requireAuth } from '../middleware/auth.middleware';
+import { requireAuth } from '../middleware/auth.middleware';
 import { validateNumericParam } from '../middleware/validation.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import { log } from '../vite';
 
 const router = Router();
 
-// Apply user info middleware to all routes
-router.use(getUserInfo);
+/**
+ * Helper function to get user ID from request
+ * Returns the user ID or null if anonymous
+ */
+function getUserIdFromRequest(req: Request): number | null {
+  return req.user?.id || null;
+}
 
 /**
  * Get all saved searches for a user
@@ -18,15 +23,15 @@ router.use(getUserInfo);
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    const userId = userInfo.user_id;
+    // Get user info from request (now attached by middleware)
+    const userId = getUserIdFromRequest(req);
+    const isAnonymous = req.isAnonymous;
     
     console.log("SAVED SEARCHES: Using user ID from request:", userId);
-    console.log("SAVED SEARCHES: Is anonymous:", userInfo.is_anonymous, "Has session:", !!userInfo.anonymous_session_id);
+    console.log("SAVED SEARCHES: Is anonymous:", isAnonymous, "Has session:", !!req.sessionId);
     
     // Anonymous users don't have saved searches - return empty array for consistent API response
-    const savedSearches = !userInfo.is_anonymous && userId ? await storage.getSavedSearchesByUserId(userId) : [];
+    const savedSearches = !isAnonymous && userId ? await storage.getSavedSearchesByUserId(userId) : [];
     return sendSuccess(res, savedSearches);
   } catch (error) {
     console.error("Error fetching saved searches:", error);
@@ -43,7 +48,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     const validatedData = insertSavedSearchSchema.parse(req.body);
 
     // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("CREATE SAVED SEARCH: Using user ID from request:", userId);
     
@@ -70,9 +75,9 @@ router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Reque
   try {
     const searchId = parseInt(req.params.id);
     
-    // Get user info from middleware
-    const userInfo = res.locals.userInfo;
-    console.log("DELETE SAVED SEARCH: Using user ID from request:", userInfo.user_id);
+    // Get user ID from request
+    const userId = getUserIdFromRequest(req);
+    console.log("DELETE SAVED SEARCH: Using user ID from request:", userId);
     
     // Get the saved search to check ownership
     const savedSearch = await storage.getSavedSearch(searchId);
@@ -81,7 +86,7 @@ router.delete('/:id', requireAuth, validateNumericParam('id'), async (req: Reque
     }
     
     // Check if user owns this saved search
-    if (userInfo.user_id !== savedSearch.user_id) {
+    if (userId !== savedSearch.user_id) {
       return sendError(res, "You don't have permission to delete this saved search", 403);
     }
 

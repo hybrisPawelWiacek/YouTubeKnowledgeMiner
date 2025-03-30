@@ -10,10 +10,30 @@ import {
   saveExportPreference, 
   getExportPreference 
 } from '../services/export';
-import { getUserIdFromRequest, requireAuth } from '../middleware/auth.middleware';
+import { requireAuth } from '../middleware/auth.middleware';
 import { sendSuccess, sendError } from '../utils/response.utils';
 
 const router = Router();
+
+/**
+ * Helper function to get user information from request object
+ * This function adapts the new auth middleware format to the existing code
+ */
+function getUserInfoFromRequest(req: Request) {
+  return {
+    user_id: req.user?.id,
+    is_anonymous: req.isAnonymous,
+    anonymous_session_id: req.isAnonymous && req.sessionId ? req.sessionId : null
+  };
+}
+
+/**
+ * Helper function to get user ID from request
+ * Returns the user ID or null if anonymous
+ */
+function getUserIdFromRequest(req: Request): number | null {
+  return req.user?.id || null;
+}
 
 /**
  * Export video content (transcript, summary, or Q&A)
@@ -25,7 +45,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     const exportRequest = req.body;
 
     // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("EXPORT: Using user ID from request:", userId);
     exportRequest.userId = userId;
@@ -72,7 +92,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 router.get('/preferences', async (req: Request, res: Response) => {
   try {
     // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("GET EXPORT PREFERENCES: Using user ID from request:", userId);
     
@@ -104,7 +124,7 @@ router.post('/preferences', requireAuth, async (req: Request, res: Response) => 
     }
 
     // Get user ID using our helper function
-    const userId = await getUserIdFromRequest(req);
+    const userId = getUserIdFromRequest(req);
     
     console.log("SAVE EXPORT PREFERENCES: Using user ID from request:", userId);
     
