@@ -9,6 +9,8 @@
 
 ## Key Documents
 
+### Core Documents
+
 | Document | Purpose | Access Rights |
 |----------|---------|---------------|
 | **prd.md** | Product requirements document | CTO-CEO: Read/Write<br>AI Dev Agent: Read-only |
@@ -16,11 +18,23 @@
 | **status.md** | Overall product status and roadmap | CTO-CEO: Read/Write<br>AI Dev Agent: Read-only |
 | **rules.md** | Communication rules between AI Dev Agent and CTO | CTO-CEO: Read/Write<br>AI Dev Agent: Read-only |
 
+### Sprint-Specific Documents
+
+The project is implemented in sprints, with dedicated documentation for each sprint located in the corresponding `docs/sprint_X` folder (e.g., `docs/sprint_1` for Sprint 1).
+
+| Document | Purpose | Access Rights |
+|----------|---------|---------------|
+| **sprint{X}-progress-report.md** | Current implementation progress, issue tracking, and references to other relevant documents | CTO-CEO: Read/Write<br>AI Dev Agent: Read-only |
+| **sprint{X}-implementation-plan.md** | Specific implementation plan outlining the overall goals and tasks for the sprint (may have alternate names, e.g., `auth-implementation-plan.md` for Sprint 1) | CTO-CEO: Read/Write<br>AI Dev Agent: Read-only |
+| **Other sprint-specific documents** | May include testing plans, design documents, research findings, etc. specific to the sprint | Varies by document |
+
 ## Communication Protocol
 
 1. **Context Bridging**: CTO-CEO must explicitly remind AI Dev Agent about relevant conversation context in each prompt, as the Agent doesn't retain conversation history between sessions.
 
 2. **Document References**: The AI Dev Agent must be explicitly instructed to read specific documents if that context is needed for the current task.
+
+3. **Sprint Context**: When working on a specific sprint, the AI Dev Agent should be directed to review the relevant sprint documentation in the `docs/sprint_X` folder. The sprint progress report in particular provides critical context about current implementation status and priorities.
 
 3. **Progress Tracking**: CTO-CEO maintains awareness of overall progress and strategic direction, while AI Dev Agent has detailed knowledge of implementation status.
 
@@ -68,7 +82,11 @@ For optimal results, structure prompts following this pattern:
 ```
 For our [Project Name] MVP, we need to implement [Feature]. This aligns with our objectives outlined in [Document Reference].
 
+This task is part of Sprint [X] as detailed in docs/sprint_[X]/sprint[X]-progress-report.md.
+
 Before implementation, please review:
+- docs/sprint_[X]/sprint[X]-progress-report.md for current sprint status
+- docs/sprint_[X]/[implementation-plan-document].md for detailed implementation guidelines
 - [Document 1] for [specific context]
 - [Document 2] for [specific context]
 - [Document 3] for [specific context]
@@ -82,11 +100,13 @@ Implementation considerations:
 - [Architectural principle to follow]
 - [Integration requirements]
 - [Security/performance considerations]
+- [How this fits into the sprint objectives]
 
 When complete, provide:
 - Testing instructions to verify functionality
 - Examples of how to use the new features
 - Any configuration changes needed
+- How this implementation addresses the sprint goals
 
 Start by showing your implementation plan, then proceed with the code.
 ```
@@ -110,7 +130,7 @@ Start by showing your implementation plan, then proceed with the code.
 
 ## Best Practices
 
-1. **Clear Goal Setting**: Begin each prompt with a clear statement of the current goal and how it relates to the overall MVP.
+1. **Sprint-Oriented Communication**: Begin each prompt with a clear statement of the current goal, which sprint it belongs to, and how it relates to the overall MVP. Reference the specific sprint progress report to provide context.
 
 2. **Progress Recaps**: Provide a brief summary of what's been accomplished when starting new sessions.
 
@@ -126,3 +146,5 @@ Start by showing your implementation plan, then proceed with the code.
 6. **Documentation Updates**: Periodically request updates to architectural documentation to reflect implementation changes.
 
 7. **Testable Deliverables**: Prefer prompts that result in functionality that can be tested end-to-end rather than partial implementations.
+
+8. **Sprint Document References**: Always reference the current sprint's progress report and implementation plan documents to ensure the AI Dev Agent has the most up-to-date context for the task.

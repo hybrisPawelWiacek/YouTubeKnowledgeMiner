@@ -24,12 +24,22 @@ interface MigrationResponse {
 
 async function testMigration(): Promise<void> {
   const args = process.argv.slice(2);
-  const anonymousSessionId = args[0];
-  const authToken = args[1];
+  
+  // If there's only one argument, assume it's the auth token
+  let anonymousSessionId = 'anon_1743026299677_qykrcr5s1';
+  let authToken: string | undefined;
+  
+  if (args.length === 1) {
+    authToken = args[0];
+  } else if (args.length >= 2) {
+    anonymousSessionId = args[0];
+    authToken = args[1];
+  }
 
-  if (!anonymousSessionId || !authToken) {
-    console.error('Usage: npx tsx scripts/test-migration.ts <anonymousSessionId> <authToken>');
-    console.error('Example: npx tsx scripts/test-migration.ts anon_1234567890_abcdef yourAuthTokenHere');
+  if (!authToken) {
+    console.error('Usage: npx tsx scripts/test-migration.ts [anonymousSessionId] <authToken>');
+    console.error('Example: npx tsx scripts/test-migration.ts "$(cat auth_session_token.txt)"');
+    console.error('Note: anonymousSessionId is optional and defaults to anon_1743026299677_qykrcr5s1');
     process.exit(1);
   }
 
@@ -37,20 +47,35 @@ async function testMigration(): Promise<void> {
   console.log('Auth token provided (first 10 chars):', authToken.substring(0, 10) + '...');
 
   try {
-    // Make the migration request against the Replit URL
-    // Note: Replace with your actual Replit URL or use environment variable
-    const serverUrl = process.env.REPLIT_URL || 'https://youtubeknowledgeminer.replit.app';
+    // Determine the server URL based on the environment
+    // Use localhost for local testing, otherwise fall back to the deployed URL if needed
+    const serverUrl = process.env.NODE_ENV === 'production' 
+      ? (process.env.REPLIT_URL || 'https://youtubeknowledgeminer.replit.app')
+      : 'http://localhost:5000';
+    
+    console.log(`Using server URL: ${serverUrl}`);
     const response = await fetch(`${serverUrl}/api/auth/migrate-anonymous-data`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `authToken=${authToken}`
+        'Cookie': `auth_session=${authToken}`,
+        'Authorization': `Bearer ${authToken}`
       },
       body: JSON.stringify({
-        sessionId: anonymousSessionId
+        anonymousSessionId: anonymousSessionId
       })
     });
 
+    // Check if the response has a JSON content type
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.log('Response status:', response.status);
+      console.log('Response is not JSON. Content type:', contentType);
+      console.log('Response text:', await response.text());
+      console.log('❌ Migration failed: Response is not in JSON format');
+      return;
+    }
+    
     const result = await response.json() as MigrationResponse;
     
     console.log('Response status:', response.status);
@@ -59,7 +84,7 @@ async function testMigration(): Promise<void> {
     if (response.ok) {
       console.log(`✅ Migration successful! ${result.data?.migratedVideos || 0} videos migrated.`);
     } else {
-      console.log('❌ Migration failed:', result.error?.message || 'Unknown error');
+      console.log('❌ Migration failed:', result.error?.message || result.message || 'Unknown error');
     }
   } catch (error) {
     console.error('Error making request:', error);

@@ -1,0 +1,68 @@
+For our YouTube Buddy MVP, we need to implement the frontend authentication components that will integrate with our recently fixed authentication API. This completes our authentication rebuild effort as part of Sprint 1.
+
+Before implementation, please review:
+- docs/sprint_1/Authentication Testing Report 2.md to understand the current state of the backend 
+- docs/sprint_1/sprint1-progress-report.md for Sprint 1 completion status
+- docs/prd.md section 5.4 (Authentication UX Enhancements) for UX requirements
+- docs/prd.md section 5.2 (Strategic Account Creation Prompts) for conversion strategy
+- docs/sprint_1/sprint1-implementation-plan.md section on Client-Side Components
+- The API routes in /server/routes/auth.routes.ts
+
+For this implementation, focus on:
+
+1. Authentication context and state management:
+   - Auth context provider with dual state handling (anonymous and authenticated users)
+   - Login, register, and logout functions that interact with our API endpoints
+   - Session persistence using HttpOnly cookies (already implemented in backend)
+   - Anonymous session tracking via localStorage with proper fallbacks
+   - Automatic detection of session type on application startup
+   - Migration state tracking during anonymous-to-authenticated transitions
+
+2. Authentication UI components:
+   - Login modal with support for both username and email login
+   - Registration form with validation (username, email, password with confirmation)
+   - Strategic account creation prompts that appear:
+     a) When anonymous users reach 2 videos (warning about 3-video limit)
+     b) When attempting to access library management features
+     c) When trying to use premium features like export
+   - User dropdown in navigation showing login status and account options
+   - Toast notifications for authentication events (success/failure)
+
+3. Migration workflow:
+   - Clear migration UI explaining the benefits (keeping videos, unlimited storage)
+   - Option to migrate during registration/login if anonymous content exists
+   - Progress indicator showing migration status with video count
+   - Success confirmation showing number of migrated videos
+   - Clear error handling with retry options if migration fails
+
+4. Enhanced error handling:
+   - Form validation with meaningful error messages
+   - API error display using toast notifications
+   - Session expiration detection with automatic logout
+   - Network failure recovery with retry mechanisms
+   - Graceful degradation for offline usage
+
+Implementation details:
+- Use React Context API for global authentication state
+- Leverage React Query for API interactions
+- Implement zod schemas for form validation (matching backend schemas)
+- Use Shadcn UI components for all UI elements
+- Ensure responsive design with Tailwind breakpoints
+- Store anonymous session ID in localStorage with proper fallbacks
+- Use cookie auth for authenticated sessions (handled by backend)
+
+Specific technical requirements:
+- Anonymous session ID must be included in X-Anonymous-Session header for API calls
+- Auth context must check both cookie auth and localStorage for session types
+- Initial load should determine if user is anonymous or authenticated
+- All forms should prevent duplicate submissions during API calls
+- Session expiration should trigger automatic logout with explanatory message
+
+When complete, provide:
+- Screenshots of each authentication UI component in various states
+- Detailed documentation of the authentication state flow
+- Step-by-step testing instructions covering both anonymous and authenticated paths
+- Clear explanations of how the strategic prompts are triggered
+- Edge case testing scenarios and how to verify proper handling
+
+Start with the authentication context provider, then implement the login/register forms, followed by the strategic prompts, and finally the migration UI components.
