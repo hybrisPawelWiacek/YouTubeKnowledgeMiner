@@ -501,43 +501,49 @@ export default function Library() {
 
   useEffect(() => {
     // For anonymous users
-    if (!user && !showedPrompt) {
+    if (!user) {
       // Check video count - only show prompt if they've reached the limit
       // hasReachedAnonymousLimit is async, so we need to handle it properly
       const checkAnonymousLimit = async () => {
         try {
+          // Call the async function and await the result
           const hasReached = await hasReachedAnonymousLimit();
           console.log('[Library] Anonymous limit check:', hasReached);
-          if (hasReached) {
+          
+          // Only update state if we're still mounted
+          if (hasReached && !showedPrompt) {
             setShowAuthPrompt(true);
+            setShowedPrompt(true);
           }
-          setShowedPrompt(true);
         } catch (error) {
           console.error('[Library] Error checking anonymous limit:', error);
-          setShowedPrompt(true);
+          // Don't set showedPrompt here to avoid hiding errors
         }
       };
       
       // Only execute the check once - not on initial render
-      if (libraryInteractions > 0) {
+      if (libraryInteractions > 0 && !showedPrompt) {
+        // Call the function and don't try to use the result directly
         checkAnonymousLimit();
-      } else {
-        setShowedPrompt(true);
       }
       
       // Load videos from local storage
       try {
-        const localData = getLocalData();
+        const localData = getLocalData() || {};
         
-        // Check if localData exists and has a videos property that's an array
-        if (localData && Array.isArray(localData.videos) && localData.videos.length > 0) {
-          setAllVideos(localData.videos);
-          setTotalCount(localData.videos.length);
+        // Initialize with empty array to avoid undefined errors
+        const videosData = Array.isArray(localData.videos) ? localData.videos : [];
+        
+        // Only update state if we haven't loaded videos from the query
+        if (videosData.length > 0 && (allVideos.length === 0 || page === 1)) {
+          console.log('[Library] Loaded videos from local storage:', videosData.length);
+          setAllVideos(videosData);
+          setTotalCount(videosData.length);
           setHasMore(false);
           setIsLoadingMore(false);
-        } else {
+        } else if (allVideos.length === 0) {
           console.log('[Library] No videos found in local storage or format is invalid');
-          // Initialize with empty array to avoid undefined errors
+          // Ensure we have an empty array, not undefined
           setAllVideos([]);
         }
       } catch (error) {
@@ -577,14 +583,14 @@ export default function Library() {
         if (!user) {
           // For anonymous users, get collections from local storage
           try {
-            const localData = getLocalData();
-            // Safely access collections property
-            if (localData && localData.collections) {
-              setSelectedCollection(localData.collections);
-            } else {
-              // Initialize with undefined to match type signature
-              setSelectedCollection(undefined);
-            }
+            const localData = getLocalData() || {};
+            // Safely access collections property with default empty array
+            const collectionsData = Array.isArray(localData.collections) ? localData.collections : [];
+            
+            console.log('[Library] Local collections loaded:', collectionsData.length);
+            
+            // Always set to undefined for selection purposes (we use the actual array in UI)
+            setSelectedCollection(undefined);
           } catch (error) {
             console.error('[Library] Error loading collections from local storage:', error);
             setSelectedCollection(undefined);

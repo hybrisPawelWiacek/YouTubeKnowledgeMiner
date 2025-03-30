@@ -17,7 +17,7 @@ const SESSION_COOKIE_NAME = 'anonymousSessionId';
  * Get the current anonymous session ID from cookies
  * @returns The session ID if available, null otherwise
  */
-export async function getAnonymousSessionId(): Promise<string | null> {
+export function getAnonymousSessionId(): string | null {
   const cookies = document.cookie.split(';');
   
   console.log('[Anonymous Session] All cookies:', document.cookie);
@@ -72,7 +72,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
   }
   
   // If not in localStorage, check cookie as fallback
-  const cookieSessionId = await getAnonymousSessionId();
+  const cookieSessionId = getAnonymousSessionId();
   if (cookieSessionId) {
     console.log('[Anonymous Session] Using existing session from cookie:', cookieSessionId);
     
@@ -223,7 +223,7 @@ export function shouldSuppressAuthPrompts(): boolean {
  * Check if the user has an anonymous session
  * @returns True if an anonymous session exists, false otherwise
  */
-export async function hasAnonymousSession(): Promise<boolean> {
+export function hasAnonymousSession(): boolean {
   // Check localStorage first (more reliable)
   const storedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
   if (storedSessionId) {
@@ -231,7 +231,7 @@ export async function hasAnonymousSession(): Promise<boolean> {
   }
   
   // Fallback to cookie check
-  const cookieSessionId = await getAnonymousSessionId();
+  const cookieSessionId = getAnonymousSessionId();
   return !!cookieSessionId;
 }
 
