@@ -6,6 +6,7 @@
  */
 
 import { getOrCreateAnonymousSessionId } from './anonymous-session';
+import { SYSTEM } from './system-config';
 
 // Error codes specific to anonymous users
 export enum AnonymousErrorCode {
@@ -53,12 +54,20 @@ export async function anonymousFetch<T = any>(
   options: RequestInit = {}
 ): Promise<T> {
   try {
-    // Add anonymous session ID to headers
-    const sessionId = getOrCreateAnonymousSessionId();
+    // Use await to ensure we get a string, not a Promise
+    const sessionId = await getOrCreateAnonymousSessionId();
     const headers = new Headers(options.headers || {});
     
     if (sessionId) {
       headers.set('x-anonymous-session', sessionId);
+      
+      // Also add the anonymous user ID when we have a session
+      headers.set('x-user-id', String(SYSTEM.ANONYMOUS_USER_ID));
+      
+      console.log(`[Anonymous API] Added anonymous session headers:`, {
+        'x-anonymous-session': sessionId,
+        'x-user-id': String(SYSTEM.ANONYMOUS_USER_ID)
+      });
     }
     
     // Log the request for debugging
@@ -148,7 +157,7 @@ export async function getAnonymousVideoCount(): Promise<{ count: number; maxAllo
     // Transform the response to match our expected format
     return { 
       count: response.count, 
-      maxAllowed: response.max_allowed || 3  // Default to 3 if not provided
+      maxAllowed: response.max_allowed || SYSTEM.ANONYMOUS_VIDEO_LIMIT  // Default to system limit if not provided
     };
   } catch (error) {
     console.error('[Anonymous API] Error getting video count:', error);
@@ -158,7 +167,7 @@ export async function getAnonymousVideoCount(): Promise<{ count: number; maxAllo
     }
     
     // Default values in case of error
-    return { count: 0, maxAllowed: 3 };
+    return { count: 0, maxAllowed: SYSTEM.ANONYMOUS_VIDEO_LIMIT };
   }
 }
 

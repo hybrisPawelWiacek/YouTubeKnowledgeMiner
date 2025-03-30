@@ -62,15 +62,33 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     req.isAuthenticated = false;
     req.isAnonymous = true;
     
+    // First check for anonymous session in header
+    let anonymousSessionFromHeader = null;
+    
+    // Check for anonymous session in header 'x-anonymous-session'
+    if (req.headers['x-anonymous-session']) {
+      const headerSessionId = req.headers['x-anonymous-session'];
+      const sessionIdValue = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
+      
+      // Check if valid anonymous session format
+      if (typeof sessionIdValue === 'string' && sessionIdValue.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+        logger.debug(`Found anonymous session in header: ${sessionIdValue}`);
+        anonymousSessionFromHeader = sessionIdValue;
+      }
+    }
+    
     // Extract session ID from cookie
     const sessionId = extractSessionId(req);
     
-    if (sessionId) {
-      req.sessionId = sessionId;
+    // Set session ID - prefer cookie-based session, but use header session if no cookie
+    const activeSessionId = sessionId || anonymousSessionFromHeader;
+    
+    if (activeSessionId) {
+      req.sessionId = activeSessionId;
       
       // Check if it's a registered user session (format: not starting with ANONYMOUS_SESSION_PREFIX)
-      if (!sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
-        const userId = await validateSession(sessionId);
+      if (!activeSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+        const userId = await validateSession(activeSessionId);
         
         if (userId) {
           const user = await getUserById(userId);
@@ -86,10 +104,13 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       } 
       // Handle anonymous session (format: anon_[timestamp]_[random])
       else {
+        logger.debug(`Processing anonymous session: ${activeSessionId}`);
+        
+        // Check if session exists in the database
         const anonSession = await db
           .select()
           .from(anonymous_sessions)
-          .where(eq(anonymous_sessions.session_id, sessionId));
+          .where(eq(anonymous_sessions.session_id, activeSessionId));
         
         if (anonSession.length > 0) {
           // Session exists in the database, use it
@@ -97,27 +118,27 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
             id: SYSTEM.ANONYMOUS_USER_ID, // Dedicated anonymous user ID from config
             username: 'anonymous',
             user_type: 'anonymous', // Explicitly set user type for anonymous users
-            anonymous_session_id: sessionId
+            anonymous_session_id: activeSessionId
           };
           
-          logger.debug(`Anonymous session validated: ${sessionId}`);
+          logger.debug(`Anonymous session validated: ${activeSessionId}`);
           
           // Update the session's last active timestamp
           try {
-            await dbStorage.updateAnonymousSessionLastActive(sessionId);
-            logger.debug(`Updated last active timestamp for session: ${sessionId}`);
+            await dbStorage.updateAnonymousSessionLastActive(activeSessionId);
+            logger.debug(`Updated last active timestamp for session: ${activeSessionId}`);
           } catch (err) {
-            logger.error(`Failed to update last active timestamp for session: ${sessionId}`, err);
+            logger.error(`Failed to update last active timestamp for session: ${activeSessionId}`, err);
           }
         } 
         // Session doesn't exist in the database yet, create it
         else {
           try {
-            logger.info(`Creating new anonymous session: ${sessionId}`);
+            logger.info(`Creating new anonymous session: ${activeSessionId}`);
             
             // Create the anonymous session in the database
             const newSession = await dbStorage.createAnonymousSession({
-              session_id: sessionId,
+              session_id: activeSessionId,
               user_agent: req.headers['user-agent'] || null,
               ip_address: req.ip || null
             });
@@ -127,12 +148,12 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
               id: SYSTEM.ANONYMOUS_USER_ID, // Dedicated anonymous user ID from config
               username: 'anonymous',
               user_type: 'anonymous',
-              anonymous_session_id: sessionId
+              anonymous_session_id: activeSessionId
             };
             
-            logger.debug(`Created and validated new anonymous session: ${sessionId}`);
+            logger.debug(`Created and validated new anonymous session: ${activeSessionId}`);
           } catch (error) {
-            logger.error(`Failed to create anonymous session: ${sessionId}`, error);
+            logger.error(`Failed to create anonymous session: ${activeSessionId}`, error);
           }
         }
       }

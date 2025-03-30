@@ -53,6 +53,7 @@ export function useLibraryQueryHeaders() {
           // Use await here to ensure we get a string, not a Promise
           let anonymousSessionId = null;
           try {
+            // Make sure to await the result to get the actual string value
             anonymousSessionId = await getOrCreateAnonymousSessionId();
             console.log('[LibraryQuery] Using anonymous session ID:', anonymousSessionId);
           } catch (e) {
@@ -68,7 +69,7 @@ export function useLibraryQueryHeaders() {
             
             console.log('[LibraryQuery] Set headers for anonymous user:', {
               'x-anonymous-session': anonymousSessionId,
-              'x-user-id': SYSTEM.ANONYMOUS_USER_ID
+              'x-user-id': String(SYSTEM.ANONYMOUS_USER_ID)
             });
           } else {
             console.warn('[LibraryQuery] No anonymous session ID available');

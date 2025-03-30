@@ -16,6 +16,17 @@ const SESSION_COOKIE_NAME = 'anonymousSessionId';
 const ALT_SESSION_COOKIE_NAME = 'anonymous_session_id';
 
 /**
+ * Generates a new anonymous session ID with proper format
+ * Format: anon_[timestamp]_[random]
+ * @returns A new unique session ID string
+ */
+export function generateSessionId(): string {
+  const timestamp = Date.now();
+  const randomPart = Math.random().toString(36).substring(2, 10);
+  return `${SYSTEM.ANONYMOUS_SESSION_PREFIX}${timestamp}_${randomPart}`;
+}
+
+/**
  * Get the current anonymous session ID from cookies
  * @returns The session ID if available, null otherwise
  */
@@ -89,8 +100,8 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
   }
   
   try {
-    // Generate a new session ID format that matches what the backend expects
-    const newSessionId = `${SYSTEM.ANONYMOUS_SESSION_PREFIX}${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    // Generate a new session ID using our consistent function
+    const newSessionId = generateSessionId();
     
     // Store it in localStorage
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newSessionId);
@@ -114,7 +125,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     console.error('[Anonymous Session] Error creating session:', error);
     
     // Fallback to client-side only if there's an error
-    const fallbackId = `${SYSTEM.ANONYMOUS_SESSION_PREFIX}${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const fallbackId = generateSessionId();
     
     // Store in localStorage
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, fallbackId);
