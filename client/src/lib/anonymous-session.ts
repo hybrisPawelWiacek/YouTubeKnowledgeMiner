@@ -74,6 +74,30 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
 }
 
 /**
+ * Prepares headers with the anonymous session ID for API requests
+ * Use this helper function to get headers with the anonymous session included
+ * 
+ * @param existingHeaders Optional existing headers to extend
+ * @returns A promise that resolves to HeadersInit object with the anonymous session included
+ */
+export async function getAnonymousSessionHeaders(existingHeaders: HeadersInit = {}): Promise<Record<string, string>> {
+  // Create a copy of the existing headers as a Record<string, string> to ensure type safety
+  const headers: Record<string, string> = { 
+    ...(typeof existingHeaders === 'object' ? existingHeaders as Record<string, string> : {})
+  };
+  
+  // Get the anonymous session ID
+  const sessionId = await getOrCreateAnonymousSessionId();
+  
+  // Add it to the headers
+  if (sessionId) {
+    headers['x-anonymous-session'] = sessionId;
+  }
+  
+  return headers;
+}
+
+/**
  * Interface for video count information 
  */
 interface VideoCountInfo {

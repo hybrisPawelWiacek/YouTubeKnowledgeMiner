@@ -18,7 +18,7 @@ import { useAuthPrompt } from "@/hooks/use-auth-prompt";
 import { AuthPromptDialog } from "@/components/auth/auth-prompt-dialog";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
+import { getOrCreateAnonymousSessionId, getAnonymousSessionHeaders, hasReachedAnonymousLimit } from "@/lib/anonymous-session";
 import { Video, Category, Collection } from "@/types";
 import {
   Filter,
@@ -140,9 +140,10 @@ export default function Library() {
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('Library - Adding anonymous session header:', sessionId);
+        // Use the helper function that properly handles the async nature of session IDs
+        headers = await getAnonymousSessionHeaders();
+        // Use a type assertion to access the header value
+        console.log('Library - Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
       // Use our API request function which handles all the auth header logic for us
@@ -223,9 +224,10 @@ export default function Library() {
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('[bulkDeleteMutation] Adding anonymous session header:', sessionId);
+        // Use the helper function that properly handles the async nature of session IDs
+        headers = await getAnonymousSessionHeaders();
+        // Use a type assertion to access the header value
+        console.log('[bulkDeleteMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
       const response = await apiRequest("DELETE", "/api/videos/bulk", { ids }, headers);
@@ -255,9 +257,10 @@ export default function Library() {
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('[bulkToggleFavoriteMutation] Adding anonymous session header:', sessionId);
+        // Use the helper function that properly handles the async nature of session IDs
+        headers = await getAnonymousSessionHeaders();
+        // Use a type assertion to access the header value
+        console.log('[bulkToggleFavoriteMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
       const response = await apiRequest("PATCH", "/api/videos/bulk", { 
@@ -287,9 +290,10 @@ export default function Library() {
       // Add anonymous session header for anonymous users
       let headers: HeadersInit = {};
       if (!user) {
-        const sessionId = getOrCreateAnonymousSessionId();
-        headers = { 'x-anonymous-session': sessionId };
-        console.log('[addToCollectionMutation] Adding anonymous session header:', sessionId);
+        // Use the helper function that properly handles the async nature of session IDs
+        headers = await getAnonymousSessionHeaders();
+        // Use a type assertion to access the header value
+        console.log('[addToCollectionMutation] Adding anonymous session header:', (headers as Record<string, string>)['x-anonymous-session']);
       }
       
       const response = await apiRequest("POST", `/api/collections/${collectionId}/videos/bulk`, { 

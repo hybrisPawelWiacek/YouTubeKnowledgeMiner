@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSupabase } from '@/hooks/use-supabase';
 import { getOrCreateAnonymousSessionId, hasAnonymousSession } from '@/lib/anonymous-session';
+import { SYSTEM } from '../../../shared/config';
 
 export function useLibraryQueryHeaders() {
   const { user } = useSupabase();
@@ -52,8 +53,8 @@ export function useLibraryQueryHeaders() {
             // Add anonymous session header
             newHeaders['x-anonymous-session'] = anonymousSessionId;
             
-            // Use the correct anonymous user ID (7)
-            newHeaders['x-user-id'] = '7';
+            // Use the anonymous user ID from system config
+            newHeaders['x-user-id'] = String(SYSTEM.ANONYMOUS_USER_ID);
           }
         } catch (error) {
           console.error('[VideoInput] Error setting up anonymous session:', error);
