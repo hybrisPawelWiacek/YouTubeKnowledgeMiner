@@ -12,6 +12,8 @@ import { SYSTEM } from '../../../shared/config';
 
 // Anonymous session cookie name
 const SESSION_COOKIE_NAME = 'anonymousSessionId';
+// Also check for the alternate cookie name used by the server
+const ALT_SESSION_COOKIE_NAME = 'anonymous_session_id';
 
 /**
  * Get the current anonymous session ID from cookies
@@ -25,13 +27,15 @@ export function getAnonymousSessionId(): string | null {
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=');
     console.log('[Anonymous Session] Checking cookie:', { name, value });
-    if (name === SESSION_COOKIE_NAME) {
+    
+    // Check both cookie names used in the application
+    if (name === SESSION_COOKIE_NAME || name === ALT_SESSION_COOKIE_NAME) {
       console.log('[Anonymous Session] Found session cookie with value:', value);
       return value;
     }
   }
   
-  console.log('[Anonymous Session] No session cookie found with name:', SESSION_COOKIE_NAME);
+  console.log('[Anonymous Session] No session cookie found with names:', SESSION_COOKIE_NAME, 'or', ALT_SESSION_COOKIE_NAME);
   return null;
 }
 
@@ -51,8 +55,9 @@ export function clearAnonymousSession(): void {
   // Remove from localStorage
   localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
   
-  // Remove from cookie by setting an expired date
+  // Remove both cookie names by setting expired dates
   document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   
   console.log('[Anonymous Session] Anonymous session cleared successfully');
 }
@@ -63,10 +68,11 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
   if (storedSessionId) {
     console.log('[Anonymous Session] Using existing session from localStorage:', storedSessionId);
     
-    // Also ensure it's in the cookie for backwards compatibility
+    // Also ensure it's in both cookie formats for compatibility
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + 30);
     document.cookie = `${SESSION_COOKIE_NAME}=${storedSessionId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
+    document.cookie = `${ALT_SESSION_COOKIE_NAME}=${storedSessionId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
     
     return storedSessionId;
   }
@@ -89,10 +95,11 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     // Store it in localStorage
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newSessionId);
     
-    // Also store in a cookie for compatibility
+    // Also store in both cookie formats for compatibility
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + 30); // 30 days expiration
     document.cookie = `${SESSION_COOKIE_NAME}=${newSessionId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
+    document.cookie = `${ALT_SESSION_COOKIE_NAME}=${newSessionId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
     
     // Initialize this session in the backend
     await axios.get('/api/anonymous/videos/count', {
@@ -112,8 +119,9 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     // Store in localStorage
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, fallbackId);
     
-    // And in cookie
+    // And in both cookie formats
     document.cookie = `${SESSION_COOKIE_NAME}=${fallbackId}; expires=${new Date(Date.now() + 30*24*60*60*1000).toUTCString()}; path=/; SameSite=Lax`;
+    document.cookie = `${ALT_SESSION_COOKIE_NAME}=${fallbackId}; expires=${new Date(Date.now() + 30*24*60*60*1000).toUTCString()}; path=/; SameSite=Lax`;
     
     console.log('[Anonymous Session] Created fallback session due to error:', fallbackId);
     return fallbackId;
