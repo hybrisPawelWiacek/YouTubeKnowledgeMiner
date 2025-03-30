@@ -25,19 +25,6 @@ export const anonymous_sessions = pgTable("anonymous_sessions", {
   ip_address: text("ip_address"),
 });
 
-// Table for storing text chunks and their vector embeddings
-export const embeddings = pgTable("embeddings", {
-  id: serial("id").primaryKey(),
-  video_id: integer("video_id").references(() => videos.id).notNull(),
-  user_id: integer("user_id").references(() => users.id).notNull(),
-  content_type: contentTypeEnum("content_type").notNull(),
-  chunk_index: integer("chunk_index").notNull(), // Position in the original content
-  content: text("content").notNull(), // The actual text chunk
-  embedding: jsonb("embedding").notNull(), // Store embeddings as JSON arrays
-  metadata: jsonb("metadata"), // Additional metadata like timestamps, etc.
-  created_at: timestamp("created_at").defaultNow().notNull(),
-});
-
 // Table to track search history
 export const search_history = pgTable("search_history", {
   id: serial("id").primaryKey(),
@@ -171,6 +158,19 @@ export const auth_sessions = pgTable("auth_sessions", {
   created_at: timestamp("created_at").defaultNow().notNull(),
   expires_at: timestamp("expires_at").notNull(),
   last_active_at: timestamp("last_active_at").defaultNow().notNull(),
+});
+
+// Table for storing text chunks and their vector embeddings
+export const embeddings = pgTable("embeddings", {
+  id: serial("id").primaryKey(),
+  video_id: integer("video_id").references(() => videos.id).notNull(),
+  user_id: integer("user_id").references(() => users.id).notNull(),
+  content_type: contentTypeEnum("content_type").notNull(),
+  chunk_index: integer("chunk_index").notNull(), // Position in the original content
+  content: text("content").notNull(), // The actual text chunk
+  embedding: jsonb("embedding").notNull(), // Store embeddings as JSON arrays
+  metadata: jsonb("metadata"), // Additional metadata like timestamps, etc.
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Insert schemas
@@ -313,7 +313,7 @@ export const semanticSearchSchema = z.object({
   limit: z.number().min(1).max(100).default(10),
 });
 
-// Insert schemas for new tables
+// Insert schemas for new tables - must be after embeddings table is defined
 export const insertEmbeddingSchema = createInsertSchema(embeddings).omit({
   id: true,
   created_at: true,
