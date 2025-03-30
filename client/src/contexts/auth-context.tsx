@@ -165,7 +165,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Migrate anonymous content to authenticated user
   const migrateAnonymousContent = async (sessionId: string): Promise<{success: boolean, message: string}> => {
     try {
-      const response = await axios.post('/api/auth/migrate-anonymous', { sessionId });
+      // Use the correct endpoint path from the backend implementation
+      const response = await axios.post('/api/auth/migrate-anonymous-data', { 
+        anonymousSessionId: sessionId 
+      });
       
       if (response.data.success) {
         toast({

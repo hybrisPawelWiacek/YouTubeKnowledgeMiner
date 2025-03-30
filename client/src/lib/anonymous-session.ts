@@ -41,17 +41,35 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     return existingId;
   }
   
-  // For our MVP implementation, we'll use a client-side generated ID
-  // rather than making an API call that doesn't exist yet
-  const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-  
-  // Store it in a cookie for persistence
-  const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 30); // 30 days expiration
-  document.cookie = `${SESSION_COOKIE_NAME}=${fallbackId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
-  
-  console.log('[Anonymous Session] Created new client-side session:', fallbackId);
-  return fallbackId;
+  try {
+    // Generate a new session ID format that matches what the backend expects
+    const newSessionId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    
+    // Store it in a cookie for persistence
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + 30); // 30 days expiration
+    document.cookie = `${SESSION_COOKIE_NAME}=${newSessionId}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`;
+    
+    // Also make a request to the backend to initialize this session
+    // We do this by simply using the session ID in a request to the count endpoint
+    await axios.get('/api/anonymous/videos/count', {
+      headers: {
+        'x-anonymous-session': newSessionId
+      }
+    });
+    
+    console.log('[Anonymous Session] Created new session:', newSessionId);
+    return newSessionId;
+  } catch (error) {
+    console.error('[Anonymous Session] Error creating session:', error);
+    
+    // Fallback to client-side only if there's an error
+    const fallbackId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    document.cookie = `${SESSION_COOKIE_NAME}=${fallbackId}; expires=${new Date(Date.now() + 30*24*60*60*1000).toUTCString()}; path=/; SameSite=Lax`;
+    
+    console.log('[Anonymous Session] Created fallback session due to error:', fallbackId);
+    return fallbackId;
+  }
 }
 
 /**
@@ -68,17 +86,27 @@ interface VideoCountInfo {
  */
 export async function getAnonymousVideoCountInfo(): Promise<VideoCountInfo> {
   try {
-    // For development/MVP, we'll use localStorage to track video count
-    // In a real implementation, this would call the backend API
-    const countStr = localStorage.getItem('anonymous_video_count') || '0';
-    const count = parseInt(countStr, 10);
+    // Get the current session ID
+    const sessionId = await getAnonymousSessionId();
+    
+    if (!sessionId) {
+      console.log('[Anonymous Session] No session found, returning default values');
+      return { count: 0, maxAllowed: 3 };
+    }
+    
+    // Call the backend API to get the actual count
+    const response = await axios.get('/api/anonymous/videos/count', {
+      headers: {
+        'x-anonymous-session': sessionId
+      }
+    });
     
     // Log for debugging
-    console.log('[Anonymous Session] Video count from localStorage:', count);
+    console.log('[Anonymous Session] Video count from API:', response.data);
     
     return {
-      count,
-      maxAllowed: 3 // Hardcoded limit for anonymous users
+      count: response.data.count || 0,
+      maxAllowed: response.data.max_allowed || 3
     };
   } catch (error) {
     console.error('Error getting anonymous video count:', error);
@@ -130,20 +158,20 @@ export async function hasAnonymousSession(): Promise<boolean> {
 
 /**
  * Increment the anonymous video count when a new video is analyzed
- * @returns The new count after incrementing
+ * Note: The backend automatically increments the count when videos are added,
+ * this function is maintained for backward compatibility with existing code
+ * @returns The new count (after API fetch)
  */
-export function incrementAnonymousVideoCount(): number {
-  // Get current count
-  const countStr = localStorage.getItem('anonymous_video_count') || '0';
-  const currentCount = parseInt(countStr, 10);
-  
-  // Increment
-  const newCount = currentCount + 1;
-  
-  // Save back to localStorage
-  localStorage.setItem('anonymous_video_count', newCount.toString());
-  
-  console.log('[Anonymous Session] Incremented video count to:', newCount);
-  
-  return newCount;
+export async function incrementAnonymousVideoCount(): Promise<number> {
+  try {
+    // Get updated count from the backend
+    const { count } = await getAnonymousVideoCountInfo();
+    
+    console.log('[Anonymous Session] Current video count from API:', count);
+    
+    return count;
+  } catch (error) {
+    console.error('Error incrementing anonymous video count:', error);
+    return 0;
+  }
 }
