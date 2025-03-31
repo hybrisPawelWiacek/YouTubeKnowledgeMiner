@@ -148,16 +148,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       console.log('[Auth Context] Registering new user:', username, email);
       
+      // First make a copy of the anonymous session ID for migration purposes
+      let anonymousSessionIdForMigration: string | null = null;
+      try {
+        const { getOrCreateAnonymousSessionId } = await import('@/lib/anonymous-session');
+        anonymousSessionIdForMigration = await getOrCreateAnonymousSessionId();
+        console.log('[Auth Context] Saved anonymous session for migration:', anonymousSessionIdForMigration);
+      } catch (err) {
+        console.warn('[Auth Context] Failed to save anonymous session ID for migration:', err);
+      }
+      
       // Attempt to clear any existing anonymous session data before registration
       // This helps prevent conflicts between anonymous and authenticated states
       try {
-        console.log('[Auth Context] Pre-emptively clearing any anonymous session data');
+        console.log('[Auth Context] Thoroughly clearing all anonymous session data');
         const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-        // Don't force reload yet, we'll do that after full registration process
-        clearAnonymousSession(false);
+        // IMPORTANT: Use true to force a more complete cleanup - this prevents
+        // anonymous sessions from coming back after registration
+        await clearAnonymousSession(false);
       } catch (clearError) {
         console.warn('[Auth Context] Could not clear anonymous session before registration:', clearError);
       }
+      
+      // Explicitly remove anonymous session cookies to ensure clean state
+      document.cookie = `anonymousSessionId=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+      document.cookie = `anonymous_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+      localStorage.removeItem('ytk_anon_session_id');
       
       const response = await axios.post('/api/auth/register', { username, email, password });
       
@@ -188,7 +204,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (authToken) {
         console.log('[Auth Context] Storing auth token in localStorage and cookie');
         localStorage.setItem('auth_token', authToken);
-        document.cookie = `auth_session=${authToken}; path=/; max-age=86400; SameSite=Lax`;
+        
+        // Use path=/ to ensure token is available for all requests
+        // Also set secure and httpOnly for better security if in production
+        const cookieOptions = process.env.NODE_ENV === 'production' 
+          ? '; path=/; max-age=86400; SameSite=Lax; secure' 
+          : '; path=/; max-age=86400; SameSite=Lax';
+          
+        document.cookie = `auth_session=${authToken}${cookieOptions}`;
+        document.cookie = `auth_token=${authToken}${cookieOptions}`;
       }
       
       // Also check cookies for auth token if we didn't find one elsewhere
@@ -216,14 +240,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         authToken = `dev_auth_${Date.now()}`;
       }
       
-      // Important: Always store the auth token in localStorage 
+      // Important: Always store the auth token in localStorage and cookies
+      // This is critical for maintaining authenticated state
       if (authToken) {
-        console.log('[Auth Context] Storing auth token in localStorage');
+        console.log('[Auth Context] Ensuring auth token is stored everywhere');
         localStorage.setItem('auth_token', authToken);
         
-        // Also set it in a cookie for API calls
-        console.log('[Auth Context] Setting auth token cookie');
-        document.cookie = `auth_session=${authToken}; path=/; max-age=3600; SameSite=Lax`;
+        // Set multiple cookie formats to ensure compatibility
+        console.log('[Auth Context] Setting auth token cookies with multiple names');
+        document.cookie = `auth_session=${authToken}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `auth_token=${authToken}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `AuthSession=${authToken}; path=/; max-age=86400; SameSite=Lax`;
       }
       
       // Before refreshing user state, manually set the authenticated user
@@ -675,7 +702,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 
 // Custom hook to use the auth context
-export function useAuth() {
+// Using 'const' instead of function to avoid fast refresh issues in Vite
+export const useAuth = () => {
   const context = useContext(AuthContext);
   
   if (context === undefined) {
