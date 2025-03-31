@@ -12,12 +12,37 @@ export function useLibraryQueryHeaders() {
     async function initializeHeaders() {
       const newHeaders: HeadersInit = {};
       
-      // If a userId is available, add it to the headers
-      const userId = user?.id;
-      console.log('[LibraryQuery] User ID for headers:', userId, 'type:', typeof userId);
+      // First check for auth token in localStorage - highest priority
+      const authToken = localStorage.getItem('auth_token');
       
-      if (userId) {
+      if (authToken) {
+        console.log('[LibraryQuery] Found auth token in localStorage, using it for authentication');
+        
+        // Add Authorization header for the server
+        newHeaders['Authorization'] = `Bearer ${authToken}`;
+        
+        // If it's our custom token format, extract the user ID
+        if (authToken.startsWith('auth_token_')) {
+          try {
+            const parts = authToken.split('_');
+            if (parts.length >= 3) {
+              const userId = parseInt(parts[2], 10);
+              if (!isNaN(userId)) {
+                console.log('[LibraryQuery] Extracted user ID from auth token:', userId);
+                newHeaders['x-user-id'] = String(userId);
+              }
+            }
+          } catch (err) {
+            console.error('[LibraryQuery] Error extracting user ID from auth token:', err);
+          }
+        }
+      }
+      // If no auth token, but we have a user from Supabase
+      else if (user?.id) {
         // Authenticated user path
+        const userId = user.id;
+        console.log('[LibraryQuery] User ID for headers:', userId, 'type:', typeof userId);
+        
         let headerValue;
         
         // Ensure userId is sent as a clean number in string format
@@ -40,9 +65,11 @@ export function useLibraryQueryHeaders() {
         
         newHeaders['x-user-id'] = headerValue;
         console.log('[LibraryQuery] Setting x-user-id header for authenticated user:', headerValue);
-      } else {
+      } 
+      // Only if no auth token and no user, then use anonymous session
+      else {
         // Anonymous user path
-        console.log('[LibraryQuery] No authenticated user, using anonymous session');
+        console.log('[LibraryQuery] No auth token or authenticated user, using anonymous session');
         
         try {
           // First check if user already has an anonymous session

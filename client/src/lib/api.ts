@@ -46,9 +46,36 @@ export async function apiRequest<T = any>(
     credentials: 'include',
   };
 
-  // Add auth header if user is authenticated
-  // Only add the header when we have a valid session
-  if (currentSession?.user) {
+  // First check for auth token in localStorage which would indicate user is registered
+  const authToken = localStorage.getItem('auth_token');
+  
+  if (authToken) {
+    console.log('[API] Found auth token in localStorage, using it for authentication');
+    
+    // Add the Authorization header with the Bearer token
+    (options.headers as Record<string, string>)['Authorization'] = `Bearer ${authToken}`;
+    
+    // If the token is our custom format, we can extract the user ID
+    if (authToken.startsWith('auth_token_')) {
+      try {
+        const parts = authToken.split('_');
+        if (parts.length >= 3) {
+          const userId = parseInt(parts[2], 10);
+          if (!isNaN(userId)) {
+            console.log('[API] Extracted user ID from auth token:', userId);
+            (options.headers as Record<string, string>)['x-user-id'] = String(userId);
+          }
+        }
+      } catch (err) {
+        console.error('[API] Error extracting user ID from auth token:', err);
+      }
+    }
+    
+    // Don't use anonymous session if we have an auth token
+    console.log('[API] Using authenticated session - skipping anonymous session header');
+  }
+  // If no auth token in localStorage but we have a currentSession
+  else if (currentSession?.user) {
     console.log('[API] Current session details:');
     console.log(`- User ID: ${currentSession.user.id} (${typeof currentSession.user.id})`);
     console.log(`- User Email: ${currentSession.user.email}`);
@@ -95,30 +122,29 @@ export async function apiRequest<T = any>(
     } else {
       console.warn('[API] Unable to set x-user-id header - invalid user ID:', userId);
     }
-  } else {
-    console.log('[API] No current session or user available for API call');
+  } 
+  // Only use anonymous session if we have no auth token and no user session
+  else {
+    console.log('[API] No auth token or user session found - checking for anonymous session');
     
-    // Handle anonymous user sessions
-    if (!currentSession?.user) {
-      try {
-        // Get or create an anonymous session ID - ensuring we await the Promise
-        const anonymousSessionId = await getOrCreateAnonymousSessionId();
+    try {
+      // Get or create an anonymous session ID - ensuring we await the Promise
+      const anonymousSessionId = await getOrCreateAnonymousSessionId();
+      
+      // Safety check in case the session is null
+      if (anonymousSessionId) {
+        console.log('[API] Using anonymous session:', anonymousSessionId);
         
-        // Safety check in case the session is null
-        if (anonymousSessionId) {
-          console.log('[API] Using anonymous session:', anonymousSessionId);
-          
-          // Add anonymous session header
-          (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
-          
-          // Log the headers being sent
-          console.log('[API] Request headers for anonymous user:', options.headers);
-        } else {
-          console.warn('[API] Failed to get a valid anonymous session ID');
-        }
-      } catch (err) {
-        console.error('[API] Error getting anonymous session ID:', err);
+        // Add anonymous session header
+        (options.headers as Record<string, string>)['x-anonymous-session'] = anonymousSessionId;
+        
+        // Log the headers being sent
+        console.log('[API] Request headers for anonymous user:', options.headers);
+      } else {
+        console.warn('[API] Failed to get a valid anonymous session ID');
       }
+    } catch (err) {
+      console.error('[API] Error getting anonymous session ID:', err);
     }
   }
 

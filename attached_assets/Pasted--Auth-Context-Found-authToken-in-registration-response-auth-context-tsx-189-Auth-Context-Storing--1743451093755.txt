@@ -1,0 +1,30 @@
+[Auth Context] Found authToken in registration response
+auth-context.tsx:189 [Auth Context] Storing auth token in localStorage and cookie
+auth-context.tsx:221 [Auth Context] Storing auth token in localStorage
+auth-context.tsx:225 [Auth Context] Setting auth token cookie
+auth-context.tsx:231 [Auth Context] Setting authenticated user from registration response: {success: true, message: 'User registered successfully. Please verify your email.', user: {…}, authToken: 'auth_token_35_1743451041857'}
+auth-context.tsx:242 [Auth Context] Setting user state with userData from response.data.user: {id: 35, username: 'pw1234', email: 'pw1234@m.com', created_at: '2025-03-31T19:57:21.748Z', status: 'pending_verification', …}
+auth-context.tsx:262 [Auth Context] Registration successful - using user data from registration response
+register-form.tsx:85 [RegisterForm] Registration successful, attempting to retrieve auth token
+register-form.tsx:93 [RegisterForm] Using auth token returned directly from register function
+register-form.tsx:117 [RegisterForm] Caching auth token to localStorage
+register-form.tsx:122 [RegisterForm] Auth token available for debugging
+header.tsx:57 [Header] Anonymous video count from server: 0
+anonymous-session.ts:38 [Anonymous Session] All cookies: 
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: {name: '', value: undefined}
+anonymous-session.ts:51 [Anonymous Session] No session cookie found with names: anonymousSessionId or anonymous_session_id
+anonymous-session.ts:274 [Anonymous Session] Created new session: anon_1743451041855_py3ynqej
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743451041855_py3ynqej
+auth.tsx:128 [AuthPage] Register success handler - checking for anonymous session: anon_1743451041855_py3ynqej
+auth.tsx:132 [AuthPage] Updating session ID from latest source: anon_1743451041855_py3ynqej
+auth.tsx:138 [AuthPage] Anonymous session found - preparing for migration
+auth.tsx:147 [AuthPage] Found auth token in localStorage for migration
+auth.tsx:166 [AuthPage] Auth token found for migration: auth_token...
+auth.tsx:177 [AuthPage] Showing migration dialog after registration
+header.tsx:57 [Header] Anonymous video count from server: 0
+api.ts:37 [API] GET request to /api/videos starting
+api.ts:38 [API] Current headers: undefined
+api.ts:99 [API] No current session or user available for API call
+anonymous-session.ts:232 [Anonymous Session] Using existing session from localStorage: anon_1743451041855_py3ynqej
+api.ts:109 [API] Using anonymous session: anon_1743451041855_py3ynqej
+api.ts:115 [API] Request headers for anonymous user: {Content-Type: 'application/json', x-anonymous-session: 'anon_1743451041855_py3ynqej'}
