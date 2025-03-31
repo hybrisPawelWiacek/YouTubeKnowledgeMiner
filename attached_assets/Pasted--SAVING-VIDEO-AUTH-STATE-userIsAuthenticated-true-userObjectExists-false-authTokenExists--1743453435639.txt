@@ -1,0 +1,25 @@
+🎥 SAVING VIDEO - AUTH STATE: {userIsAuthenticated: true, userObjectExists: false, authTokenExists: true, userType: 'undefined'}
+video-result.tsx:70 🔐 AUTH TOKEN FOUND - User is authenticated via custom auth
+video-result.tsx:75 - User ID from token: 43
+video-result.tsx:93 📤 VIDEO DATA BEING SENT TO API: {youtubeId: 'TFJUunLoN3Y', title: 'Gemini 2.5 Builds Your AI Startup in Minutes! (N8N Hack)', channel: 'AI Money', duration: '17:15', publishDate: 'March 29, 2025', …}
+video-result.tsx:118 📡 Using auth token for authenticated request
+video-result.tsx:123 📡 Making POST request to /api/videos
+anonymous-session.ts:135 [Anonymous Session] User is authenticated - not using anonymous session
+anonymous-session.ts:62 [Anonymous Session] Thoroughly clearing all anonymous session data
+anonymous-session.ts:111 [Anonymous Session] Session data cleared
+anonymous-session.ts:115 [Anonymous Session] Preserved auth cookies: auth_token=auth_token_43_1743453326985; AuthSession=auth_token_43_1743453326985
+anonymous-session.ts:249 [Anonymous Session] No session found, returning default values
+video-result.tsx:125 ✅ SAVE VIDEO RESPONSE: {message: 'Video processed successfully', video: {…}}
+video-result.tsx:140 Video saved successfully with ID: undefined
+anonymous-session.ts:135 [Anonymous Session] User is authenticated - not using anonymous session
+anonymous-session.ts:62 [Anonymous Session] Thoroughly clearing all anonymous session data
+anonymous-session.ts:111 [Anonymous Session] Session data cleared
+anonymous-session.ts:115 [Anonymous Session] Preserved auth cookies: auth_token=auth_token_43_1743453326985; AuthSession=auth_token_43_1743453326985
+anonymous-session.ts:249 [Anonymous Session] No session found, returning default values
+video-result.tsx:155 [VideoResult] Navigating to library page after saving video
+header.tsx:57 [Header] Anonymous video count from server: 0
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:171 Library - Found auth token in localStorage, using authenticated headers
+library.tsx:183 Library - Extracted user ID from auth token: 43
+library.tsx:696 [Library] Found videos in local storage: 0
+library.tsx:751 [Library] Local collections loaded: 0

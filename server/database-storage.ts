@@ -178,10 +178,10 @@ export class DatabaseStorage implements IStorage {
       baseQuery = baseQuery.orderBy(sortDirection(sortField));
       
       // Get total count first (without pagination)
-      const countQuery = baseQuery.toSQL();
-      const countResult = await db.execute(sql`
-        SELECT COUNT(*) as count FROM (${sql.raw(countQuery.sql)}) as count_query
-      `, countQuery.params);
+      // Instead of doing a complex nested query, let's just execute a count query directly
+      const countResult = await db.select({
+        count: sql`COUNT(*)`
+      }).from(videos).where(and(...conditions));
       
       const totalCount = parseInt(countResult.rows[0].count, 10);
       console.log("[searchVideos] Total matching videos:", totalCount);
