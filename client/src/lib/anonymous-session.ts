@@ -75,8 +75,23 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
   localStorage.removeItem('anonymousViews');
   localStorage.removeItem('anonymous_video_count');
   
-  // Clear cookies
-  // ------------------------
+  // Clear cookies - BUT PRESERVE AUTH COOKIES
+  // ------------------------------------------
+  
+  // Get all existing cookies to keep auth cookies
+  const cookieList = document.cookie.split('; ');
+  const authCookies: string[] = [];
+  
+  // Parse out auth cookies to preserve them
+  for (const cookie of cookieList) {
+    const [name] = cookie.split('=');
+    // Skip auth-related cookies for preservation
+    if (name === 'auth_token' || 
+        name === 'auth_session' || 
+        name === 'AuthSession') {
+      authCookies.push(cookie);
+    }
+  }
   
   // 1. Clear the main anonymous session cookie
   document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
@@ -91,11 +106,16 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
     document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain}; SameSite=Lax`;
   }
   
-  // 4. For extra safety, also try to set with null value
-  document.cookie = `${SESSION_COOKIE_NAME}=null; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-  document.cookie = `${ALT_SESSION_COOKIE_NAME}=null; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  // Log the status after clearing, showing only auth cookies that were preserved
+  const authCookieStr = authCookies.join('; ');
+  console.log('[Anonymous Session] Session data cleared');
   
-  console.log('[Anonymous Session] Session data cleared - cookies after clearing:', document.cookie);
+  // Only log preserved auth cookies if they exist
+  if (authCookieStr) {
+    console.log('[Anonymous Session] Preserved auth cookies:', authCookieStr);
+  } else {
+    console.log('[Anonymous Session] No auth cookies to preserve');
+  }
   
   // For some scenarios, we might want to force a page reload to ensure a clean state
   if (forceReload) {
