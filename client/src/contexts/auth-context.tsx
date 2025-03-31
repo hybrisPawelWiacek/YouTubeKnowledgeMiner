@@ -147,10 +147,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     try {
       console.log('[Auth Context] Registering new user:', username, email);
+      
+      // Attempt to clear any existing anonymous session data before registration
+      // This helps prevent conflicts between anonymous and authenticated states
+      try {
+        console.log('[Auth Context] Pre-emptively clearing any anonymous session data');
+        const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+        // Don't force reload yet, we'll do that after full registration process
+        clearAnonymousSession(false);
+      } catch (clearError) {
+        console.warn('[Auth Context] Could not clear anonymous session before registration:', clearError);
+      }
+      
       const response = await axios.post('/api/auth/register', { username, email, password });
       
-      // Store user data
-      setUser(response.data);
+      // Store user data - make sure to explicitly set is_anonymous to false
+      // This is critical to ensure the user is treated as authenticated
+      const userData = response.data;
+      if (userData) {
+        userData.is_anonymous = false; // Force to false to ensure authenticated state
+      }
+      setUser(userData);
       
       // Track the auth token
       let authToken: string | undefined = undefined;
@@ -201,6 +218,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.warn('[Auth Context] Creating fallback development token');
         authToken = `dev_auth_${Date.now()}`;
         localStorage.setItem('auth_token', authToken);
+      }
+      
+      // Force a refresh of authentication state to ensure we have the latest
+      try {
+        console.log('[Auth Context] Forcing auth state refresh after registration');
+        await refreshUser();
+      } catch (refreshError) {
+        console.error('[Auth Context] Error refreshing user after registration:', refreshError);
       }
       
       toast({

@@ -148,6 +148,30 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
     // Make a verification request after a short delay to allow for any async operations
     setTimeout(async () => {
       try {
+        // Before verification, do another sweep for cookies - our most aggressive approach
+        // This is especially important for eliminating duplicate or old session cookies
+        const allCookies = document.cookie.split(';');
+        console.log('[Anonymous Session] Verification phase - checking all cookies:', allCookies);
+        
+        // Scan for and clear ANY cookie that might be related to anonymous sessions
+        for (const cookie of allCookies) {
+          const [name] = cookie.trim().split('=');
+          if (!name) continue;
+          
+          // If the cookie name includes any of these strings, remove it
+          const suspiciousParts = ['anon', 'anonymous', 'session', 'ytk'];
+          const isSuspicious = suspiciousParts.some(part => 
+            name.toLowerCase().includes(part)
+          );
+          
+          if (isSuspicious) {
+            console.log('[Anonymous Session] Verification phase: removing suspicious cookie:', name);
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/api; SameSite=Lax`;
+          }
+        }
+        
+        // Now make a verification API request with empty anonymous session headers
         const response = await fetch('/api/anonymous/videos/count', {
           headers: verifyHeaders,
           // Ensure browser doesn't use cached response
@@ -162,15 +186,28 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
           console.warn('[Anonymous Session] Session data persisted after clearing! Forcing regeneration...');
           // This will trigger the generation of a brand new session ID next time it's needed
           localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+          
+          // More aggressive clearing of localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.toLowerCase().includes('anon')) {
+              localStorage.removeItem(key);
+            }
+          }
         }
         
         // If requested, force a page reload to ensure clean state
         if (forceReload) {
           console.log('[Anonymous Session] Forcing page reload for clean state');
-          window.location.reload();
+          // Use a more direct reload approach to ensure it happens
+          window.location.href = '/';
         }
       } catch (error) {
         console.error('[Anonymous Session] Error during verification check:', error);
+        // Still try to reload if that was requested
+        if (forceReload) {
+          window.location.reload();
+        }
       }
     }, 500); // 500ms delay to ensure other operations complete first
   } catch (e) {
@@ -178,7 +215,8 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
     
     // Still attempt reload if requested, even if verification failed
     if (forceReload) {
-      window.location.reload();
+      // Use window.location.href for a more definitive reload
+      window.location.href = '/';
     }
   }
 }

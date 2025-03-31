@@ -92,38 +92,58 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
         try {
           const { clearAnonymousSession } = await import('@/lib/anonymous-session');
           
-          // Determine if we should force reload based on whether videos were migrated
-          // Safety - use the videoCount state which was set earlier
-          const shouldForceReload = videoCount > 0;
+          // Always force reload after migration to ensure clean state
+          const shouldForceReload = true;
           
-          console.log(`[MigrationDialog] Clearing anonymous session ${shouldForceReload ? 'with' : 'without'} page reload`);
+          console.log(`[MigrationDialog] Clearing anonymous session with page reload`);
           
-          // Force refresh the user state to update the UI before potential reload
+          // Force refresh the user state to update the UI before reload
           await refreshUser();
           console.log('[MigrationDialog] Auth state refreshed after migration');
           
-          // Use the enhanced clearAnonymousSession which handles all cleanup thoroughly
-          // Pass true to trigger a page reload if videos were migrated
-          if (shouldForceReload) {
-            // Give the UI a moment to update before reloading
-            setTimeout(() => {
-              console.log('[MigrationDialog] Clearing session with reload after delay');
-              clearAnonymousSession(true);
-            }, 1500);
-          } else {
-            // Just clear without reload if no videos were migrated
-            clearAnonymousSession(false);
-          }
+          // First, ensure all cookies related to anonymous sessions are cleared
+          const paths = ['/', '/api', '/api/auth', '/api/anonymous', '/videos', ''];
+          const cookieNames = ['anonymousSessionId', 'anonymous_session_id', 'anonymous_session', 'x-anonymous-session'];
+          
+          cookieNames.forEach(name => {
+            paths.forEach(path => {
+              document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+              console.log(`[MigrationDialog] Manually cleared cookie ${name} on path ${path}`);
+            });
+          });
+          
+          // Also remove from localStorage directly
+          localStorage.removeItem('ytk_anon_session_id');
+          console.log('[MigrationDialog] Directly removed anonymous session from localStorage');
+          
+          // Now use the thorough clearAnonymousSession function with a delay
+          setTimeout(() => {
+            console.log('[MigrationDialog] Clearing session with reload after delay');
+            clearAnonymousSession(true); // Always force reload to ensure clean state
+          }, 1000);
           
           console.log('[MigrationDialog] Anonymous session cleared successfully');
         } catch (error) {
           console.error('[MigrationDialog] Error during cleanup:', error);
           
-          // Fallback - still try to refresh user state even if cleanup failed
+          // Even if there's an error, still try to force a clean state
           try {
-            refreshUser();
-          } catch (refreshErr) {
-            console.error('[MigrationDialog] Error refreshing user state:', refreshErr);
+            // Force a direct cleanup of known storage locations
+            localStorage.removeItem('ytk_anon_session_id');
+            document.cookie = 'anonymousSessionId=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+            document.cookie = 'anonymous_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+            
+            // Refresh user state
+            await refreshUser();
+            
+            // Force reload after a short delay
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 1000);
+          } catch (fallbackErr) {
+            console.error('[MigrationDialog] Even fallback cleanup failed:', fallbackErr);
+            // Last resort: just reload the page
+            window.location.href = '/';
           }
         }
       } else {
