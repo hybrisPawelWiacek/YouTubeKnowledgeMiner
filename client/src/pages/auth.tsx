@@ -110,78 +110,123 @@ export default function AuthPage() {
 
   // Auth success handlers
   const handleLoginSuccess = () => {
-    // If there's an anonymous session, show migration dialog
-    if (sessionId) {
-      setMigrationAction('login');
-      setShowMigrationDialog(true);
+    // Check for auth token - needed for migration
+    const authToken = localStorage.getItem('auth_token');
+    
+    // Check for anonymous session data to migrate
+    const oldLocalStorageId = localStorage.getItem('ytk_anon_session_id');
+    const oldCookieId = getAnonymousSessionId();
+    const oldVideoCountStr = localStorage.getItem('anonymous_video_count');
+    const oldVideoCount = oldVideoCountStr ? parseInt(oldVideoCountStr, 10) : 0;
+    
+    console.log('[AuthPage] Login success handler - authentication complete');
+    console.log('[AuthPage] Auth token present:', !!authToken);
+    console.log('[AuthPage] Anonymous data check:', { 
+      oldLocalStorageId, 
+      oldCookieId,
+      oldVideoCount 
+    });
+    
+    // First check if we have an auth token
+    if (authToken) {
+      console.log('[AuthPage] Found auth token for migration');
+      setMigrationAuthToken(authToken);
     } else {
-      // Otherwise redirect to home page
+      // No auth token means login failed or token wasn't stored correctly
+      console.warn('[AuthPage] No auth token found after login - redirecting to home');
       setLocation('/');
+      return;
     }
+    
+    // Next, determine if there's any session data to migrate
+    const hasSessionData = oldLocalStorageId || oldCookieId;
+    const hasVideos = oldVideoCount > 0;
+    
+    // If there's no session data or no videos, skip migration
+    if (!hasSessionData || !hasVideos) {
+      console.log('[AuthPage] No anonymous session data to migrate - redirecting to home');
+      setLocation('/');
+      return;
+    }
+    
+    // We've made it here, so we have auth token and session data with videos
+    console.log('[AuthPage] Anonymous session with videos found - preparing for migration');
+    
+    // Update session ID state with any ID we found (prioritize localStorage)
+    const migrationSessionId = oldLocalStorageId || oldCookieId;
+    if (migrationSessionId && migrationSessionId !== sessionId) {
+      console.log('[AuthPage] Setting session ID for migration:', migrationSessionId);
+      setSessionId(migrationSessionId);
+    }
+    
+    // Trigger the migration dialog
+    console.log('[AuthPage] Showing migration dialog after login');
+    setMigrationAction('login');
+    setShowMigrationDialog(true);
   };
 
   const handleRegisterSuccess = () => {
-    // Check if there's actually an anonymous session to migrate
-    // We need to re-check here because sessionId might not be set yet
-    const storedSessionId = localStorage.getItem('ytk_anon_session_id') || getAnonymousSessionId();
+    // Check for auth token - needed for migration
+    const authToken = localStorage.getItem('auth_token');
     
-    console.log('[AuthPage] Register success handler - checking for anonymous session:', storedSessionId);
+    // Check for anonymous session data to migrate
+    // IMPORTANT: we use localStorage directly here instead of getAnonymousSessionId()
+    // because the cookies might have been cleared but the localStorage entry could still exist
+    const oldLocalStorageId = localStorage.getItem('ytk_anon_session_id');
+    const oldCookieId = getAnonymousSessionId();
+    const oldVideoCountStr = localStorage.getItem('anonymous_video_count');
     
-    // Store the most up-to-date session ID
-    if (storedSessionId && storedSessionId !== sessionId) {
-      console.log('[AuthPage] Updating session ID from latest source:', storedSessionId);
-      setSessionId(storedSessionId);
-    }
+    // Convert video count to number or default to 0 if not found
+    const oldVideoCount = oldVideoCountStr ? parseInt(oldVideoCountStr, 10) : 0;
     
-    // If there's an anonymous session, prepare and show migration dialog
-    if (storedSessionId || sessionId) {
-      console.log('[AuthPage] Anonymous session found - preparing for migration');
-      
-      // Try to get the auth token from cookies or localStorage for migration
-      try {
-        // First check localStorage (most reliable) - the register form should have saved it
-        const localToken = localStorage.getItem('auth_token');
-        let authToken = null;
-        
-        if (localToken) {
-          console.log('[AuthPage] Found auth token in localStorage for migration');
-          authToken = localToken;
-        } else {
-          // Try cookies as fallback
-          const allCookies = document.cookie.split('; ');
-          const authCookie = allCookies.find(cookie => 
-            cookie.startsWith('auth_session=') || 
-            cookie.startsWith('AuthSession=') || 
-            cookie.startsWith('auth_token=')
-          );
-          
-          if (authCookie) {
-            authToken = authCookie.split('=')[1];
-            console.log('[AuthPage] Found auth token in cookies for migration');
-          }
-        }
-        
-        // If we found a token, log it and store it
-        if (authToken) {
-          console.log('[AuthPage] Auth token found for migration:', 
-                      authToken.substring(0, 10) + '...');
-          setMigrationAuthToken(authToken);
-        } else {
-          console.warn('[AuthPage] No auth token found in cookies or localStorage');
-        }
-      } catch (error) {
-        console.error('[AuthPage] Error extracting auth token for migration:', error);
-      }
-      
-      // Trigger the migration dialog
-      console.log('[AuthPage] Showing migration dialog after registration');
-      setMigrationAction('register');
-      setShowMigrationDialog(true);
+    console.log('[AuthPage] Register success handler - authentication complete');
+    console.log('[AuthPage] Auth token present:', !!authToken);
+    console.log('[AuthPage] Anonymous data check:', { 
+      oldLocalStorageId, 
+      oldCookieId,
+      oldVideoCount 
+    });
+    
+    // First, store the auth token for migration if found
+    if (authToken) {
+      console.log('[AuthPage] Found auth token for migration');
+      setMigrationAuthToken(authToken);
     } else {
-      // No anonymous session to migrate, just redirect to home page
-      console.log('[AuthPage] No anonymous session found - redirecting to home');
+      // No auth token means registration failed or token wasn't stored correctly
+      console.warn('[AuthPage] No auth token found after registration - redirecting to home');
       setLocation('/');
+      return;
     }
+    
+    // Next, determine if there's any session data to migrate:
+    // 1. Do we have a session ID?
+    // 2. Is there a known video count > 0?
+    const hasSessionData = oldLocalStorageId || oldCookieId;
+    const hasVideos = oldVideoCount > 0;
+    
+    // If there's no session data or no videos, skip migration
+    if (!hasSessionData || !hasVideos) {
+      console.log('[AuthPage] No anonymous session data to migrate - redirecting to home');
+      setLocation('/');
+      return;
+    }
+    
+    // We've made it here, so we have:
+    // 1. A valid auth token
+    // 2. Anonymous session data that might have videos
+    console.log('[AuthPage] Anonymous session with videos found - preparing for migration');
+    
+    // Update session ID state with any ID we found (prioritize localStorage)
+    const migrationSessionId = oldLocalStorageId || oldCookieId;
+    if (migrationSessionId && migrationSessionId !== sessionId) {
+      console.log('[AuthPage] Setting session ID for migration:', migrationSessionId);
+      setSessionId(migrationSessionId);
+    }
+    
+    // Trigger the migration dialog
+    console.log('[AuthPage] Showing migration dialog after registration');
+    setMigrationAction('register');
+    setShowMigrationDialog(true);
   };
 
   // Close migration dialog

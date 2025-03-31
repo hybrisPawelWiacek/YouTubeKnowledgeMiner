@@ -1,0 +1,29 @@
+[Header] Anonymous video count from server: 0
+Console.js:61 [Anonymous Session] User is authenticated - not using anonymous session
+Console.js:61 [Anonymous Session] Thoroughly clearing all anonymous session data
+Console.js:61 [Anonymous Session] Session data cleared - cookies after clearing: 
+Console.js:61 [VideoInput] Fetching video count with session: null
+_app-f2ae44c5ffe03ab9.js:13 Invalid href 'https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev//' passed to next/router in page: '/replEnvironmentDesktop'. Repeated forward-slashes (//) or backslashes \ are not valid in the href.
+(anonymous) @ _app-f2ae44c5ffe03ab9.js:13
+Console.js:61 [Anonymous Session] All cookies: 
+Console.js:61 [Anonymous Session] Checking cookie: Object
+Console.js:61 [Anonymous Session] No session cookie found with names: anonymousSessionId or anonymous_session_id
+Console.js:61 [AuthPage] Register success handler - checking for anonymous session: null
+Console.js:61 [AuthPage] Anonymous session found - preparing for migration
+Console.js:61 [AuthPage] Found auth token in localStorage for migration
+Console.js:61 [AuthPage] Auth token found for migration: auth_token...
+Console.js:61 [AuthPage] Showing migration dialog after registration
+2
+                
+          
+          
+          
+         Chrome is moving towards a new experience that allows users to choose to browse without third-party cookies.
+Console.js:61 [Anonymous Session] User is authenticated - not using anonymous session
+Console.js:61 [Anonymous Session] Thoroughly clearing all anonymous session data
+Console.js:61 [Anonymous Session] Session data cleared - cookies after clearing: 
+Console.js:61 [Anonymous Session] No session found, returning default values
+Console.js:61 [Anonymous Session] User is authenticated - not using anonymous session
+Console.js:61 [Anonymous Session] Thoroughly clearing all anonymous session data
+Console.js:61 [Anonymous Session] Session data cleared - cookies after clearing: 
+Console.js:61 [Anonymous Session] No session found, returning default values
