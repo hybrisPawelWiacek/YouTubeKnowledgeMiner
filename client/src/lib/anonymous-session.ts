@@ -57,15 +57,63 @@ export function getAnonymousSessionId(): string | null {
  * Used when logging in, registering, or after migration
  */
 export function clearAnonymousSession(): void {
-  console.log('[Anonymous Session] Clearing anonymous session data');
-  // Remove from localStorage
+  console.log('[Anonymous Session] Thoroughly clearing all anonymous session data');
+  
+  // Remove known session key from localStorage
   localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
   
-  // Remove both cookie names by setting expired dates
-  document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-  document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  // Look for and remove any other anonymous session related data in localStorage
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.includes('anon_') || key.includes('anonymous'))) {
+      console.log('[Anonymous Session] Found additional anonymous session data in localStorage:', key);
+      keysToRemove.push(key);
+    }
+  }
   
-  console.log('[Anonymous Session] Anonymous session cleared successfully');
+  // Remove all collected keys (doing it separately to avoid index shifting during removal)
+  keysToRemove.forEach(key => {
+    console.log('[Anonymous Session] Removing localStorage item:', key);
+    localStorage.removeItem(key);
+  });
+  
+  // Remove both cookie names by setting expired dates
+  // Include multiple path variations to ensure complete removal
+  const paths = ['/', '/api', ''];
+  
+  paths.forEach(path => {
+    document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+    document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+  });
+  
+  // Also clear any cookies that contain "anon" or "anonymous" in their names
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name] = cookie.trim().split('=');
+    if (name && (name.toLowerCase().includes('anon') || name.toLowerCase().includes('anonymous'))) {
+      console.log('[Anonymous Session] Clearing additional anonymous cookie:', name);
+      paths.forEach(path => {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+      });
+    }
+  }
+  
+  console.log('[Anonymous Session] Anonymous session data completely cleared');
+  
+  // Force a refresh of the anonymous video count API to verify clearing worked
+  try {
+    setTimeout(async () => {
+      const response = await fetch('/api/anonymous/videos/count', {
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      console.log('[Anonymous Session] Post-clearing API check:', await response.json());
+    }, 500);
+  } catch (e) {
+    console.error('[Anonymous Session] Error checking API after clearing:', e);
+  }
 }
 
 /**

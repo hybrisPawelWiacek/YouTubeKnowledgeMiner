@@ -256,10 +256,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const refreshUser = async (): Promise<void> => {
+    console.log('[AuthContext] Refreshing user state');
     try {
-      const response = await axios.get('/api/auth/me');
-      setUser(response.data);
+      // Clear any cached auth data to force a fresh fetch
+      const response = await axios.get('/api/auth/me', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
+      });
+      
+      console.log('[AuthContext] User refresh successful:', response.data);
+      
+      // If we get valid user data, update the state
+      if (response.data && response.data.id) {
+        setUser(response.data);
+        console.log('[AuthContext] User state updated to:', 
+                   response.data.is_anonymous ? 'anonymous user' : 'authenticated user');
+      } else {
+        // If we get an empty response, clear the user state
+        console.warn('[AuthContext] User refresh returned empty data, clearing user state');
+        setUser(null);
+      }
     } catch (error) {
+      console.error('[AuthContext] Error refreshing user:', error);
+      // On error, clear the user state to be safe
       setUser(null);
     }
   };

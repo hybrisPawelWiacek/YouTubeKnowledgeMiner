@@ -31,7 +31,7 @@ interface MigrationDialogProps {
 type MigrationStatus = 'idle' | 'migrating' | 'success' | 'error';
 
 export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: MigrationDialogProps) {
-  const { migrateAnonymousContent } = useAuth();
+  const { migrateAnonymousContent, refreshUser } = useAuth();
   const [status, setStatus] = useState<MigrationStatus>('idle');
   const [message, setMessage] = useState<string>('');
   const [videoCount, setVideoCount] = useState<number>(0);
@@ -88,10 +88,48 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
         // Set the success message
         setMessage(result.message || `Successfully migrated your content`);
         
-        // Clear the anonymous session from localStorage as an additional safeguard
+        // Clear the anonymous session from all storage mechanisms
+        console.log('[MigrationDialog] Cleaning up anonymous session after successful migration');
+        
+        // Clear from localStorage (known keys)
         localStorage.removeItem('ytk_anon_session_id');
-        document.cookie = 'anonymousSessionId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        document.cookie = 'anonymous_session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        
+        // Look for and remove any other anonymous session related data
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('anon_') || key.includes('anonymous'))) {
+            console.log('[MigrationDialog] Clearing additional anonymous session data:', key);
+            localStorage.removeItem(key);
+          }
+        }
+        
+        // Clear all possible cookie names with various paths and domains to ensure complete removal
+        document.cookie = 'anonymousSessionId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = 'anonymous_session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        
+        // Force refresh the user state to update the UI and auth context
+        try {
+          // Directly refresh the auth context to ensure the UI updates correctly
+          refreshUser();
+          console.log('[MigrationDialog] Auth state refreshed after migration');
+          
+          // Force a page reload after a short delay to ensure all state is reset
+          setTimeout(() => {
+            console.log('[MigrationDialog] Forcing page reload to refresh all state');
+            window.location.href = '/';
+          }, 2000);
+        } catch (err) {
+          console.error('[MigrationDialog] Error refreshing auth state:', err);
+        }
+        
+        // Import the clearAnonymousSession function to clean up thoroughly
+        try {
+          const { clearAnonymousSession } = await import('@/lib/anonymous-session');
+          clearAnonymousSession();
+          console.log('[MigrationDialog] Anonymous session cleared successfully');
+        } catch (error) {
+          console.error('[MigrationDialog] Error clearing anonymous session:', error);
+        }
       } else {
         console.error('[MigrationDialog] Migration failed with message:', result.message);
         console.error('[MigrationDialog] Error code:', result.error?.code);
@@ -128,7 +166,7 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
       setStatus('error');
       setMessage(errorDetails);
     }
-  }, [sessionId, migrateAnonymousContent, authToken]);
+  }, [sessionId, migrateAnonymousContent, authToken, refreshUser]);
 
   // Start migration when dialog opens with a slight delay to ensure auth token is available
   useEffect(() => {
@@ -214,8 +252,24 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
     }
   };
 
+  // Handle dialog close with additional page refresh logic
+  const handleClose = () => {
+    // If migration was successful, force a complete page refresh
+    // This ensures all state is completely reset
+    if (status === 'success') {
+      console.log('[MigrationDialog] Migration was successful - triggering page refresh on close');
+      // Call the onClose first to update parent components
+      onClose();
+      // Then force a complete page reload to reset all state
+      window.location.href = '/';
+    } else {
+      // Just call the regular onClose if migration wasn't successful
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -241,7 +295,7 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
         <DialogFooter>
           {(status === 'success' || status === 'error') && (
             <Button 
-              onClick={onClose}
+              onClick={handleClose}
               className="w-full sm:w-auto"
             >
               {status === 'success' ? 'Go to Library' : 'Close'}
