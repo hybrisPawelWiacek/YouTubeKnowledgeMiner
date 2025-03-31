@@ -60,11 +60,32 @@ export default function AuthPage() {
       setActiveTab('login');
     }
     
-    // Check for anonymous session
+    // Check for anonymous session from all possible sources
     const checkAnonymousSession = async () => {
-      const id = await getAnonymousSessionId();
+      // Try to get the session ID from cookies first
+      let id = getAnonymousSessionId();
+      
+      // Also check localStorage as a fallback
+      if (!id) {
+        const localStorageId = localStorage.getItem('ytk_anon_session_id');
+        if (localStorageId) {
+          console.log('[AuthPage] Found anonymous session in localStorage:', localStorageId);
+          id = localStorageId;
+        }
+      }
+      
+      // If we found a session ID, set it in state and trigger other side effects
       if (id) {
+        console.log('[AuthPage] Anonymous session found:', id);
         setSessionId(id);
+        
+        // Check if we should force migrate (from URL parameter)
+        const shouldMigrate = params.get('migrate') === 'true';
+        if (shouldMigrate) {
+          console.log('[AuthPage] Auto-triggering migration from URL parameter');
+          setMigrationAction(params.get('action') === 'register' ? 'register' : 'login');
+          setShowMigrationDialog(true);
+        }
       }
     };
     
@@ -100,41 +121,65 @@ export default function AuthPage() {
   };
 
   const handleRegisterSuccess = () => {
-    // If there's an anonymous session, show migration dialog
-    if (sessionId) {
-      // Try to get the auth token from cookies or localStorage
+    // Check if there's actually an anonymous session to migrate
+    // We need to re-check here because sessionId might not be set yet
+    const storedSessionId = localStorage.getItem('ytk_anon_session_id') || getAnonymousSessionId();
+    
+    console.log('[AuthPage] Register success handler - checking for anonymous session:', storedSessionId);
+    
+    // Store the most up-to-date session ID
+    if (storedSessionId && storedSessionId !== sessionId) {
+      console.log('[AuthPage] Updating session ID from latest source:', storedSessionId);
+      setSessionId(storedSessionId);
+    }
+    
+    // If there's an anonymous session, prepare and show migration dialog
+    if (storedSessionId || sessionId) {
+      console.log('[AuthPage] Anonymous session found - preparing for migration');
+      
+      // Try to get the auth token from cookies or localStorage for migration
       try {
-        // First check cookies
-        const allCookies = document.cookie.split('; ');
-        const authCookie = allCookies.find(cookie => 
-          cookie.startsWith('auth_session=') || 
-          cookie.startsWith('AuthSession=') || 
-          cookie.startsWith('auth_token=')
-        );
-        
+        // First check localStorage (most reliable) - the register form should have saved it
+        const localToken = localStorage.getItem('auth_token');
         let authToken = null;
-        if (authCookie) {
-          authToken = authCookie.split('=')[1];
-          console.log('[AuthPage] Found auth token in cookies for migration');
+        
+        if (localToken) {
+          console.log('[AuthPage] Found auth token in localStorage for migration');
+          authToken = localToken;
         } else {
-          // Try localStorage
-          const localToken = localStorage.getItem('auth_token');
-          if (localToken) {
-            console.log('[AuthPage] Using token from localStorage for migration');
-            authToken = localToken;
+          // Try cookies as fallback
+          const allCookies = document.cookie.split('; ');
+          const authCookie = allCookies.find(cookie => 
+            cookie.startsWith('auth_session=') || 
+            cookie.startsWith('AuthSession=') || 
+            cookie.startsWith('auth_token=')
+          );
+          
+          if (authCookie) {
+            authToken = authCookie.split('=')[1];
+            console.log('[AuthPage] Found auth token in cookies for migration');
           }
         }
         
-        // Store the auth token for migration
-        setMigrationAuthToken(authToken);
+        // If we found a token, log it and store it
+        if (authToken) {
+          console.log('[AuthPage] Auth token found for migration:', 
+                      authToken.substring(0, 10) + '...');
+          setMigrationAuthToken(authToken);
+        } else {
+          console.warn('[AuthPage] No auth token found in cookies or localStorage');
+        }
       } catch (error) {
         console.error('[AuthPage] Error extracting auth token for migration:', error);
       }
       
+      // Trigger the migration dialog
+      console.log('[AuthPage] Showing migration dialog after registration');
       setMigrationAction('register');
       setShowMigrationDialog(true);
     } else {
-      // Otherwise redirect to home page
+      // No anonymous session to migrate, just redirect to home page
+      console.log('[AuthPage] No anonymous session found - redirecting to home');
       setLocation('/');
     }
   };

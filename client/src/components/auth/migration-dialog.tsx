@@ -53,26 +53,48 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
       }
 
       console.log('[MigrationDialog] Calling migrateAnonymousContent with session ID:', sessionId);
+      console.log('[MigrationDialog] Auth token available:', !!authToken);
+      
+      if (authToken) {
+        console.log('[MigrationDialog] Using provided auth token (first 10 chars):', 
+                   authToken.substring(0, 10) + '...');
+      } else {
+        console.log('[MigrationDialog] No auth token provided, will use token from auth context');
+      }
+      
+      // Perform the migration
       const result = await migrateAnonymousContent(sessionId, authToken);
       console.log('[MigrationDialog] Migration result:', result);
       
       if (result.success) {
+        console.log('[MigrationDialog] Migration successful');
         setStatus('success');
-        // Extract the number of videos migrated from the message
-        // This is a simple parsing based on expected message format
+        
+        // Extract the number of videos migrated from the result
         if (result.data?.migratedVideos !== undefined) {
           // Use the direct data if available (preferred)
+          console.log('[MigrationDialog] Videos migrated:', result.data.migratedVideos);
           setVideoCount(result.data.migratedVideos);
         } else {
           // Fallback to parsing from message
-          const matches = result.message.match(/^(\d+)/);
+          const matches = result.message?.match(/^(\d+)/);
           if (matches && matches[1]) {
-            setVideoCount(parseInt(matches[1], 10));
+            const count = parseInt(matches[1], 10);
+            console.log('[MigrationDialog] Videos migrated (parsed from message):', count);
+            setVideoCount(count);
           }
         }
-        setMessage(result.message);
+        
+        // Set the success message
+        setMessage(result.message || `Successfully migrated your content`);
+        
+        // Clear the anonymous session from localStorage as an additional safeguard
+        localStorage.removeItem('ytk_anon_session_id');
+        document.cookie = 'anonymousSessionId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'anonymous_session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       } else {
         console.error('[MigrationDialog] Migration failed with message:', result.message);
+        console.error('[MigrationDialog] Error code:', result.error?.code);
         
         // Check for specific error codes and provide helpful messages
         if (result.error?.code === 'AUTH_REQUIRED') {
@@ -113,19 +135,31 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
     if (isOpen && status === 'idle') {
       // Add a short delay to ensure the authentication token has been properly set
       // in cookies/localStorage before attempting the migration
-      console.log('[MigrationDialog] Setting up migration with delay to ensure auth token is available');
-      console.log('[MigrationDialog] Using authToken directly:', !!authToken);
+      console.log('[MigrationDialog] Dialog opened - preparing for migration...');
+      console.log('[MigrationDialog] Session ID to migrate:', sessionId);
+      console.log('[MigrationDialog] Auth token provided directly:', !!authToken);
       
+      // Check if we should try to get the auth token from localStorage as fallback
+      if (!authToken) {
+        const localStorageToken = localStorage.getItem('auth_token');
+        if (localStorageToken) {
+          console.log('[MigrationDialog] Found auth token in localStorage, will use it for migration');
+        } else {
+          console.log('[MigrationDialog] No auth token in localStorage, will rely on auth context token');
+        }
+      }
+      
+      // Set up a timer with a slightly longer delay to ensure the auth token is available
       const migrationTimer = setTimeout(() => {
         console.log('[MigrationDialog] Starting migration after delay');
         handleMigration();
-      }, 1000); // 1 second delay
+      }, 1500); // 1.5 second delay for better reliability
       
       return () => {
         clearTimeout(migrationTimer);
       };
     }
-  }, [isOpen, status, handleMigration, authToken]);
+  }, [isOpen, status, handleMigration, authToken, sessionId]);
 
   // Content based on migration status
   const renderContent = () => {
