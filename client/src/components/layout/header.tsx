@@ -1,4 +1,3 @@
-import { useSupabase } from "@/hooks/use-supabase";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { FolderOpen, Home, User, LogOut, ChevronDown, Search } from "lucide-react";
@@ -14,12 +13,13 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { getOrCreateAnonymousSessionId } from "@/lib/anonymous-session";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/auth-context";
 
 // Define maximum videos allowed for anonymous users
 const MAX_ANONYMOUS_VIDEOS = 3;
 
 export function Header() {
-  const { user, signOut } = useSupabase();
+  const { user, logout, isAuthenticated } = useAuth();
   const [location] = useLocation();
   const { toast } = useToast();
   const [anonymousVideoCount, setAnonymousVideoCount] = useState(0);
@@ -42,7 +42,7 @@ export function Header() {
         return { count: 0, maxAllowed: MAX_ANONYMOUS_VIDEOS };
       }
     },
-    enabled: !user, // Only run this query for anonymous users
+    enabled: !isAuthenticated, // Only run this query for anonymous users
     refetchInterval: 30000, // Refetch every 30 seconds
     refetchOnWindowFocus: true,
     retry: 1
@@ -52,7 +52,7 @@ export function Header() {
   useEffect(() => {
     setIsLoading(isVideoCountLoading);
     
-    if (!user && videoCountData) {
+    if (!isAuthenticated && videoCountData) {
       if (typeof videoCountData.count === 'number') {
         console.log('[Header] Anonymous video count from server:', videoCountData.count);
         setAnonymousVideoCount(videoCountData.count);
@@ -62,19 +62,19 @@ export function Header() {
           setMaxAllowedVideos(videoCountData.maxAllowed);
         }
       }
-    } else if (user) {
+    } else if (isAuthenticated) {
       // Reset counter for authenticated users
       setAnonymousVideoCount(0);
     }
-  }, [user, videoCountData, isVideoCountLoading]);
+  }, [isAuthenticated, videoCountData, isVideoCountLoading]);
 
   const isActive = (path: string) => location === path;
   // Always show the counter for anonymous users, even if it's 0/3
-  const showVideoCounter = !user;
+  const showVideoCounter = !isAuthenticated;
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await logout();
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
@@ -148,26 +148,18 @@ export function Header() {
           </div>
 
           <div className="flex items-center">
-            {user ? (
+            {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2 px-2">
                     <div className="flex items-center">
-                      {user.user_metadata?.avatar_url ? (
-                        <img 
-                          src={user.user_metadata.avatar_url} 
-                          alt="Profile" 
-                          className="w-8 h-8 rounded-full object-cover border border-primary/30"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            {user.email ? user.email[0].toUpperCase() : "U"}
-                          </span>
-                        </div>
-                      )}
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                        <span className="text-white font-medium">
+                          {user.username ? user.username[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
+                        </span>
+                      </div>
                       <span className="ml-2 text-sm text-gray-300 hidden sm:inline">
-                        {user.user_metadata?.full_name || user.email}
+                        {user.username || user.email}
                       </span>
                       <ChevronDown className="h-4 w-4 ml-1 text-gray-400" />
                     </div>
@@ -176,22 +168,14 @@ export function Header() {
                 <DropdownMenuContent align="end" className="w-64">
                   <div className="px-3 py-2">
                     <div className="flex items-center space-x-3">
-                      {user.user_metadata?.avatar_url ? (
-                        <img 
-                          src={user.user_metadata.avatar_url} 
-                          alt="Profile" 
-                          className="w-10 h-10 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            {user.email ? user.email[0].toUpperCase() : "U"}
-                          </span>
-                        </div>
-                      )}
+                      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+                        <span className="text-white font-medium">
+                          {user.username ? user.username[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
+                        </span>
+                      </div>
                       <div className="space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {user.user_metadata?.full_name || 'User'}
+                          {user.username || 'User'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 leading-none">
                           {user.email}
@@ -203,7 +187,7 @@ export function Header() {
                   <DropdownMenuSeparator />
                   
                   <div className="px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Account Provider: {user.app_metadata?.provider || 'Email'}
+                    Account Type: {user.role || 'Registered User'}
                   </div>
                   
                   <DropdownMenuSeparator />
