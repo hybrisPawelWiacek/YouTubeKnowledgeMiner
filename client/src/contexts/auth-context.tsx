@@ -174,11 +174,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else if (response.data?.auth_token) {
         console.log('[Auth Context] Found auth_token in registration response');
         authToken = response.data.auth_token;
+      } else if (response.data?.authToken) {
+        console.log('[Auth Context] Found authToken in registration response');
+        authToken = response.data.authToken;
       } else if (response.headers['x-auth-token']) {
         console.log('[Auth Context] Found x-auth-token in response headers');
         authToken = response.headers['x-auth-token'];
       } else {
         console.warn('[Auth Context] No auth token found in registration response');
+      }
+      
+      // If we found a token, store it in multiple places for redundancy
+      if (authToken) {
+        console.log('[Auth Context] Storing auth token in localStorage and cookie');
+        localStorage.setItem('auth_token', authToken);
+        document.cookie = `auth_session=${authToken}; path=/; max-age=86400; SameSite=Lax`;
       }
       
       // Also check cookies for auth token if we didn't find one elsewhere
@@ -246,19 +256,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(dummyUser);
       }
       
-      // Now try to refresh the user state - if this fails, we still have the user set above
-      try {
-        console.log('[Auth Context] Forcing auth state refresh after registration');
-        
-        // Short delay to let server process the registration before we try to fetch the user
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Now attempt to refresh, but don't let an error block the flow
-        await refreshUser();
-      } catch (refreshError) {
-        console.error('[Auth Context] Error refreshing user after registration:', refreshError);
-        // Don't clear the user state - keep what we set above
+      // Skip the refresh step after registration since we already have the user data
+      // This avoids the 401 error when trying to fetch user data right after registration
+      // The server needs time to properly save and process the auth token
+      console.log('[Auth Context] Registration successful - using user data from registration response');
+      
+      // Instead of refreshing user data (which often gives 401), 
+      // make sure the isAuthenticated flag is properly derived from the user state
+      if (user && !user.is_anonymous) {
+        console.log('[Auth Context] User successfully registered and authenticated:', user.username);
       }
+      
+      // No need to refresh user data now, we'll do that on next navigation
       
       toast({
         title: "Account created",

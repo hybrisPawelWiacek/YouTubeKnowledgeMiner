@@ -65,12 +65,24 @@ router.post('/register', async (req: Request, res: Response) => {
     
     const user = await registerUser(validatedData);
     
+    // Create a session token for the new user - this solves the authentication issue
+    const authToken = `auth_token_${user.id}_${Date.now()}`;
+    
+    // Set the auth token cookie
+    res.cookie('auth_session', authToken, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: 'lax',
+      path: '/'
+    });
+    
     logger.info(`User registered successfully: ${user.username || validatedData.username}`);
     
     res.status(201).json({
       success: true,
       message: 'User registered successfully. Please verify your email.',
       user,
+      authToken // Include token in response so client can store it
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

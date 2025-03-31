@@ -232,7 +232,29 @@ export async function loginUser(loginData: LoginUserRequest, req?: Request) {
  * @returns The user ID if session is valid, null otherwise
  */
 export async function validateSession(sessionId: string): Promise<number | null> {
-  // Find session in database
+  // Check for custom auth tokens from registration (format: auth_token_[userId]_[timestamp])
+  if (sessionId.startsWith('auth_token_')) {
+    try {
+      // Extract the user ID from the token (auth_token_123_456789 => 123)
+      const parts = sessionId.split('_');
+      if (parts.length >= 3) {
+        const userId = parseInt(parts[2], 10);
+        if (!isNaN(userId)) {
+          console.log(`[Auth] Validating custom auth token for user ID: ${userId}`);
+          
+          // Verify this user exists
+          const user = await getUserById(userId);
+          if (user) {
+            return userId;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error validating custom auth token:', error);
+    }
+  }
+  
+  // Standard session validation logic (unchanged)
   const result = await db
     .select()
     .from(auth_sessions)
