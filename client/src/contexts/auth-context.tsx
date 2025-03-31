@@ -110,7 +110,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     try {
       const response = await axios.post('/api/auth/login', { email, password });
+      
+      // Store user data
       setUser(response.data);
+      
+      // If there's a refresh_token, store it in localStorage as a backup 
+      // for situations where cookies might not be accessible
+      if (response.data.refresh_token) {
+        console.log('[Auth Context] Storing auth token in localStorage for backup');
+        localStorage.setItem('auth_token', response.data.refresh_token);
+      }
+      
+      // Successfully logged in message
       toast({
         title: "Logged in successfully",
         description: `Welcome back, ${response.data.username}!`,
@@ -136,7 +147,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     try {
       const response = await axios.post('/api/auth/register', { username, email, password });
+      
+      // Store user data
       setUser(response.data);
+      
+      // If there's a refresh_token or session token, store it in localStorage as a backup
+      if (response.data.refresh_token) {
+        console.log('[Auth Context] Storing auth token in localStorage for backup');
+        localStorage.setItem('auth_token', response.data.refresh_token);
+      } else if (response.data.token) {
+        console.log('[Auth Context] Storing session token in localStorage for backup');
+        localStorage.setItem('auth_token', response.data.token);
+      }
+      
       toast({
         title: "Account created",
         description: "Your account has been created successfully!",
@@ -159,13 +182,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = async (): Promise<void> => {
     try {
       await axios.post('/api/auth/logout');
+      
+      // Clear user state
       setUser(null);
+      
+      // Also clear the localStorage token
+      localStorage.removeItem('auth_token');
+      
+      // Success message
       toast({
         title: "Logged out",
         description: "You have been logged out successfully.",
       });
     } catch (error) {
       console.error('Logout error:', error);
+      
+      // Even if the server request fails, still clear the local state to
+      // ensure the user can log out reliably
+      setUser(null);
+      localStorage.removeItem('auth_token');
+      
       toast({
         variant: "destructive",
         title: "Logout failed",
@@ -197,17 +233,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
       }
       
-      // Get the auth token from cookies
-      let authToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('auth_session='))
-        ?.split('=')[1];
+      // Get auth token from multiple possible cookie names for maximum compatibility
+      const allCookies = document.cookie.split('; ');
+      console.log('[Auth Context] All cookies:', allCookies);
+      
+      // Try to find auth token in cookies with different possible names
+      let authToken = null;
+      const cookieNames = ['auth_session', 'AuthSession', 'auth_token'];
+      
+      for (const cookieName of cookieNames) {
+        const found = allCookies.find(row => row.startsWith(`${cookieName}=`));
+        if (found) {
+          authToken = found.split('=')[1];
+          console.log(`[Auth Context] Found auth token in ${cookieName} cookie (first 10 chars):`, 
+            authToken.substring(0, 10) + '...');
+          break;
+        }
+      }
       
       // Add debugging for auth token
       if (!authToken) {
-        console.warn('[Auth Context] No auth token found in cookies');
-      } else {
-        console.log('[Auth Context] Found auth token in cookies (first 10 chars):', authToken.substring(0, 10) + '...');
+        console.warn('[Auth Context] No auth token found in cookies, using local token caching');
+        
+        // Try to get token from localStorage (backup mechanism)
+        const localToken = localStorage.getItem('auth_token');
+        if (localToken) {
+          console.log('[Auth Context] Using auth token from localStorage');
+          authToken = localToken;
+        }
       }
       
       // Configure axios to include credentials and multiple authentication methods for maximum compatibility
