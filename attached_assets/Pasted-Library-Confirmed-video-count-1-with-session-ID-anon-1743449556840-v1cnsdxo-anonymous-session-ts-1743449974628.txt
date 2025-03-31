@@ -1,0 +1,35 @@
+Library - Confirmed video count: 1 with session ID: anon_1743449556840_v1cnsdxo
+anonymous-session.ts:38 [Anonymous Session] All cookies: anonymousSessionId=anon_1743449556840_v1cnsdxo; anonymous_session_id=anon_1743449556840_v1cnsdxo
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: Object
+anonymous-session.ts:46 [Anonymous Session] Found session cookie with value: anon_1743449556840_v1cnsdxo
+auth.tsx:79 [AuthPage] Anonymous session found: anon_1743449556840_v1cnsdxo
+anonymous-session.ts:38 [Anonymous Session] All cookies: anonymousSessionId=anon_1743449556840_v1cnsdxo; anonymous_session_id=anon_1743449556840_v1cnsdxo
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: Object
+anonymous-session.ts:46 [Anonymous Session] Found session cookie with value: anon_1743449556840_v1cnsdxo
+auth.tsx:79 [AuthPage] Anonymous session found: anon_1743449556840_v1cnsdxo
+auth-context.tsx:149 [Auth Context] Registering new user: pw12 pw12@pw.com
+auth-context.tsx:176 [Auth Context] No auth token found in registration response
+register @ auth-context.tsx:176Understand this warningAI
+auth-context.tsx:201 [Auth Context] Creating fallback development token
+register @ auth-context.tsx:201Understand this warningAI
+register-form.tsx:85 [RegisterForm] Registration successful, attempting to retrieve auth token
+register-form.tsx:93 [RegisterForm] Using auth token returned directly from register function
+register-form.tsx:117 [RegisterForm] Caching auth token to localStorage
+register-form.tsx:122 [RegisterForm] Auth token available for debugging
+header.tsx:57 [Header] Anonymous video count from server: 1
+anonymous-session.ts:194 [Anonymous Session] Using existing session from localStorage: anon_1743449556840_v1cnsdxo
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743449556840_v1cnsdxo
+auth.tsx:128 [AuthPage] Register success handler - checking for anonymous session: anon_1743449556840_v1cnsdxo
+auth.tsx:138 [AuthPage] Anonymous session found - preparing for migration
+auth.tsx:147 [AuthPage] Found auth token in localStorage for migration
+auth.tsx:166 [AuthPage] Auth token found for migration: dev_auth_1...
+auth.tsx:177 [AuthPage] Showing migration dialog after registration
+header.tsx:57 [Header] Anonymous video count from server: 1
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:168 Library - All cookies before getAnonymousSessionHeaders(): anonymousSessionId=anon_1743449556840_v1cnsdxo; anonymous_session_id=anon_1743449556840_v1cnsdxo
+anonymous-session.ts:194 [Anonymous Session] Using existing session from localStorage: anon_1743449556840_v1cnsdxo
+library.tsx:576 [Library] Found videos in local storage: 0
+library.tsx:631 [Library] Local collections loaded: 0
+library.tsx:175 Library - Adding anonymous session header: anon_1743449556840_v1cnsdxo
+library.tsx:186 Library - Check video count for this session: {count: 1, session_id: 'anon_1743449556840_v1cnsdxo', max_allowed: 3}
+library.tsx:189 Library - Confirmed video count: 1 with session ID: anon_1743449556840_v1cnsdxo
