@@ -32,17 +32,31 @@ const router = Router();
  * This function adapts the new auth middleware format to the existing code
  */
 function getUserInfoFromRequest(req: Request) {
+  // First check if the user is authenticated
+  if (req.isAuthenticated && req.user) {
+    // For authenticated users, return user ID, ignore anonymous session stuff
+    console.log(`[getUserInfoFromRequest] Auth properties: isAuthenticated=${req.isAuthenticated}, isAnonymous=${req.isAnonymous}`);
+    console.log(`[getUserInfoFromRequest] Authenticated user object:`, req.user);
+    
+    return {
+      user_id: req.user.id,
+      is_anonymous: false,
+      anonymous_session_id: null
+    };
+  }
+  
+  // If we get here, we're dealing with an anonymous user
   // Get the anonymous session ID from multiple possible sources
   let anonymousSessionId = null;
   
   // First check if it's in req.sessionId (from auth middleware)
-  if (req.isAnonymous && req.sessionId) {
+  if (req.sessionId) {
     anonymousSessionId = req.sessionId;
     console.log(`[getUserInfoFromRequest] Found session ID in req.sessionId: ${anonymousSessionId}`);
   }
   
   // If not found, check the header
-  if (!anonymousSessionId && req.isAnonymous) {
+  if (!anonymousSessionId) {
     const headerSessionId = req.headers['x-anonymous-session'];
     if (headerSessionId) {
       anonymousSessionId = Array.isArray(headerSessionId) ? headerSessionId[0] : headerSessionId;
@@ -51,7 +65,7 @@ function getUserInfoFromRequest(req: Request) {
   }
   
   // If a session ID is in the user object, use that (sometimes the middleware sets it there)
-  if (!anonymousSessionId && req.isAnonymous && req.user?.anonymous_session_id) {
+  if (!anonymousSessionId && req.user?.anonymous_session_id) {
     anonymousSessionId = req.user.anonymous_session_id;
     console.log(`[getUserInfoFromRequest] Found session ID in user object: ${anonymousSessionId}`);
   }
@@ -66,8 +80,8 @@ function getUserInfoFromRequest(req: Request) {
   console.log(`[getUserInfoFromRequest] cookie header: ${req.headers.cookie || 'not set'}`);
   
   return {
-    user_id: req.user?.id,
-    is_anonymous: req.isAnonymous,
+    user_id: req.user?.id || null,
+    is_anonymous: true,
     anonymous_session_id: anonymousSessionId
   };
 }

@@ -1,0 +1,67 @@
+[Anonymous Session] Thoroughly clearing all anonymous session data
+anonymous-session.ts:136 [Anonymous Session] All anonymous session storage cleared
+anonymous-session.ts:154 [Anonymous Session] Verification phase - checking all cookies: ['']
+anonymous-session.ts:182 [Anonymous Session] Post-clearing API check: {count: 0, max_allowed: 3}
+auth-context.tsx:178 [Auth Context] Found authToken in registration response
+auth-context.tsx:189 [Auth Context] Storing auth token in localStorage and cookie
+auth-context.tsx:221 [Auth Context] Storing auth token in localStorage
+auth-context.tsx:225 [Auth Context] Setting auth token cookie
+auth-context.tsx:231 [Auth Context] Setting authenticated user from registration response: {success: true, message: 'User registered successfully. Please verify your email.', user: {…}, authToken: 'auth_token_36_1743451255928'}
+auth-context.tsx:242 [Auth Context] Setting user state with userData from response.data.user: {id: 36, username: 'pw12345', email: 'p@p.com', created_at: '2025-03-31T20:00:55.819Z', status: 'pending_verification', …}
+auth-context.tsx:262 [Auth Context] Registration successful - using user data from registration response
+register-form.tsx:85 [RegisterForm] Registration successful, attempting to retrieve auth token
+register-form.tsx:93 [RegisterForm] Using auth token returned directly from register function
+register-form.tsx:117 [RegisterForm] Caching auth token to localStorage
+register-form.tsx:122 [RegisterForm] Auth token available for debugging
+header.tsx:57 [Header] Anonymous video count from server: 0
+anonymous-session.ts:38 [Anonymous Session] All cookies: 
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: {name: '', value: undefined}
+anonymous-session.ts:51 [Anonymous Session] No session cookie found with names: anonymousSessionId or anonymous_session_id
+anonymous-session.ts:274 [Anonymous Session] Created new session: anon_1743451255929_ci9j97ql
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743451255929_ci9j97ql
+auth.tsx:128 [AuthPage] Register success handler - checking for anonymous session: anon_1743451255929_ci9j97ql
+auth.tsx:132 [AuthPage] Updating session ID from latest source: anon_1743451255929_ci9j97ql
+auth.tsx:138 [AuthPage] Anonymous session found - preparing for migration
+auth.tsx:147 [AuthPage] Found auth token in localStorage for migration
+auth.tsx:166 [AuthPage] Auth token found for migration: auth_token...
+auth.tsx:177 [AuthPage] Showing migration dialog after registration
+header.tsx:57 [Header] Anonymous video count from server: 0
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:168 Library - All cookies before getAnonymousSessionHeaders(): anonymousSessionId=anon_1743451255929_ci9j97ql; anonymous_session_id=anon_1743451255929_ci9j97ql
+anonymous-session.ts:232 [Anonymous Session] Using existing session from localStorage: anon_1743451255929_ci9j97ql
+library.tsx:576 [Library] Found videos in local storage: 0
+library.tsx:631 [Library] Local collections loaded: 0
+library.tsx:175 Library - Adding anonymous session header: anon_1743451255929_ci9j97ql
+library.tsx:186 Library - Check video count for this session: {count: 0, max_allowed: 3}
+library.tsx:189 Library - Confirmed video count: 0 with session ID: anon_1743451255929_ci9j97ql
+queryClient.ts:16 
+            
+            
+           GET https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev/api/videos?sort_by=date&sort_order=desc&page=1&limit=20 500 (Internal Server Error)
+apiRequest @ queryClient.ts:16
+queryFn @ library.tsx:204
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=96c10521:840
+run @ @tanstack_react-query.js?v=96c10521:494
+start @ @tanstack_react-query.js?v=96c10521:536
+fetch @ @tanstack_react-query.js?v=96c10521:926
+executeFetch_fn @ @tanstack_react-query.js?v=96c10521:2211
+onSubscribe @ @tanstack_react-query.js?v=96c10521:1898
+subscribe @ @tanstack_react-query.js?v=96c10521:24
+(anonymous) @ @tanstack_react-query.js?v=96c10521:3022
+subscribeToStore @ chunk-UPELNCPK.js?v=96c10521:11984
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19416
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18895
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:18627Understand this errorAI
+header.tsx:57 [Header] Anonymous video count from server: 0
+anonymous-session.ts:232 [Anonymous Session] Using existing session from localStorage: anon_1743451255929_ci9j97ql
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743451255929_ci9j97ql

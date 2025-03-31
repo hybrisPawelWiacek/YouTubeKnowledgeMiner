@@ -249,33 +249,43 @@ export async function validateSession(sessionId: string): Promise<number | null>
           }
         }
       }
+      
+      // If we get here, the token format is wrong or the user doesn't exist
+      console.error('Invalid custom auth token format or user not found:', sessionId);
+      return null;
     } catch (error) {
       console.error('Error validating custom auth token:', error);
+      return null;
     }
   }
   
   // Standard session validation logic (unchanged)
-  const result = await db
-    .select()
-    .from(auth_sessions)
-    .where(
-      and(
-        eq(auth_sessions.session_id, sessionId),
-        sql`${auth_sessions.expires_at} > NOW()`
-      )
-    );
-  
-  if (result.length === 0) {
+  try {
+    const result = await db
+      .select()
+      .from(auth_sessions)
+      .where(
+        and(
+          eq(auth_sessions.session_id, sessionId),
+          sql`${auth_sessions.expires_at} > NOW()`
+        )
+      );
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    // Update last active timestamp
+    await db
+      .update(auth_sessions)
+      .set({ last_active_at: new Date() })
+      .where(eq(auth_sessions.session_id, sessionId));
+    
+    return result[0].user_id;
+  } catch (error) {
+    console.error('Error validating session:', error);
     return null;
   }
-  
-  // Update last active timestamp
-  await db
-    .update(auth_sessions)
-    .set({ last_active_at: new Date() })
-    .where(eq(auth_sessions.session_id, sessionId));
-  
-  return result[0].user_id;
 }
 
 /**
