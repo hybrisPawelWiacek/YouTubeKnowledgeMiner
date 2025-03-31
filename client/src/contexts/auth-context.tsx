@@ -23,6 +23,21 @@ interface User {
   role: string;
 }
 
+// Migration response data interface
+interface MigrationResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    migratedVideos: number;
+    [key: string]: any;
+  };
+  error?: {
+    code: string;
+    message?: string;
+    details?: any;
+  };
+}
+
 // Auth Context State
 interface AuthContextType {
   user: User | null;
@@ -33,7 +48,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   register: (username: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  migrateAnonymousContent: (sessionId: string) => Promise<{success: boolean, message: string}>;
+  migrateAnonymousContent: (sessionId: string) => Promise<MigrationResponse>;
   refreshUser: () => Promise<void>;
 }
 
@@ -47,7 +62,13 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => false,
   register: async () => false,
   logout: async () => {},
-  migrateAnonymousContent: async () => ({success: false, message: ''}),
+  migrateAnonymousContent: async () => ({
+    success: false, 
+    message: '',
+    error: {
+      code: 'CONTEXT_NOT_INITIALIZED'
+    }
+  }),
   refreshUser: async () => {},
 });
 
@@ -163,12 +184,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Migrate anonymous content to authenticated user
-  const migrateAnonymousContent = async (sessionId: string): Promise<{success: boolean, message: string}> => {
+  const migrateAnonymousContent = async (sessionId: string): Promise<MigrationResponse> => {
     try {
-      // Use the correct endpoint path from the backend implementation
+      if (!isAuthenticated || !user) {
+        console.error('[Auth Context] Cannot migrate content - user not authenticated');
+        return {
+          success: false,
+          message: 'You must be logged in to migrate content',
+          error: {
+            code: 'AUTH_REQUIRED'
+          }
+        };
+      }
+      
+      // Get the auth token from cookies
+      let authToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('auth_session='))
+        ?.split('=')[1];
+      
+      // Add debugging for auth token
+      if (!authToken) {
+        console.warn('[Auth Context] No auth token found in cookies');
+      } else {
+        console.log('[Auth Context] Found auth token in cookies (first 10 chars):', authToken.substring(0, 10) + '...');
+      }
+      
+      // Configure axios to include credentials and multiple authentication methods for maximum compatibility
+      const config: {
+        withCredentials: boolean;
+        headers: Record<string, string>;
+      } = {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      // Include auth token in Authorization header if available
+      if (authToken) {
+        config.headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
+      // Validate session ID format
+      if (!sessionId.startsWith('anon_')) {
+        console.error('[Auth Context] Invalid session ID format:', sessionId);
+        return {
+          success: false,
+          message: 'Invalid anonymous session ID format',
+          error: {
+            code: 'INVALID_SESSION_ID'
+          }
+        };
+      }
+      
+      // Log debug info
+      console.log('[Auth Context] Attempting to migrate anonymous session:', sessionId);
+      console.log('[Auth Context] User authenticated as:', user.username);
+      
+      // Use the migration endpoint compatible with our client implementation
       const response = await axios.post('/api/auth/migrate-anonymous-data', { 
-        anonymousSessionId: sessionId 
-      });
+        anonymousSessionId: sessionId,
+        // Include auth token in the request body as a fallback
+        authToken: authToken
+      }, config);
       
       if (response.data.success) {
         // Import the clearAnonymousSession function to avoid circular dependencies
@@ -177,9 +256,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Clear the anonymous session after successful migration
         clearAnonymousSession();
         
+        console.log('[Auth Context] Migration successful, videos migrated:', response.data.data?.migratedVideos);
+        
+        // Check if we have migrated videos count (if not, default to 0)
+        const migratedCount = response.data.data?.migratedVideos || 0;
+        
         toast({
           title: "Content migrated successfully",
-          description: `${response.data.data.migratedVideos} videos have been added to your library.`,
+          description: `${migratedCount} ${migratedCount === 1 ? 'video has' : 'videos have'} been added to your library.`,
         });
         
         // Refresh user data to reflect any changes
@@ -187,21 +271,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         return {
           success: true,
-          message: `${response.data.data.migratedVideos} videos migrated successfully`
+          message: `${migratedCount} ${migratedCount === 1 ? 'video' : 'videos'} migrated successfully`,
+          data: response.data.data
         };
       } else {
         throw new Error(response.data.message || 'Migration failed');
       }
     } catch (error: any) {
+      console.error('[Auth Context] Migration error:', error);
+      
+      // Extract and log the detailed error information
+      if (error.response) {
+        console.error('[Auth Context] Server response error:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      }
+      
+      // Get error code if available
+      const errorCode = error.response?.data?.error?.code || 'MIGRATION_ERROR';
       const errorMessage = error.response?.data?.message || error.message || 'Failed to migrate your content';
+      
       toast({
         variant: "destructive",
         title: "Migration failed",
         description: errorMessage,
       });
+      
       return {
         success: false,
-        message: errorMessage
+        message: errorMessage,
+        error: {
+          code: errorCode,
+          details: error.response?.data?.error
+        }
       };
     }
   };

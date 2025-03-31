@@ -1,0 +1,73 @@
+[Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743403741247_j0w4zw40
+auth-context.tsx:72 
+            
+            
+           GET https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev/api/auth/me 401 (Unauthorized)
+dispatchXhrRequest @ axios.js?v=96c10521:1637
+xhr @ axios.js?v=96c10521:1517
+dispatchRequest @ axios.js?v=96c10521:1992
+_request @ axios.js?v=96c10521:2213
+request @ axios.js?v=96c10521:2104
+Axios.<computed> @ axios.js?v=96c10521:2232
+wrap @ axios.js?v=96c10521:8
+loadUser @ auth-context.tsx:72
+(anonymous) @ auth-context.tsx:82
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI
+anonymous-session.ts:196 [Anonymous Session] Video count from API: {count: 1, session_id: 'anon_1743403741247_j0w4zw40', max_allowed: 3}
+header.tsx:57 [Header] Anonymous video count from server: 1
+anonymous-session.ts:36 [Anonymous Session] All cookies: anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:40 [Anonymous Session] Checking cookie: {name: 'anonymousSessionId', value: 'anon_1743403741247_j0w4zw40'}
+anonymous-session.ts:44 [Anonymous Session] Found session cookie with value: anon_1743403741247_j0w4zw40
+anonymous-session.ts:36 [Anonymous Session] All cookies: anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:40 [Anonymous Session] Checking cookie: {name: 'anonymousSessionId', value: 'anon_1743403741247_j0w4zw40'}
+anonymous-session.ts:44 [Anonymous Session] Found session cookie with value: anon_1743403741247_j0w4zw40
+header.tsx:57 [Header] Anonymous video count from server: 1
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743403741247_j0w4zw40
+auth-context.tsx:169 
+            
+            
+           POST https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev/api/auth/migrate-anonymous-data 401 (Unauthorized)
+dispatchXhrRequest @ axios.js?v=96c10521:1637
+xhr @ axios.js?v=96c10521:1517
+dispatchRequest @ axios.js?v=96c10521:1992
+_request @ axios.js?v=96c10521:2213
+request @ axios.js?v=96c10521:2104
+httpMethod @ axios.js?v=96c10521:2242
+wrap @ axios.js?v=96c10521:8
+migrateAnonymousContent @ auth-context.tsx:169
+handleMigration @ migration-dialog.tsx:51
+(anonymous) @ migration-dialog.tsx:41
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI

@@ -43,6 +43,9 @@ export async function migrateAnonymousData(
   logger.info(`Starting migration from session ${anonymousSessionId} to user ${userId}`);
   
   try {
+    // Add more detailed logging for debugging
+    logger.info(`Migration request: anonymousSessionId=${anonymousSessionId}, userId=${userId}`);
+    
     // Verify that the anonymous session ID has the correct format
     if (!anonymousSessionId.startsWith('anon_')) {
       logger.error(`Invalid anonymous session ID format: ${anonymousSessionId}`);
@@ -54,6 +57,8 @@ export async function migrateAnonymousData(
       .select()
       .from(anonymous_sessions)
       .where(eq(anonymous_sessions.session_id, anonymousSessionId));
+    
+    logger.info(`Session query results: ${JSON.stringify(sessionResults)}`);
     
     if (sessionResults.length === 0) {
       logger.error(`Anonymous session not found: ${anonymousSessionId}`);
@@ -108,7 +113,17 @@ export async function migrateAnonymousData(
     
     return { migratedVideos: updateResults.length };
   } catch (error) {
-    logger.error('Migration error:', error);
-    throw new Error(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Enhanced error logging for better debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
+    
+    logger.error('Migration service error:', {
+      error: errorMessage,
+      stack: errorStack,
+      anonymousSessionId,
+      userId
+    });
+    
+    throw new Error(`Migration failed: ${errorMessage}`);
   }
 }

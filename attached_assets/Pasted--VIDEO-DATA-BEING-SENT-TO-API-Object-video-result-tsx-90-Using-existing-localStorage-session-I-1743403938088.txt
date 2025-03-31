@@ -1,0 +1,40 @@
+📤 VIDEO DATA BEING SENT TO API: Object
+video-result.tsx:90 📡 Using existing localStorage session ID: anon_1743403741247_j0w4zw40
+video-result.tsx:103 📡 Making POST request to /api/videos
+video-result.tsx:105 ✅ SAVE VIDEO RESPONSE: Object
+video-result.tsx:109 📡 Saving anonymous session ID to localStorage: anon_1743403741247_j0w4zw40
+video-result.tsx:120 Video saved successfully with ID: undefined
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+video-result.tsx:135 [VideoResult] Navigating to library page after saving video
+header.tsx:57 [Header] Anonymous video count from server: 0
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:168 Library - All cookies before getAnonymousSessionHeaders(): anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+library.tsx:576 [Library] Found videos in local storage: 0
+library.tsx:631 [Library] Local collections loaded: 0
+library.tsx:175 Library - Adding anonymous session header: anon_1743403741247_j0w4zw40
+anonymous-session.ts:196 [Anonymous Session] Video count from API: Object
+header.tsx:57 [Header] Anonymous video count from server: 1
+library.tsx:186 Library - Check video count for this session: Object
+library.tsx:189 Library - Confirmed video count: 1 with session ID: anon_1743403741247_j0w4zw40
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:168 Library - All cookies before getAnonymousSessionHeaders(): anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+library.tsx:175 Library - Adding anonymous session header: anon_1743403741247_j0w4zw40
+library.tsx:186 Library - Check video count for this session: Object
+library.tsx:189 Library - Confirmed video count: 1 with session ID: anon_1743403741247_j0w4zw40
+anonymous-session.ts:36 [Anonymous Session] All cookies: anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:40 [Anonymous Session] Checking cookie: Object
+anonymous-session.ts:44 [Anonymous Session] Found session cookie with value: anon_1743403741247_j0w4zw40
+anonymous-session.ts:36 [Anonymous Session] All cookies: anonymousSessionId=anon_1743403741247_j0w4zw40; anonymous_session_id=anon_1743403741247_j0w4zw40
+anonymous-session.ts:40 [Anonymous Session] Checking cookie: Object
+anonymous-session.ts:44 [Anonymous Session] Found session cookie with value: anon_1743403741247_j0w4zw40
+header.tsx:57 [Header] Anonymous video count from server: 1
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743403741247_j0w4zw40
+/api/auth/migrate-anonymous-data:1 
+            
+            
+           Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this errorAI
+anonymous-session.ts:80 [Anonymous Session] Using existing session from localStorage: anon_1743403741247_j0w4zw40
+anonymous-session.ts:196 [Anonymous Session] Video count from API: {count: 1, session_id: 'anon_1743403741247_j0w4zw40', max_allowed: 3}

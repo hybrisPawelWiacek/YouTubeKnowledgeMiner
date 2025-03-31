@@ -8,7 +8,7 @@
  * 3. Confirms successful migration of content
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -35,39 +35,81 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
   const [message, setMessage] = useState<string>('');
   const [videoCount, setVideoCount] = useState<number>(0);
 
-  // Start migration when dialog opens
-  useEffect(() => {
-    if (isOpen && status === 'idle') {
-      handleMigration();
-    }
-  }, [isOpen, status]);
-
   // Handle the migration process
-  const handleMigration = async () => {
+  const handleMigration = useCallback(async () => {
+    console.log('[MigrationDialog] Starting migration for session:', sessionId);
     setStatus('migrating');
     setMessage('Migrating your anonymous videos to your account...');
 
     try {
+      // Add debug info about the session being migrated
+      if (!sessionId || sessionId.trim() === '') {
+        console.error('[MigrationDialog] Invalid session ID:', sessionId);
+        throw new Error('Invalid anonymous session ID');
+      }
+
+      console.log('[MigrationDialog] Calling migrateAnonymousContent with session ID:', sessionId);
       const result = await migrateAnonymousContent(sessionId);
+      console.log('[MigrationDialog] Migration result:', result);
       
       if (result.success) {
         setStatus('success');
         // Extract the number of videos migrated from the message
         // This is a simple parsing based on expected message format
-        const matches = result.message.match(/^(\d+)/);
-        if (matches && matches[1]) {
-          setVideoCount(parseInt(matches[1], 10));
+        if (result.data?.migratedVideos !== undefined) {
+          // Use the direct data if available (preferred)
+          setVideoCount(result.data.migratedVideos);
+        } else {
+          // Fallback to parsing from message
+          const matches = result.message.match(/^(\d+)/);
+          if (matches && matches[1]) {
+            setVideoCount(parseInt(matches[1], 10));
+          }
         }
         setMessage(result.message);
       } else {
+        console.error('[MigrationDialog] Migration failed with message:', result.message);
+        
+        // Check for specific error codes and provide helpful messages
+        if (result.error?.code === 'AUTH_REQUIRED') {
+          setMessage('Authentication required. Please make sure you are logged in and try again.');
+        } else {
+          setMessage(result.message || 'Failed to migrate your content');
+        }
+        
         setStatus('error');
-        setMessage(result.message || 'Failed to migrate your content');
       }
     } catch (error: any) {
+      console.error('[MigrationDialog] Migration error:', error);
+      
+      // Check response.data for error details from API
+      let errorDetails = 'An unexpected error occurred during migration';
+      
+      if (error.response?.data) {
+        const apiError = error.response.data;
+        console.log('[MigrationDialog] API error response:', apiError);
+        
+        if (apiError.error?.code === 'AUTH_REQUIRED') {
+          errorDetails = 'Authentication required. Please log in again and try once more.';
+        } else if (apiError.message) {
+          errorDetails = apiError.message;
+        }
+      } else if (error.message) {
+        errorDetails = error.message;
+      }
+      
+      console.error('[MigrationDialog] Error details:', errorDetails);
       setStatus('error');
-      setMessage(error.message || 'An unexpected error occurred during migration');
+      setMessage(errorDetails);
     }
-  };
+  }, [sessionId, migrateAnonymousContent]);
+
+  // Start migration when dialog opens
+  useEffect(() => {
+    if (isOpen && status === 'idle') {
+      handleMigration();
+    }
+  }, [isOpen, status, handleMigration]);
 
   // Content based on migration status
   const renderContent = () => {

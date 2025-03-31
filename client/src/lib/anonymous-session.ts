@@ -14,6 +14,8 @@ import { SYSTEM } from './system-config';
 const SESSION_COOKIE_NAME = 'anonymousSessionId';
 // Also check for the alternate cookie name used by the server
 const ALT_SESSION_COOKIE_NAME = 'anonymous_session_id';
+// Local storage key for anonymous session
+const LOCAL_STORAGE_SESSION_KEY = 'ytk_anon_session_id';
 
 /**
  * Generates a new anonymous session ID with proper format
@@ -51,13 +53,6 @@ export function getAnonymousSessionId(): string | null {
 }
 
 /**
- * Gets an existing anonymous session ID or creates a new one if none exists
- * @returns The session ID, either existing or newly created
- */
-// Local storage key for anonymous session
-const LOCAL_STORAGE_SESSION_KEY = 'ytk_anon_session_id';
-
-/**
  * Clears the anonymous session data from localStorage and cookies
  * Used when logging in, registering, or after migration
  */
@@ -73,6 +68,10 @@ export function clearAnonymousSession(): void {
   console.log('[Anonymous Session] Anonymous session cleared successfully');
 }
 
+/**
+ * Gets an existing anonymous session ID or creates a new one if none exists
+ * @returns The session ID, either existing or newly created
+ */
 export async function getOrCreateAnonymousSessionId(): Promise<string> {
   // First check if we have a session ID in localStorage (more reliable than cookies)
   const storedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);

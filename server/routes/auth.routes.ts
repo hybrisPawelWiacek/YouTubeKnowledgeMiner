@@ -15,7 +15,9 @@ import {
   verifyEmail,
   changePassword,
   setSessionCookie,
-  clearSessionCookie
+  clearSessionCookie,
+  validateSession,
+  getUserById
 } from '../services/auth.service';
 import { migrateAnonymousData } from '../services/migration.service';
 import { 
@@ -367,19 +369,104 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 /**
  * POST /api/auth/migrate
  * Migrate data from anonymous session to authenticated user
+ * 
+ * This endpoint handles authentication in multiple ways to ensure it works
+ * with various client implementations:
+ * 1. Regular session-based authentication (req.user)
+ * 2. Cookie-based authentication (auth_session cookie)
+ * 3. Authorization header (Bearer token)
  */
-router.post('/migrate', requireAuth, async (req: Request, res: Response) => {
+router.post('/migrate', async (req: Request, res: Response) => {
   try {
+    // Debug logging to help diagnose authentication issues
+    logger.debug(`Migration request received`);
+    logger.debug(`Auth status: isAuthenticated=${req.isAuthenticated}, user=${JSON.stringify(req.user || 'none')}`);
+    logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
+    logger.debug(`Request cookies: ${JSON.stringify(req.cookies)}`);
+    
+    // Step 1: Try to authenticate user from various sources if not already authenticated
+    if (!req.isAuthenticated || !req.user) {
+      let userId = null;
+      
+      // Method 1: Check auth_session cookie
+      const authCookie = req.cookies?.auth_session;
+      if (authCookie) {
+        logger.debug(`Found auth cookie, attempting to validate: ${authCookie.substring(0, 10)}...`);
+        try {
+          userId = await validateSession(authCookie);
+          if (userId) {
+            logger.debug(`Successfully validated user from cookie: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Cookie authentication failed:', error);
+        }
+      }
+      
+      // Method 2: Check Authorization header (Bearer token)
+      if (!userId && req.headers.authorization?.startsWith('Bearer ')) {
+        const token = req.headers.authorization.substring(7);
+        logger.debug(`Found Bearer token, attempting to validate: ${token.substring(0, 10)}...`);
+        try {
+          userId = await validateSession(token);
+          if (userId) {
+            logger.debug(`Successfully validated user from Bearer token: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Bearer token authentication failed:', error);
+        }
+      }
+      
+      // If we found a valid user ID from any auth method, load the user
+      if (userId) {
+        const user = await getUserById(userId);
+        if (user) {
+          req.user = user;
+          req.isAuthenticated = true;
+          req.isAnonymous = false;
+          logger.info(`Successfully authenticated user for migration: ${user.username}`);
+        }
+      }
+    }
+    
+    // Now check if authentication was successful
+    if (!req.isAuthenticated || !req.user || !req.user.id) {
+      logger.warn('Migration failed: User not authenticated', {
+        isAuthenticated: req.isAuthenticated,
+        hasUser: !!req.user,
+        userId: req.user?.id,
+        authCookie: !!req.cookies?.auth_session,
+        hasAuthHeader: !!req.headers.authorization,
+        anonymousSessionId: req.body.anonymousSessionId
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required for migration. Please log in and try again.',
+        error: {
+          code: 'AUTH_REQUIRED'
+        }
+      });
+    }
+
     const userId = req.user.id;
     
-    // Get anonymous session ID from request header or body
-    const sessionId = req.body.anonymousSessionId || 
-                      req.body.sessionId || 
-                      (req.headers['x-anonymous-session'] ? 
-                        (Array.isArray(req.headers['x-anonymous-session']) ? 
-                          req.headers['x-anonymous-session'][0] : 
-                          req.headers['x-anonymous-session']) : 
-                        null);
+    // Get anonymous session ID from request - we support multiple formats/locations
+    let sessionId = null;
+    
+    // Check for session ID in body with either 'anonymousSessionId' or 'sessionId' key
+    if (req.body.anonymousSessionId) {
+      sessionId = req.body.anonymousSessionId;
+      logger.debug(`Found session ID in request body (anonymousSessionId): ${sessionId}`);
+    } else if (req.body.sessionId) {
+      sessionId = req.body.sessionId;
+      logger.debug(`Found session ID in request body (sessionId): ${sessionId}`);
+    }
+    
+    // If not in body, check for X-Anonymous-Session header
+    if (!sessionId && req.headers['x-anonymous-session']) {
+      const headerValue = req.headers['x-anonymous-session'];
+      sessionId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+      logger.debug(`Found session ID in X-Anonymous-Session header: ${sessionId}`);
+    }
     
     if (!sessionId) {
       logger.warn(`Migration failed: No session ID provided for user ${req.user.username}`);
@@ -398,7 +485,8 @@ router.post('/migrate', requireAuth, async (req: Request, res: Response) => {
       });
     }
     
-    // Migrate the data
+    // All validation passed, perform the migration
+    logger.info(`Starting migration from session ${sessionId} to user ${userId} (${req.user.username})`);
     const result = await migrateAnonymousData(sessionId, userId);
     
     logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
@@ -411,44 +499,18 @@ router.post('/migrate', requireAuth, async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error('Migration error', { error });
+    // Log error with detailed information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
     
-    res.status(500).json({
-      success: false,
-      message: 'Migration failed. Please try again later.',
-      error: {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        code: 'MIGRATION_ERROR',
-      },
+    logger.error('Migration error', { 
+      error: errorMessage,
+      stack: errorStack,
+      userId: req.user?.id,
+      anonymousSessionId: req.body.anonymousSessionId 
     });
-  }
-});
-
-/**
- * POST /api/auth/migrate-anonymous-data
- * Alias for /api/auth/migrate to maintain backward compatibility with client apps
- */
-router.post('/migrate-anonymous-data', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user.id;
     
-    // Validate request data
-    const validatedData = migrateAnonymousDataSchema.parse(req.body);
-    const sessionId = validatedData.anonymousSessionId;
-    
-    // Migrate the data
-    const result = await migrateAnonymousData(sessionId, userId);
-    
-    logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
-    
-    res.json({
-      success: true,
-      message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
-      data: {
-        migratedVideos: result.migratedVideos,
-      },
-    });
-  } catch (error) {
+    // Return more specific error info if it's a validation error
     if (error instanceof z.ZodError) {
       logger.warn('Migration validation error', { error: error.errors });
       return res.status(400).json({
@@ -458,13 +520,138 @@ router.post('/migrate-anonymous-data', requireAuth, async (req: Request, res: Re
       });
     }
     
-    logger.error('Migration error', { error });
+    res.status(500).json({
+      success: false,
+      message: 'Migration failed. Please try again later.',
+      error: {
+        message: errorMessage,
+        code: 'MIGRATION_ERROR',
+      },
+    });
+  }
+});
+
+/**
+ * POST /api/auth/migrate-anonymous-data
+ * Alias for /api/auth/migrate to maintain backward compatibility with client apps
+ * 
+ * We're just replicating the same implementation as /migrate but using the 
+ * migrateAnonymousDataSchema validator, which is what makes this endpoint slightly
+ * different from the other one.
+ */
+router.post('/migrate-anonymous-data', async (req: Request, res: Response) => {
+  try {
+    // Log request info
+    logger.debug(`Migration request received on '/migrate-anonymous-data'`);
+    logger.debug(`Auth status: isAuthenticated=${req.isAuthenticated}, user=${JSON.stringify(req.user || 'none')}`);
+    
+    // Use the same authentication approach as the primary endpoint
+    if (!req.isAuthenticated || !req.user) {
+      let userId = null;
+      
+      // Method 1: Check auth_session cookie
+      const authCookie = req.cookies?.auth_session;
+      if (authCookie) {
+        try {
+          userId = await validateSession(authCookie);
+          if (userId) {
+            logger.debug(`Successfully validated user from cookie: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Cookie authentication failed:', error);
+        }
+      }
+      
+      // Method 2: Check Authorization header (Bearer token)
+      if (!userId && req.headers.authorization?.startsWith('Bearer ')) {
+        const token = req.headers.authorization.substring(7);
+        try {
+          userId = await validateSession(token);
+          if (userId) {
+            logger.debug(`Successfully validated user from Bearer token: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Bearer token authentication failed:', error);
+        }
+      }
+      
+      // If we found a valid user ID from any auth method, load the user
+      if (userId) {
+        const user = await getUserById(userId);
+        if (user) {
+          req.user = user;
+          req.isAuthenticated = true;
+          req.isAnonymous = false;
+          logger.info(`Successfully authenticated user for migration: ${user.username}`);
+        }
+      }
+    }
+    
+    // Check if authentication was successful
+    if (!req.isAuthenticated || !req.user || !req.user.id) {
+      logger.warn('Migration failed: User not authenticated', {
+        isAuthenticated: req.isAuthenticated,
+        hasUser: !!req.user,
+        userId: req.user?.id,
+        authCookie: !!req.cookies?.auth_session,
+        hasAuthHeader: !!req.headers.authorization,
+        anonymousSessionId: req.body.anonymousSessionId
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required for migration. Please log in and try again.',
+        error: {
+          code: 'AUTH_REQUIRED'
+        }
+      });
+    }
+
+    const userId = req.user.id;
+    
+    // This endpoint uses Zod schema validation
+    const validatedData = migrateAnonymousDataSchema.parse(req.body);
+    const sessionId = validatedData.anonymousSessionId;
+    
+    // Perform the migration using the shared service function
+    logger.info(`Starting migration from session ${sessionId} to user ${userId} (${req.user.username})`);
+    const result = await migrateAnonymousData(sessionId, userId);
+    
+    logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
+    
+    res.json({
+      success: true,
+      message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
+      data: {
+        migratedVideos: result.migratedVideos,
+      },
+    });
+  } catch (error) {
+    // Handle validation errors distinctly
+    if (error instanceof z.ZodError) {
+      logger.warn('Migration validation error', { error: error.errors });
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    
+    // Log error with detailed information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
+    
+    logger.error('Migration error', { 
+      error: errorMessage,
+      stack: errorStack,
+      userId: req.user?.id,
+      anonymousSessionId: req.body.anonymousSessionId 
+    });
     
     res.status(500).json({
       success: false,
       message: 'Migration failed. Please try again later.',
       error: {
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: errorMessage,
         code: 'MIGRATION_ERROR',
       },
     });
