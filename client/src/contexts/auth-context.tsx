@@ -161,34 +161,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       const response = await axios.post('/api/auth/register', { username, email, password });
       
-      // Store user data - make sure to explicitly set is_anonymous to false
-      // This is critical to ensure the user is treated as authenticated
-      const userData = response.data;
-      if (userData) {
-        userData.is_anonymous = false; // Force to false to ensure authenticated state
-      }
-      setUser(userData);
-      
       // Track the auth token
       let authToken: string | undefined = undefined;
       
       // Look for auth tokens in various places
-      if (response.data.refresh_token) {
+      if (response.data?.refresh_token) {
         console.log('[Auth Context] Found refresh_token in registration response');
         authToken = response.data.refresh_token;
-        if (authToken) localStorage.setItem('auth_token', authToken);
-      } else if (response.data.token) {
+      } else if (response.data?.token) {
         console.log('[Auth Context] Found token in registration response');
         authToken = response.data.token;
-        if (authToken) localStorage.setItem('auth_token', authToken);
-      } else if (response.data.auth_token) {
+      } else if (response.data?.auth_token) {
         console.log('[Auth Context] Found auth_token in registration response');
         authToken = response.data.auth_token;
-        if (authToken) localStorage.setItem('auth_token', authToken);
       } else if (response.headers['x-auth-token']) {
         console.log('[Auth Context] Found x-auth-token in response headers');
         authToken = response.headers['x-auth-token'];
-        if (authToken) localStorage.setItem('auth_token', authToken);
       } else {
         console.warn('[Auth Context] No auth token found in registration response');
       }
@@ -206,7 +194,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (authCookie) {
             console.log('[Auth Context] Found auth token in cookies after registration');
             authToken = authCookie.split('=')[1];
-            localStorage.setItem('auth_token', authToken);
           }
         } catch (cookieError) {
           console.error('[Auth Context] Error reading cookies:', cookieError);
@@ -217,15 +204,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!authToken && process.env.NODE_ENV === 'development') {
         console.warn('[Auth Context] Creating fallback development token');
         authToken = `dev_auth_${Date.now()}`;
-        localStorage.setItem('auth_token', authToken);
       }
       
-      // Force a refresh of authentication state to ensure we have the latest
+      // Important: Always store the auth token in localStorage 
+      if (authToken) {
+        console.log('[Auth Context] Storing auth token in localStorage');
+        localStorage.setItem('auth_token', authToken);
+        
+        // Also set it in a cookie for API calls
+        console.log('[Auth Context] Setting auth token cookie');
+        document.cookie = `auth_session=${authToken}; path=/; max-age=3600; SameSite=Lax`;
+      }
+      
+      // Before refreshing user state, manually set the authenticated user
+      // This ensures even if the refresh fails, we have user data for the UI
+      console.log('[Auth Context] Setting authenticated user from registration response:', response.data);
+      
+      // Check if we got a user object directly in the response
+      if (response.data && (response.data.id || response.data.username)) {
+        const userData = { ...response.data, is_anonymous: false };
+        console.log('[Auth Context] Setting user state with userData:', userData);
+        setUser(userData);
+      } 
+      // If the response has a nested user object
+      else if (response.data?.user) {
+        const userData = { ...response.data.user, is_anonymous: false };
+        console.log('[Auth Context] Setting user state with userData from response.data.user:', userData);
+        setUser(userData);
+      }
+      // As a last resort, create a minimal user object from the registration data
+      else {
+        const dummyUser = {
+          id: Date.now(), // Temporary ID until refreshUser can get the real one
+          username: username,
+          email: email,
+          is_anonymous: false,
+          created_at: new Date().toISOString(),
+          role: 'user'
+        };
+        console.log('[Auth Context] Created minimal user state from registration data:', dummyUser);
+        setUser(dummyUser);
+      }
+      
+      // Now try to refresh the user state - if this fails, we still have the user set above
       try {
         console.log('[Auth Context] Forcing auth state refresh after registration');
+        
+        // Short delay to let server process the registration before we try to fetch the user
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Now attempt to refresh, but don't let an error block the flow
         await refreshUser();
       } catch (refreshError) {
         console.error('[Auth Context] Error refreshing user after registration:', refreshError);
+        // Don't clear the user state - keep what we set above
       }
       
       toast({
@@ -294,7 +326,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       // Try to extract auth token from localStorage or cookies
       const storedToken = localStorage.getItem('auth_token');
+      
+      // First check if we already have a valid user object and we're not in an anonymous state
+      // If so, we can skip the refresh for better performance
+      if (user && !user.is_anonymous && !storedToken) {
+        console.log('[AuthContext] Already have valid authenticated user, skipping refresh');
+        return;
+      }
+      
+      // Collect all cookies
       const cookies = document.cookie.split('; ');
+      console.log('[AuthContext] Cookies for auth check:', cookies);
+      
+      // Look for auth cookie
       const authCookie = cookies.find(c => 
         c.startsWith('auth_session=') || 
         c.startsWith('AuthSession=') || 
@@ -311,8 +355,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Add auth token from localStorage if available
       if (storedToken) {
+        console.log('[AuthContext] Using auth token from localStorage for refresh');
         headers['Authorization'] = `Bearer ${storedToken}`;
+        
+        // Also set cookie as a backup method
+        document.cookie = `auth_session=${storedToken}; path=/; max-age=3600; SameSite=Lax`;
       }
+      
+      // If we have a cookie but no localStorage token, use that and update localStorage
+      if (authCookie && !storedToken) {
+        const cookieToken = authCookie.split('=')[1];
+        console.log('[AuthContext] Found auth token in cookies, storing to localStorage');
+        localStorage.setItem('auth_token', cookieToken);
+        headers['Authorization'] = `Bearer ${cookieToken}`;
+      }
+      
+      console.log('[AuthContext] Request headers for user refresh:', headers);
       
       // Request with these headers to ensure we get the current authentication state
       const response = await axios.get('/api/auth/me', {
@@ -329,6 +387,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Check for standard success shape with user data
       if (response.data?.success && response.data?.user) {
         const userData = response.data.user;
+        
+        // Ensure the is_anonymous flag is correctly set
+        if (userData.is_anonymous === undefined) {
+          userData.is_anonymous = false; // Default to authenticated if not specified
+        }
+        
         setUser(userData);
         console.log('[AuthContext] User state updated to:', 
                    userData.is_anonymous ? 'anonymous user' : 'authenticated user', 
@@ -336,27 +400,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } 
       // Also support direct user data in response (no success wrapper)
       else if (response.data && response.data.id) {
-        setUser(response.data);
-        console.log('[AuthContext] User state updated to direct data with ID:', response.data.id);
+        const userData = { ...response.data };
+        
+        // Ensure the is_anonymous flag is correctly set
+        if (userData.is_anonymous === undefined) {
+          userData.is_anonymous = false; // Default to authenticated if not specified
+        }
+        
+        setUser(userData);
+        console.log('[AuthContext] User state updated to direct data with ID:', userData.id);
       } 
       else {
-        // If we get an empty response, clear the user state
-        console.warn('[AuthContext] User refresh returned empty data, clearing user state');
-        setUser(null);
+        // If we get an empty response but we have a token, keep existing user state
+        if (storedToken && user) {
+          console.warn('[AuthContext] User refresh returned empty data but token exists, keeping user state');
+        } else {
+          // Otherwise clear the user state
+          console.warn('[AuthContext] User refresh returned empty data, clearing user state');
+          setUser(null);
+        }
       }
     } catch (error: unknown) {
       console.error('[AuthContext] Error refreshing user:', error);
       
-      // On error, clear the user state to be safe
-      setUser(null);
-      
-      // Additional error handling - clear token if specifically unauthorized
       // Type guard to safely access error properties
       const axiosError = error as { response?: { status: number } };
       
+      // Special handling for unauthorized errors
       if (axiosError?.response?.status === 401) {
         console.warn('[AuthContext] Unauthorized response, clearing auth token');
         localStorage.removeItem('auth_token');
+        
+        // Also clear any auth cookies
+        document.cookie = 'auth_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        document.cookie = 'AuthSession=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        
+        // Clear user state
+        setUser(null);
+      } 
+      // For other types of errors, only clear user state if we don't have a token
+      else if (!localStorage.getItem('auth_token')) {
+        setUser(null);
+      } else {
+        console.warn('[AuthContext] Non-401 error refreshing user, but token exists - keeping current user state');
+        // Keep the existing user state if we have a token
       }
     }
   };

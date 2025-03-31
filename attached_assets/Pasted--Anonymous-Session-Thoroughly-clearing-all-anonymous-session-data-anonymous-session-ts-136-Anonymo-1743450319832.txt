@@ -1,0 +1,142 @@
+[Anonymous Session] Thoroughly clearing all anonymous session data
+anonymous-session.ts:136 [Anonymous Session] All anonymous session storage cleared
+anonymous-session.ts:154 [Anonymous Session] Verification phase - checking all cookies: ['']
+anonymous-session.ts:182 [Anonymous Session] Post-clearing API check: {count: 0, max_allowed: 3}
+auth-context.tsx:193 [Auth Context] No auth token found in registration response
+register @ auth-context.tsx:193
+await in register
+onSubmit @ register-form.tsx:82
+(anonymous) @ chunk-EV5STJTR.js?v=96c10521:1675
+await in (anonymous)
+callCallback2 @ chunk-UPELNCPK.js?v=96c10521:3674
+invokeGuardedCallbackDev @ chunk-UPELNCPK.js?v=96c10521:3699
+invokeGuardedCallback @ chunk-UPELNCPK.js?v=96c10521:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-UPELNCPK.js?v=96c10521:3736
+executeDispatch @ chunk-UPELNCPK.js?v=96c10521:7014
+processDispatchQueueItemsInOrder @ chunk-UPELNCPK.js?v=96c10521:7034
+processDispatchQueue @ chunk-UPELNCPK.js?v=96c10521:7043
+dispatchEventsForPlugins @ chunk-UPELNCPK.js?v=96c10521:7051
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:7174
+batchedUpdates$1 @ chunk-UPELNCPK.js?v=96c10521:18913
+batchedUpdates @ chunk-UPELNCPK.js?v=96c10521:3579
+dispatchEventForPluginEventSystem @ chunk-UPELNCPK.js?v=96c10521:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-UPELNCPK.js?v=96c10521:5478
+dispatchEvent @ chunk-UPELNCPK.js?v=96c10521:5472
+dispatchDiscreteEvent @ chunk-UPELNCPK.js?v=96c10521:5449Understand this warningAI
+auth-context.tsx:218 [Auth Context] Creating fallback development token
+register @ auth-context.tsx:218
+await in register
+onSubmit @ register-form.tsx:82
+(anonymous) @ chunk-EV5STJTR.js?v=96c10521:1675
+await in (anonymous)
+callCallback2 @ chunk-UPELNCPK.js?v=96c10521:3674
+invokeGuardedCallbackDev @ chunk-UPELNCPK.js?v=96c10521:3699
+invokeGuardedCallback @ chunk-UPELNCPK.js?v=96c10521:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-UPELNCPK.js?v=96c10521:3736
+executeDispatch @ chunk-UPELNCPK.js?v=96c10521:7014
+processDispatchQueueItemsInOrder @ chunk-UPELNCPK.js?v=96c10521:7034
+processDispatchQueue @ chunk-UPELNCPK.js?v=96c10521:7043
+dispatchEventsForPlugins @ chunk-UPELNCPK.js?v=96c10521:7051
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:7174
+batchedUpdates$1 @ chunk-UPELNCPK.js?v=96c10521:18913
+batchedUpdates @ chunk-UPELNCPK.js?v=96c10521:3579
+dispatchEventForPluginEventSystem @ chunk-UPELNCPK.js?v=96c10521:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-UPELNCPK.js?v=96c10521:5478
+dispatchEvent @ chunk-UPELNCPK.js?v=96c10521:5472
+dispatchDiscreteEvent @ chunk-UPELNCPK.js?v=96c10521:5449Understand this warningAI
+auth-context.tsx:225 [Auth Context] Forcing auth state refresh after registration
+auth-context.tsx:292 [AuthContext] Refreshing user state with no-cache
+header.tsx:57 [Header] Anonymous video count from server: 1
+anonymous-session.ts:38 [Anonymous Session] All cookies: 
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: {name: '', value: undefined}
+anonymous-session.ts:51 [Anonymous Session] No session cookie found with names: anonymousSessionId or anonymous_session_id
+auth-context.tsx:318 
+            
+            
+           GET https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev/api/auth/me?_=1743450296300 401 (Unauthorized)
+dispatchXhrRequest @ axios.js?v=96c10521:1637
+xhr @ axios.js?v=96c10521:1517
+dispatchRequest @ axios.js?v=96c10521:1992
+_request @ axios.js?v=96c10521:2213
+request @ axios.js?v=96c10521:2104
+Axios.<computed> @ axios.js?v=96c10521:2232
+wrap @ axios.js?v=96c10521:8
+refreshUser @ auth-context.tsx:318
+register @ auth-context.tsx:226
+await in register
+onSubmit @ register-form.tsx:82
+(anonymous) @ chunk-EV5STJTR.js?v=96c10521:1675
+await in (anonymous)
+callCallback2 @ chunk-UPELNCPK.js?v=96c10521:3674
+invokeGuardedCallbackDev @ chunk-UPELNCPK.js?v=96c10521:3699
+invokeGuardedCallback @ chunk-UPELNCPK.js?v=96c10521:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-UPELNCPK.js?v=96c10521:3736
+executeDispatch @ chunk-UPELNCPK.js?v=96c10521:7014
+processDispatchQueueItemsInOrder @ chunk-UPELNCPK.js?v=96c10521:7034
+processDispatchQueue @ chunk-UPELNCPK.js?v=96c10521:7043
+dispatchEventsForPlugins @ chunk-UPELNCPK.js?v=96c10521:7051
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:7174
+batchedUpdates$1 @ chunk-UPELNCPK.js?v=96c10521:18913
+batchedUpdates @ chunk-UPELNCPK.js?v=96c10521:3579
+dispatchEventForPluginEventSystem @ chunk-UPELNCPK.js?v=96c10521:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-UPELNCPK.js?v=96c10521:5478
+dispatchEvent @ chunk-UPELNCPK.js?v=96c10521:5472
+dispatchDiscreteEvent @ chunk-UPELNCPK.js?v=96c10521:5449Understand this errorAI
+auth-context.tsx:348 [AuthContext] Error refreshing user: AxiosError {message: 'Request failed with status code 401', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
+refreshUser @ auth-context.tsx:348
+await in refreshUser
+register @ auth-context.tsx:226
+await in register
+onSubmit @ register-form.tsx:82
+(anonymous) @ chunk-EV5STJTR.js?v=96c10521:1675
+await in (anonymous)
+callCallback2 @ chunk-UPELNCPK.js?v=96c10521:3674
+invokeGuardedCallbackDev @ chunk-UPELNCPK.js?v=96c10521:3699
+invokeGuardedCallback @ chunk-UPELNCPK.js?v=96c10521:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-UPELNCPK.js?v=96c10521:3736
+executeDispatch @ chunk-UPELNCPK.js?v=96c10521:7014
+processDispatchQueueItemsInOrder @ chunk-UPELNCPK.js?v=96c10521:7034
+processDispatchQueue @ chunk-UPELNCPK.js?v=96c10521:7043
+dispatchEventsForPlugins @ chunk-UPELNCPK.js?v=96c10521:7051
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:7174
+batchedUpdates$1 @ chunk-UPELNCPK.js?v=96c10521:18913
+batchedUpdates @ chunk-UPELNCPK.js?v=96c10521:3579
+dispatchEventForPluginEventSystem @ chunk-UPELNCPK.js?v=96c10521:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-UPELNCPK.js?v=96c10521:5478
+dispatchEvent @ chunk-UPELNCPK.js?v=96c10521:5472
+dispatchDiscreteEvent @ chunk-UPELNCPK.js?v=96c10521:5449Understand this errorAI
+auth-context.tsx:358 [AuthContext] Unauthorized response, clearing auth token
+refreshUser @ auth-context.tsx:358
+await in refreshUser
+register @ auth-context.tsx:226
+await in register
+onSubmit @ register-form.tsx:82
+(anonymous) @ chunk-EV5STJTR.js?v=96c10521:1675
+await in (anonymous)
+callCallback2 @ chunk-UPELNCPK.js?v=96c10521:3674
+invokeGuardedCallbackDev @ chunk-UPELNCPK.js?v=96c10521:3699
+invokeGuardedCallback @ chunk-UPELNCPK.js?v=96c10521:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-UPELNCPK.js?v=96c10521:3736
+executeDispatch @ chunk-UPELNCPK.js?v=96c10521:7014
+processDispatchQueueItemsInOrder @ chunk-UPELNCPK.js?v=96c10521:7034
+processDispatchQueue @ chunk-UPELNCPK.js?v=96c10521:7043
+dispatchEventsForPlugins @ chunk-UPELNCPK.js?v=96c10521:7051
+(anonymous) @ chunk-UPELNCPK.js?v=96c10521:7174
+batchedUpdates$1 @ chunk-UPELNCPK.js?v=96c10521:18913
+batchedUpdates @ chunk-UPELNCPK.js?v=96c10521:3579
+dispatchEventForPluginEventSystem @ chunk-UPELNCPK.js?v=96c10521:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-UPELNCPK.js?v=96c10521:5478
+dispatchEvent @ chunk-UPELNCPK.js?v=96c10521:5472
+dispatchDiscreteEvent @ chunk-UPELNCPK.js?v=96c10521:5449Understand this warningAI
+register-form.tsx:85 [RegisterForm] Registration successful, attempting to retrieve auth token
+register-form.tsx:93 [RegisterForm] Using auth token returned directly from register function
+register-form.tsx:117 [RegisterForm] Caching auth token to localStorage
+register-form.tsx:122 [RegisterForm] Auth token available for debugging
+anonymous-session.ts:274 [Anonymous Session] Created new session: anon_1743450296318_mqkdtnnl
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743450296318_mqkdtnnl
+auth.tsx:128 [AuthPage] Register success handler - checking for anonymous session: anon_1743450296318_mqkdtnnl
+auth.tsx:132 [AuthPage] Updating session ID from latest source: anon_1743450296318_mqkdtnnl
+auth.tsx:138 [AuthPage] Anonymous session found - preparing for migration
+auth.tsx:147 [AuthPage] Found auth token in localStorage for migration
+auth.tsx:166 [AuthPage] Auth token found for migration: dev_auth_1...
+auth.tsx:177 [AuthPage] Showing migration dialog after registration
