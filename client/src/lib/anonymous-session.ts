@@ -55,18 +55,35 @@ export function getAnonymousSessionId(): string | null {
 /**
  * Clears the anonymous session data from localStorage and cookies
  * Used when logging in, registering, or after migration
+ * 
+ * The enhanced version ensures a complete cleanup and app state refresh
+ * 
+ * @param forceReload Optional boolean to trigger page reload after clearing (default: false)
  */
-export function clearAnonymousSession(): void {
+export function clearAnonymousSession(forceReload: boolean = false): void {
   console.log('[Anonymous Session] Thoroughly clearing all anonymous session data');
   
-  // Remove known session key from localStorage
+  // Clear browser storage
+  // ------------------------
+  
+  // 1. Clear localStorage - first the known keys
   localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
   
-  // Look for and remove any other anonymous session related data in localStorage
+  // 2. Then look for and remove any pattern-matched anonymous session related data
   const keysToRemove: string[] = [];
+  
+  // Patterns to match against for thorough cleanup
+  const localStoragePatterns = [
+    'anon_', 'anonymous', 'session_id', 'sessionId', 'ytk_anon'
+  ];
+  
+  // Scan localStorage for matching keys
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && (key.includes('anon_') || key.includes('anonymous'))) {
+    if (!key) continue;
+    
+    // Check if the key matches any of our patterns
+    if (localStoragePatterns.some(pattern => key.toLowerCase().includes(pattern))) {
       console.log('[Anonymous Session] Found additional anonymous session data in localStorage:', key);
       keysToRemove.push(key);
     }
@@ -78,41 +95,91 @@ export function clearAnonymousSession(): void {
     localStorage.removeItem(key);
   });
   
-  // Remove both cookie names by setting expired dates
-  // Include multiple path variations to ensure complete removal
-  const paths = ['/', '/api', ''];
+  // Clear cookies
+  // ------------------------
   
-  paths.forEach(path => {
-    document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
-    document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+  // 1. Define all paths where cookies might have been set
+  const paths = ['/', '/api', '/api/auth', '/api/anonymous', '/videos', ''];
+  
+  // 2. The known session cookie names
+  const knownSessionCookies = [
+    SESSION_COOKIE_NAME,
+    ALT_SESSION_COOKIE_NAME,
+    'anonymous_session',
+    'x-anonymous-session'
+  ];
+  
+  // 3. First clear the known cookie names on all paths
+  knownSessionCookies.forEach(cookieName => {
+    paths.forEach(path => {
+      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
+    });
   });
   
-  // Also clear any cookies that contain "anon" or "anonymous" in their names
+  // 4. Then scan for and clear any cookies containing anonymous session patterns
+  const cookiePatterns = ['anon', 'anonymous', 'session'];
   const cookies = document.cookie.split(';');
+  
   for (const cookie of cookies) {
     const [name] = cookie.trim().split('=');
-    if (name && (name.toLowerCase().includes('anon') || name.toLowerCase().includes('anonymous'))) {
-      console.log('[Anonymous Session] Clearing additional anonymous cookie:', name);
+    if (!name) continue;
+    
+    // Check if the cookie matches any of our patterns
+    if (cookiePatterns.some(pattern => name.toLowerCase().includes(pattern))) {
+      console.log('[Anonymous Session] Clearing pattern-matched cookie:', name);
       paths.forEach(path => {
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
       });
     }
   }
   
-  console.log('[Anonymous Session] Anonymous session data completely cleared');
+  console.log('[Anonymous Session] All anonymous session storage cleared');
   
-  // Force a refresh of the anonymous video count API to verify clearing worked
+  // Verify clearing worked with API
+  // ------------------------
   try {
+    // Use no-cache headers to ensure we get a fresh response
+    const verifyHeaders = new Headers({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
+    // Make a verification request after a short delay to allow for any async operations
     setTimeout(async () => {
-      const response = await fetch('/api/anonymous/videos/count', {
-        headers: {
-          'Cache-Control': 'no-cache'
+      try {
+        const response = await fetch('/api/anonymous/videos/count', {
+          headers: verifyHeaders,
+          // Ensure browser doesn't use cached response
+          cache: 'no-store' 
+        });
+        
+        const data = await response.json();
+        console.log('[Anonymous Session] Post-clearing API check:', data);
+        
+        // If we still have a count, something went wrong - force regenerate a new session
+        if (data.count > 0) {
+          console.warn('[Anonymous Session] Session data persisted after clearing! Forcing regeneration...');
+          // This will trigger the generation of a brand new session ID next time it's needed
+          localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
         }
-      });
-      console.log('[Anonymous Session] Post-clearing API check:', await response.json());
-    }, 500);
+        
+        // If requested, force a page reload to ensure clean state
+        if (forceReload) {
+          console.log('[Anonymous Session] Forcing page reload for clean state');
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('[Anonymous Session] Error during verification check:', error);
+      }
+    }, 500); // 500ms delay to ensure other operations complete first
   } catch (e) {
-    console.error('[Anonymous Session] Error checking API after clearing:', e);
+    console.error('[Anonymous Session] Error setting up verification check:', e);
+    
+    // Still attempt reload if requested, even if verification failed
+    if (forceReload) {
+      window.location.reload();
+    }
   }
 }
 

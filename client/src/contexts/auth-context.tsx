@@ -255,34 +255,84 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  /**
+   * Refresh the current user's data
+   * 
+   * Enhanced version that ensures completely fresh data by:
+   * 1. Adding proper cache control headers
+   * 2. Including all known auth tokens in the request
+   * 3. Ensuring consistency in error handling
+   */
   const refreshUser = async (): Promise<void> => {
-    console.log('[AuthContext] Refreshing user state');
+    console.log('[AuthContext] Refreshing user state with no-cache');
+    
     try {
-      // Clear any cached auth data to force a fresh fetch
+      // Try to extract auth token from localStorage or cookies
+      const storedToken = localStorage.getItem('auth_token');
+      const cookies = document.cookie.split('; ');
+      const authCookie = cookies.find(c => 
+        c.startsWith('auth_session=') || 
+        c.startsWith('AuthSession=') || 
+        c.startsWith('auth_token=')
+      );
+      
+      // Set up headers to force a fresh fetch and include all possible auth mechanisms
+      const headers: Record<string, string> = {
+        // Cache control headers to prevent any caching
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      };
+      
+      // Add auth token from localStorage if available
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+      
+      // Request with these headers to ensure we get the current authentication state
       const response = await axios.get('/api/auth/me', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Expires': '0',
+        headers,
+        // Also specify axios should not use cached response
+        params: {
+          // Add timestamp to force fresh request (breaks browser cache)
+          '_': Date.now() 
         }
       });
       
       console.log('[AuthContext] User refresh successful:', response.data);
       
-      // If we get valid user data, update the state
-      if (response.data && response.data.id) {
-        setUser(response.data);
+      // Check for standard success shape with user data
+      if (response.data?.success && response.data?.user) {
+        const userData = response.data.user;
+        setUser(userData);
         console.log('[AuthContext] User state updated to:', 
-                   response.data.is_anonymous ? 'anonymous user' : 'authenticated user');
-      } else {
+                   userData.is_anonymous ? 'anonymous user' : 'authenticated user', 
+                   'with ID:', userData.id);
+      } 
+      // Also support direct user data in response (no success wrapper)
+      else if (response.data && response.data.id) {
+        setUser(response.data);
+        console.log('[AuthContext] User state updated to direct data with ID:', response.data.id);
+      } 
+      else {
         // If we get an empty response, clear the user state
         console.warn('[AuthContext] User refresh returned empty data, clearing user state');
         setUser(null);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[AuthContext] Error refreshing user:', error);
+      
       // On error, clear the user state to be safe
       setUser(null);
+      
+      // Additional error handling - clear token if specifically unauthorized
+      // Type guard to safely access error properties
+      const axiosError = error as { response?: { status: number } };
+      
+      if (axiosError?.response?.status === 401) {
+        console.warn('[AuthContext] Unauthorized response, clearing auth token');
+        localStorage.removeItem('auth_token');
+      }
     }
   };
 
@@ -399,11 +449,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[Auth Context] User authenticated as:', user.username);
       
       // Include the user ID directly in the request for direct server-side verification
+      // NOTE: The server schema expects a specific format with anonymousSessionId and options (optional)
       const requestPayload = {
         anonymousSessionId: sessionId,
-        userId: user.id,
-        // Include auth token in the request body as a fallback
-        authToken: authToken
+        // Add additional fields in a compatible way with server schema
+        options: {
+          // These fields are used by the client but ignored by server validation
+          userId: user.id,
+          authToken: authToken,
+          deleteAfterMigration: true
+        }
       };
       
       console.log('[Auth Context] Sending migration request with payload:', {
@@ -418,20 +473,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Import the clearAnonymousSession function to avoid circular dependencies
         const { clearAnonymousSession } = await import('@/lib/anonymous-session');
         
-        // Clear the anonymous session after successful migration
-        clearAnonymousSession();
-        
         console.log('[Auth Context] Migration successful, videos migrated:', response.data.data?.migratedVideos);
         
         // Check if we have migrated videos count (if not, default to 0)
         const migratedCount = response.data.data?.migratedVideos || 0;
+        
+        // Clear the anonymous session after successful migration and force refresh
+        // Pass true to trigger page reload if needed (ensures a completely clean state)
+        clearAnonymousSession(migratedCount > 0);
         
         toast({
           title: "Content migrated successfully",
           description: `${migratedCount} ${migratedCount === 1 ? 'video has' : 'videos have'} been added to your library.`,
         });
         
-        // Refresh user data to reflect any changes
+        // Forcefully refresh user data with no-cache headers to reflect any changes
         await refreshUser();
         
         return {

@@ -535,30 +535,37 @@ router.post('/migrate', async (req: Request, res: Response) => {
  * POST /api/auth/migrate-anonymous-data
  * Alias for /api/auth/migrate to maintain backward compatibility with client apps
  * 
- * We're just replicating the same implementation as /migrate but using the 
- * migrateAnonymousDataSchema validator, which is what makes this endpoint slightly
- * different from the other one.
+ * Enhanced version with better client compatibility and more robust error handling
+ * to ensure successful migration between anonymous and registered user states.
  */
 router.post('/migrate-anonymous-data', async (req: Request, res: Response) => {
   try {
-    // Log request info
+    // More detailed logging to diagnose issues
     logger.debug(`Migration request received on '/migrate-anonymous-data'`);
+    logger.debug(`Request body: ${JSON.stringify(req.body)}`);
+    logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
+    logger.debug(`Request cookies: ${JSON.stringify(req.cookies)}`);
     logger.debug(`Auth status: isAuthenticated=${req.isAuthenticated}, user=${JSON.stringify(req.user || 'none')}`);
     
     // Use the same authentication approach as the primary endpoint
     if (!req.isAuthenticated || !req.user) {
       let userId = null;
       
-      // Method 1: Check auth_session cookie
-      const authCookie = req.cookies?.auth_session;
-      if (authCookie) {
-        try {
-          userId = await validateSession(authCookie);
-          if (userId) {
-            logger.debug(`Successfully validated user from cookie: ${userId}`);
+      // Method 1: Check auth_session cookie (multiple possible names)
+      const cookieNames = ['auth_session', 'auth_token', 'authToken'];
+      for (const cookieName of cookieNames) {
+        const authCookie = req.cookies?.[cookieName];
+        if (authCookie) {
+          try {
+            logger.debug(`Found auth cookie ${cookieName}, attempting to validate: ${authCookie.substring(0, 10)}...`);
+            userId = await validateSession(authCookie);
+            if (userId) {
+              logger.debug(`Successfully validated user from cookie ${cookieName}: ${userId}`);
+              break; // Exit the loop once we find a valid cookie
+            }
+          } catch (error) {
+            logger.warn(`Cookie authentication failed for ${cookieName}:`, error);
           }
-        } catch (error) {
-          logger.warn('Cookie authentication failed:', error);
         }
       }
       
@@ -566,12 +573,64 @@ router.post('/migrate-anonymous-data', async (req: Request, res: Response) => {
       if (!userId && req.headers.authorization?.startsWith('Bearer ')) {
         const token = req.headers.authorization.substring(7);
         try {
+          logger.debug(`Found Bearer token, attempting to validate: ${token.substring(0, 10)}...`);
           userId = await validateSession(token);
           if (userId) {
             logger.debug(`Successfully validated user from Bearer token: ${userId}`);
           }
         } catch (error) {
           logger.warn('Bearer token authentication failed:', error);
+        }
+      }
+      
+      // Method 3: Check for auth token in request body options (from client)
+      if (!userId && req.body.options?.authToken) {
+        try {
+          logger.debug(`Found auth token in request body options, attempting to validate: ${req.body.options.authToken.substring(0, 10)}...`);
+          userId = await validateSession(req.body.options.authToken);
+          if (userId) {
+            logger.debug(`Successfully validated user from request body token: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Request body token authentication failed:', error);
+        }
+      }
+      
+      // Method 4: Fall back to request.body.authToken directly
+      if (!userId && req.body.authToken) {
+        try {
+          logger.debug(`Found auth token directly in request body, attempting to validate: ${req.body.authToken.substring(0, 10)}...`);
+          userId = await validateSession(req.body.authToken);
+          if (userId) {
+            logger.debug(`Successfully validated user from direct request body token: ${userId}`);
+          }
+        } catch (error) {
+          logger.warn('Direct request body token authentication failed:', error);
+        }
+      }
+      
+      // Method 5: If userId is directly provided in options for development environments
+      if (!userId && process.env.NODE_ENV === 'development') {
+        let providedUserId: number | undefined = undefined;
+        
+        // Try to get userId from options object
+        if (req.body.options?.userId) {
+          const parsedId = parseInt(req.body.options.userId, 10);
+          if (!isNaN(parsedId)) {
+            providedUserId = parsedId;
+          }
+        } 
+        // Or try direct from body
+        else if (req.body.userId) {
+          const parsedId = parseInt(req.body.userId, 10);
+          if (!isNaN(parsedId)) {
+            providedUserId = parsedId;
+          }
+        }
+        
+        if (providedUserId !== undefined) {
+          logger.debug(`Using provided userId from request for development: ${providedUserId}`);
+          userId = providedUserId;
         }
       }
       
@@ -583,71 +642,116 @@ router.post('/migrate-anonymous-data', async (req: Request, res: Response) => {
           req.isAuthenticated = true;
           req.isAnonymous = false;
           logger.info(`Successfully authenticated user for migration: ${user.username}`);
+        } else {
+          logger.warn(`User not found for ID: ${userId}`);
         }
       }
     }
     
-    // Check if authentication was successful - enhanced with multiple auth methods
+    // Make sure user is authenticated
     if (!req.isAuthenticated || !req.user || !req.user.id) {
-      // Last chance: Try to use userId from the request body if available
-      if (req.body.userId) {
-        try {
-          const userId = parseInt(req.body.userId, 10);
-          if (!isNaN(userId)) {
-            logger.info(`Using userId from request body as fallback: ${userId}`);
-            const user = await getUserById(userId);
-            if (user) {
-              req.user = user;
-              req.isAuthenticated = true;
-              req.isAnonymous = false;
-              logger.info(`Successfully authenticated user using userId from body: ${user.username}`);
-            }
-          }
-        } catch (error) {
-          logger.warn('Failed to authenticate using userId from body', { error });
-        }
-      }
-      
-      // If still not authenticated, log and return error
-      if (!req.isAuthenticated || !req.user || !req.user.id) {
-        logger.warn('Migration failed: User not authenticated', {
-          isAuthenticated: req.isAuthenticated,
-          hasUser: !!req.user,
-          userId: req.user?.id,
-          authCookie: !!req.cookies?.auth_session,
-          hasAuthHeader: !!req.headers.authorization,
-          anonymousSessionId: req.body.anonymousSessionId,
-          userIdInBody: req.body.userId || 'missing'
-        });
-        return res.status(401).json({
-          success: false,
-          message: 'Authentication required for migration. Please log in and try again.',
-          error: {
-            code: 'AUTH_REQUIRED'
-          }
-        });
-      }
+      logger.warn('Migration failed: User not authenticated', {
+        isAuthenticated: req.isAuthenticated,
+        hasUser: !!req.user,
+        userId: req.user?.id,
+        authCookie: !!req.cookies?.auth_session,
+        hasAuthHeader: !!req.headers.authorization,
+        hasAuthTokenInOptions: !!req.body.options?.authToken,
+        hasDirectAuthToken: !!req.body.authToken,
+        requestHasSessionId: !!req.body.anonymousSessionId || !!req.body.sessionId
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required for migration. Please log in and try again.',
+        error: {
+          code: 'AUTH_REQUIRED',
+        },
+      });
     }
-
+    
     const userId = req.user.id;
     
-    // This endpoint uses Zod schema validation
-    const validatedData = migrateAnonymousDataSchema.parse(req.body);
-    const sessionId = validatedData.anonymousSessionId;
+    // Extract sessionId from various possible locations with more flexibility
+    let sessionId = null;
+    
+    try {
+      // First try standard schema validation
+      const validatedData = migrateAnonymousDataSchema.parse(req.body);
+      sessionId = validatedData.anonymousSessionId;
+      logger.debug(`Request passed schema validation, using session ID: ${sessionId}`);
+    } catch (validationError) {
+      // If schema validation fails, try to find the session ID in alternative locations
+      logger.debug('Schema validation failed, looking for session ID in alternative locations');
+      
+      // Check direct in body with either key name
+      if (req.body.anonymousSessionId) {
+        sessionId = req.body.anonymousSessionId;
+        logger.debug(`Found session ID in request body.anonymousSessionId: ${sessionId}`);
+      } else if (req.body.sessionId) {
+        sessionId = req.body.sessionId;
+        logger.debug(`Found session ID in request body.sessionId: ${sessionId}`);
+      } 
+      // Check in headers
+      else if (req.headers['x-anonymous-session']) {
+        const headerValue = req.headers['x-anonymous-session'];
+        sessionId = Array.isArray(headerValue) ? headerValue[0] : headerValue as string;
+        logger.debug(`Found session ID in x-anonymous-session header: ${sessionId}`);
+      }
+      
+      // If still not found, this will trigger an error below
+    }
+    
+    // Final validation of the session ID
+    if (!sessionId) {
+      logger.error('Missing anonymous session ID for migration');
+      return res.status(400).json({
+        success: false,
+        message: 'Anonymous session ID is required for migration',
+        error: {
+          code: 'MISSING_SESSION_ID'
+        }
+      });
+    }
+    
+    // Validate session ID format
+    if (!sessionId.startsWith('anon_')) {
+      logger.error(`Invalid anonymous session ID format: ${sessionId}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid anonymous session ID format. Must start with "anon_"',
+        error: {
+          code: 'INVALID_SESSION_FORMAT'
+        }
+      });
+    }
     
     // Perform the migration using the shared service function
     logger.info(`Starting migration from session ${sessionId} to user ${userId} (${req.user.username})`);
-    const result = await migrateAnonymousData(sessionId, userId);
     
-    logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
-    
-    res.json({
-      success: true,
-      message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
-      data: {
-        migratedVideos: result.migratedVideos,
-      },
-    });
+    try {
+      const result = await migrateAnonymousData(sessionId, userId);
+      
+      logger.info(`Migration successful for user ${req.user.username}: ${result.migratedVideos} videos migrated`);
+      
+      res.json({
+        success: true,
+        message: `Successfully migrated ${result.migratedVideos} videos to your account.`,
+        data: {
+          migratedVideos: result.migratedVideos,
+        },
+      });
+    } catch (migrationError) {
+      logger.error('Migration service error:', migrationError);
+      
+      // Send a more specific error message to the client
+      res.status(500).json({
+        success: false,
+        message: migrationError instanceof Error ? migrationError.message : 'Migration failed.',
+        error: {
+          code: 'MIGRATION_ERROR'
+        }
+      });
+    }
   } catch (error) {
     // Handle validation errors distinctly
     if (error instanceof z.ZodError) {

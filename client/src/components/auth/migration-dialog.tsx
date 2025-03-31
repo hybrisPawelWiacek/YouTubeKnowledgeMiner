@@ -88,47 +88,43 @@ export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: Migra
         // Set the success message
         setMessage(result.message || `Successfully migrated your content`);
         
-        // Clear the anonymous session from all storage mechanisms
-        console.log('[MigrationDialog] Cleaning up anonymous session after successful migration');
-        
-        // Clear from localStorage (known keys)
-        localStorage.removeItem('ytk_anon_session_id');
-        
-        // Look for and remove any other anonymous session related data
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.includes('anon_') || key.includes('anonymous'))) {
-            console.log('[MigrationDialog] Clearing additional anonymous session data:', key);
-            localStorage.removeItem(key);
-          }
-        }
-        
-        // Clear all possible cookie names with various paths and domains to ensure complete removal
-        document.cookie = 'anonymousSessionId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        document.cookie = 'anonymous_session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        
-        // Force refresh the user state to update the UI and auth context
-        try {
-          // Directly refresh the auth context to ensure the UI updates correctly
-          refreshUser();
-          console.log('[MigrationDialog] Auth state refreshed after migration');
-          
-          // Force a page reload after a short delay to ensure all state is reset
-          setTimeout(() => {
-            console.log('[MigrationDialog] Forcing page reload to refresh all state');
-            window.location.href = '/';
-          }, 2000);
-        } catch (err) {
-          console.error('[MigrationDialog] Error refreshing auth state:', err);
-        }
-        
-        // Import the clearAnonymousSession function to clean up thoroughly
+        // Import and use our enhanced clearAnonymousSession function
         try {
           const { clearAnonymousSession } = await import('@/lib/anonymous-session');
-          clearAnonymousSession();
+          
+          // Determine if we should force reload based on whether videos were migrated
+          // Safety - use the videoCount state which was set earlier
+          const shouldForceReload = videoCount > 0;
+          
+          console.log(`[MigrationDialog] Clearing anonymous session ${shouldForceReload ? 'with' : 'without'} page reload`);
+          
+          // Force refresh the user state to update the UI before potential reload
+          await refreshUser();
+          console.log('[MigrationDialog] Auth state refreshed after migration');
+          
+          // Use the enhanced clearAnonymousSession which handles all cleanup thoroughly
+          // Pass true to trigger a page reload if videos were migrated
+          if (shouldForceReload) {
+            // Give the UI a moment to update before reloading
+            setTimeout(() => {
+              console.log('[MigrationDialog] Clearing session with reload after delay');
+              clearAnonymousSession(true);
+            }, 1500);
+          } else {
+            // Just clear without reload if no videos were migrated
+            clearAnonymousSession(false);
+          }
+          
           console.log('[MigrationDialog] Anonymous session cleared successfully');
         } catch (error) {
-          console.error('[MigrationDialog] Error clearing anonymous session:', error);
+          console.error('[MigrationDialog] Error during cleanup:', error);
+          
+          // Fallback - still try to refresh user state even if cleanup failed
+          try {
+            refreshUser();
+          } catch (refreshErr) {
+            console.error('[MigrationDialog] Error refreshing user state:', refreshErr);
+          }
         }
       } else {
         console.error('[MigrationDialog] Migration failed with message:', result.message);
