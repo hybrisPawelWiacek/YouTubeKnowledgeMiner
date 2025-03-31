@@ -183,7 +183,10 @@ export class DatabaseStorage implements IStorage {
         count: sql`COUNT(*)`
       }).from(videos).where(and(...conditions));
       
-      const totalCount = parseInt(countResult.rows[0].count, 10);
+      // Safely extract the count, defaulting to 0 if the result structure is unexpected
+      const totalCount = countResult && countResult[0]?.count 
+        ? parseInt(countResult[0].count.toString(), 10) 
+        : 0;
       console.log("[searchVideos] Total matching videos:", totalCount);
       
       // Apply pagination
