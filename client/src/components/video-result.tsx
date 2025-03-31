@@ -48,9 +48,15 @@ export function VideoResult({ video }: VideoResultProps) {
 
   const { mutate: saveVideo, isPending } = useMutation({
     mutationFn: async (metadata: VideoMetadata) => {
+      // Check for authentication token directly - might indicate a user that Supabase doesn't know about
+      const authToken = localStorage.getItem('auth_token');
+      const isAuthenticated = !!user || !!authToken;
+      
       // Detailed debugging information for authentication context
-      console.log('🎥 SAVING VIDEO - USER CONTEXT:', {
-        userIsAuthenticated: !!user,
+      console.log('🎥 SAVING VIDEO - AUTH STATE:', {
+        userIsAuthenticated: isAuthenticated,
+        userObjectExists: !!user,
+        authTokenExists: !!authToken,
         userType: typeof user?.id
       });
       
@@ -60,8 +66,17 @@ export function VideoResult({ video }: VideoResultProps) {
         console.log('- ID:', user.id, '(type:', typeof user.id, ')');
         console.log('- Email:', user.email);
         console.log('- Login method:', user.app_metadata?.provider || 'unknown');
+      } else if (authToken) {
+        console.log('🔐 AUTH TOKEN FOUND - User is authenticated via custom auth');
+        if (authToken.startsWith('auth_token_')) {
+          const parts = authToken.split('_');
+          if (parts.length >= 3) {
+            const userId = parseInt(parts[2], 10);
+            console.log('- User ID from token:', userId);
+          }
+        }
       } else {
-        console.log('⚠️ NO USER SESSION FOUND - User not authenticated');
+        console.log('⚠️ NO USER SESSION OR AUTH TOKEN FOUND - User not authenticated');
       }
       
       const videoData = {
@@ -82,7 +97,8 @@ export function VideoResult({ video }: VideoResultProps) {
         let headers: HeadersInit = {};
         
         // For anonymous users, add session header using the helper function
-        if (!user) {
+        if (!user && !authToken) {
+          console.log('📡 No user or auth token - using anonymous session');
           try {
             // First ensure we're checking localStorage to see if the session already exists
             const existingSessionId = localStorage.getItem('ytk_anon_session_id');
@@ -97,6 +113,10 @@ export function VideoResult({ video }: VideoResultProps) {
           } catch (error) {
             console.error('📡 Error getting anonymous session headers:', error);
           }
+        } else if (authToken) {
+          // Add auth token to headers
+          console.log('📡 Using auth token for authenticated request');
+          headers = { 'Authorization': `Bearer ${authToken}` };
         }
         
         // Making the API request
@@ -182,8 +202,16 @@ export function VideoResult({ video }: VideoResultProps) {
     incrementEngagement();
     setInteractionCount(prev => prev + 1);
 
+    // Check for authentication both in user object and localStorage auth token
+    const authToken = localStorage.getItem('auth_token');
+    const isAuthenticated = !!user || !!authToken;
+    
     // For authenticated users, just proceed normally
-    if (user) {
+    if (isAuthenticated) {
+      console.log('[VideoResult] Authenticated user detected - proceeding with save', {
+        userExists: !!user,
+        authTokenExists: !!authToken
+      });
       handleActualSave(metadata);
       return;
     }
@@ -261,10 +289,21 @@ export function VideoResult({ video }: VideoResultProps) {
 
   const createCategory = async (categoryName: string) => {
     try {
+      // Check for authentication both in user object and localStorage auth token
+      const authToken = localStorage.getItem('auth_token');
+      const isAuthenticated = !!user || !!authToken;
+      
+      // Initialize headers
+      let headers: HeadersInit = {};
+      
+      // If user is authenticated via token but not user object
+      if (!user && authToken) {
+        console.log('📡 Using auth token for category creation');
+        headers = { 'Authorization': `Bearer ${authToken}` };
+      }
       // For anonymous users, we don't allow creating categories
       // But in case we change this later, let's add the session headers
-      let headers: HeadersInit = {};
-      if (!user) {
+      else if (!isAuthenticated) {
         try {
           // Use the helper function that correctly handles types
           headers = await getAnonymousSessionHeaders({});
@@ -450,8 +489,12 @@ export function VideoResult({ video }: VideoResultProps) {
                         onValueChange={(value) => {
                           // Handle special "create" action
                           if (value === "create-new") {
+                            // Check for authentication both in user object and localStorage auth token
+                            const authToken = localStorage.getItem('auth_token');
+                            const isAuthenticated = !!user || !!authToken;
+                            
                             // If user is not authenticated, show login prompt
-                            if (!user) {
+                            if (!isAuthenticated) {
                               toast({
                                 title: "Authentication Required",
                                 description: "Please log in or create an account to add custom categories",
