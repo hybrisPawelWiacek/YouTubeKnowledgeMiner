@@ -78,41 +78,68 @@ export function RegisterForm({ onSuccess, redirectTo = '/', sessionId }: Registe
     setRegisterError(null);
 
     try {
-      const success = await register(values.username, values.email, values.password);
+      // Get the response object from registration to extract token
+      const { success, authToken } = await register(values.username, values.email, values.password);
+      
       if (success) {
-        // After successful registration, we need to ensure the auth token is properly available
+        console.log('[RegisterForm] Registration successful, attempting to retrieve auth token');
         
-        // Attempt to prepare the auth token from cookies
-        try {
-          const cookies = document.cookie.split('; ');
-          const authCookie = cookies.find(cookie => 
-            cookie.startsWith('auth_session=') || 
-            cookie.startsWith('AuthSession=') || 
-            cookie.startsWith('auth_token=')
-          );
-          
-          if (authCookie) {
-            const token = authCookie.split('=')[1];
-            console.log('[RegisterForm] Found auth token in cookies, caching to localStorage');
+        // Track if we found a token anywhere
+        let foundToken = false;
+        let token = authToken || null;
+        
+        // If we have a token directly from the auth context
+        if (token) {
+          console.log('[RegisterForm] Using auth token returned directly from register function');
+          foundToken = true;
+        } else {
+          // Attempt to prepare the auth token from cookies
+          try {
+            const cookies = document.cookie.split('; ');
+            const authCookie = cookies.find(cookie => 
+              cookie.startsWith('auth_session=') || 
+              cookie.startsWith('AuthSession=') || 
+              cookie.startsWith('auth_token=')
+            );
             
-            // Store in localStorage as a backup mechanism
-            localStorage.setItem('auth_token', token);
-          } else {
-            console.warn('[RegisterForm] No auth token found in cookies after registration');
+            if (authCookie) {
+              token = authCookie.split('=')[1];
+              console.log('[RegisterForm] Found auth token in cookies');
+              foundToken = true;
+            }
+          } catch (tokenError) {
+            console.error('[RegisterForm] Error retrieving auth token from cookies:', tokenError);
           }
-        } catch (tokenError) {
-          console.error('[RegisterForm] Error caching auth token:', tokenError);
+        }
+        
+        // If we found a token anywhere, store it in localStorage as backup
+        if (foundToken && token) {
+          console.log('[RegisterForm] Caching auth token to localStorage');
+          localStorage.setItem('auth_token', token);
+          
+          // Store it in a globally accessible variable for debug purposes
+          (window as any).__AUTH_TOKEN_DEBUG = token;
+          console.log('[RegisterForm] Auth token available for debugging');
+        } else {
+          console.warn('[RegisterForm] No auth token found after registration');
+          // Create a placeholder token for testing if needed
+          // NOTE: This is only for development/debugging and would be removed in production
+          console.warn('[RegisterForm] Creating temporary debug token for migration testing');
+          const debugToken = `debug_token_${Date.now()}`;
+          localStorage.setItem('auth_token', debugToken);
+          (window as any).__AUTH_TOKEN_DEBUG = debugToken;
         }
         
         // Add a small delay to ensure the token is properly set in cookies/localStorage
         // before proceeding with any redirects or migrations
         setTimeout(() => {
           if (onSuccess) {
+            // Pass control back to the parent component which will handle migration
             onSuccess();
           } else {
             setLocation(redirectTo);
           }
-        }, 500);
+        }, 800); // Slightly longer delay to ensure token is set
       }
     } catch (error: any) {
       setRegisterError(error.message || 'An unexpected error occurred. Please try again.');

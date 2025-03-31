@@ -46,7 +46,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (username: string, email: string, password: string) => Promise<boolean>;
+  register: (username: string, email: string, password: string) => Promise<{success: boolean, authToken?: string}>;
   logout: () => Promise<void>;
   migrateAnonymousContent: (sessionId: string, providedAuthToken?: string, retryCount?: number) => Promise<MigrationResponse>;
   refreshUser: () => Promise<void>;
@@ -60,7 +60,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   error: null,
   login: async () => false,
-  register: async () => false,
+  register: async () => ({ success: false }),
   logout: async () => {},
   migrateAnonymousContent: async () => ({
     success: false, 
@@ -141,39 +141,84 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const register = async (username: string, email: string, password: string): Promise<boolean> => {
+  const register = async (username: string, email: string, password: string): Promise<{success: boolean, authToken?: string}> => {
     setIsLoading(true);
     setError(null);
     
     try {
+      console.log('[Auth Context] Registering new user:', username, email);
       const response = await axios.post('/api/auth/register', { username, email, password });
       
       // Store user data
       setUser(response.data);
       
-      // If there's a refresh_token or session token, store it in localStorage as a backup
+      // Track the auth token
+      let authToken: string | undefined = undefined;
+      
+      // Look for auth tokens in various places
       if (response.data.refresh_token) {
-        console.log('[Auth Context] Storing auth token in localStorage for backup');
-        localStorage.setItem('auth_token', response.data.refresh_token);
+        console.log('[Auth Context] Found refresh_token in registration response');
+        authToken = response.data.refresh_token;
+        if (authToken) localStorage.setItem('auth_token', authToken);
       } else if (response.data.token) {
-        console.log('[Auth Context] Storing session token in localStorage for backup');
-        localStorage.setItem('auth_token', response.data.token);
+        console.log('[Auth Context] Found token in registration response');
+        authToken = response.data.token;
+        if (authToken) localStorage.setItem('auth_token', authToken);
+      } else if (response.data.auth_token) {
+        console.log('[Auth Context] Found auth_token in registration response');
+        authToken = response.data.auth_token;
+        if (authToken) localStorage.setItem('auth_token', authToken);
+      } else if (response.headers['x-auth-token']) {
+        console.log('[Auth Context] Found x-auth-token in response headers');
+        authToken = response.headers['x-auth-token'];
+        if (authToken) localStorage.setItem('auth_token', authToken);
+      } else {
+        console.warn('[Auth Context] No auth token found in registration response');
+      }
+      
+      // Also check cookies for auth token if we didn't find one elsewhere
+      if (!authToken) {
+        try {
+          const cookies = document.cookie.split('; ');
+          const authCookie = cookies.find(cookie => 
+            cookie.startsWith('auth_session=') || 
+            cookie.startsWith('AuthSession=') || 
+            cookie.startsWith('auth_token=')
+          );
+          
+          if (authCookie) {
+            console.log('[Auth Context] Found auth token in cookies after registration');
+            authToken = authCookie.split('=')[1];
+            localStorage.setItem('auth_token', authToken);
+          }
+        } catch (cookieError) {
+          console.error('[Auth Context] Error reading cookies:', cookieError);
+        }
+      }
+      
+      // Create a fallback token if necessary for development/debugging
+      if (!authToken && process.env.NODE_ENV === 'development') {
+        console.warn('[Auth Context] Creating fallback development token');
+        authToken = `dev_auth_${Date.now()}`;
+        localStorage.setItem('auth_token', authToken);
       }
       
       toast({
         title: "Account created",
         description: "Your account has been created successfully!",
       });
-      return true;
+      
+      return { success: true, authToken };
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Registration failed. Please try again with different credentials.';
+      console.error('[Auth Context] Registration error:', error);
       setError(errorMessage);
       toast({
         variant: "destructive",
         title: "Registration failed",
         description: errorMessage,
       });
-      return false;
+      return { success: false };
     } finally {
       setIsLoading(false);
     }
