@@ -1,0 +1,46 @@
+[Auth Context] Found authToken in registration response
+auth-context.tsx:205 [Auth Context] Storing auth token in localStorage and cookie
+auth-context.tsx:246 [Auth Context] Ensuring auth token is stored everywhere
+auth-context.tsx:250 [Auth Context] Setting auth token cookies with multiple names
+auth-context.tsx:258 [Auth Context] Setting authenticated user from registration response: 
+Object
+auth-context.tsx:269 [Auth Context] Setting user state with userData from response.data.user: 
+Object
+auth-context.tsx:289 [Auth Context] Registration successful - using user data from registration response
+register-form.tsx:85 [RegisterForm] Registration successful, attempting to retrieve auth token
+register-form.tsx:93 [RegisterForm] Using auth token returned directly from register function
+register-form.tsx:117 [RegisterForm] Caching auth token to localStorage
+register-form.tsx:122 [RegisterForm] Auth token available for debugging
+header.tsx:57 [Header] Anonymous video count from server: 0
+anonymous-session.ts:38 [Anonymous Session] All cookies: auth_token=auth_token_39_1743452005755; AuthSession=auth_token_39_1743452005755
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: 
+Object
+anonymous-session.ts:42 [Anonymous Session] Checking cookie: 
+Object
+anonymous-session.ts:51 [Anonymous Session] No session cookie found with names: anonymousSessionId or anonymous_session_id
+anonymous-session.ts:274 [Anonymous Session] Created new session: anon_1743452005744_hry990qf
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743452005744_hry990qf
+auth.tsx:128 [AuthPage] Register success handler - checking for anonymous session: anon_1743452005744_hry990qf
+auth.tsx:132 [AuthPage] Updating session ID from latest source: anon_1743452005744_hry990qf
+auth.tsx:138 [AuthPage] Anonymous session found - preparing for migration
+auth.tsx:147 [AuthPage] Found auth token in localStorage for migration
+auth.tsx:166 [AuthPage] Auth token found for migration: auth_token...
+auth.tsx:177 [AuthPage] Showing migration dialog after registration
+header.tsx:57 [Header] Anonymous video count from server: 0
+api.ts:37 [API] GET request to /api/videos starting
+api.ts:38 [API] Current headers: undefined
+api.ts:53 [API] Found auth token in localStorage, using it for authentication
+api.ts:65 [API] Extracted user ID from auth token: 39
+api.ts:75 [API] Using authenticated session - skipping anonymous session header
+header.tsx:57 [Header] Anonymous video count from server: 0
+library.tsx:161 Library - Fetching videos for user: undefined type: undefined
+library.tsx:168 Library - All cookies before getAnonymousSessionHeaders(): auth_token=auth_token_39_1743452005755; AuthSession=auth_token_39_1743452005755; anonymousSessionId=anon_1743452005744_hry990qf; anonymous_session_id=anon_1743452005744_hry990qf
+anonymous-session.ts:232 [Anonymous Session] Using existing session from localStorage: anon_1743452005744_hry990qf
+library.tsx:576 [Library] Found videos in local storage: 0
+library.tsx:631 [Library] Local collections loaded: 0
+library.tsx:175 Library - Adding anonymous session header: anon_1743452005744_hry990qf
+library.tsx:186 Library - Check video count for this session: 
+{count: 0, max_allowed: 3}
+library.tsx:189 Library - Confirmed video count: 0 with session ID: anon_1743452005744_hry990qf
+﻿
+

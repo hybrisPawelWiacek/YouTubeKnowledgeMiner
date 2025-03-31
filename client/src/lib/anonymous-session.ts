@@ -53,10 +53,8 @@ export function getAnonymousSessionId(): string | null {
 }
 
 /**
- * Clears the anonymous session data from localStorage and cookies
- * Used when logging in, registering, or after migration
- * 
- * The enhanced version ensures a complete cleanup and app state refresh
+ * Clear all anonymous session data from cookies and localStorage
+ * Call this during registration/login or migration to ensure clean state
  * 
  * @param forceReload Optional boolean to trigger page reload after clearing (default: false)
  */
@@ -69,164 +67,58 @@ export function clearAnonymousSession(forceReload: boolean = false): void {
   // 1. Clear localStorage - first the known keys
   localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
   
-  // 2. Then look for and remove any pattern-matched anonymous session related data
-  const keysToRemove: string[] = [];
+  // 2. Clear fallback keys that might be leftover from older versions
+  localStorage.removeItem('anonymousSessionId');
+  localStorage.removeItem('anonymous_session_id');
   
-  // Patterns to match against for thorough cleanup
-  const localStoragePatterns = [
-    'anon_', 'anonymous', 'session_id', 'sessionId', 'ytk_anon'
-  ];
-  
-  // Scan localStorage for matching keys
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    
-    // Check if the key matches any of our patterns
-    if (localStoragePatterns.some(pattern => key.toLowerCase().includes(pattern))) {
-      console.log('[Anonymous Session] Found additional anonymous session data in localStorage:', key);
-      keysToRemove.push(key);
-    }
-  }
-  
-  // Remove all collected keys (doing it separately to avoid index shifting during removal)
-  keysToRemove.forEach(key => {
-    console.log('[Anonymous Session] Removing localStorage item:', key);
-    localStorage.removeItem(key);
-  });
+  // 3. Any other app-specific state related to anonymous mode
+  localStorage.removeItem('anonymousViews');
+  localStorage.removeItem('anonymous_video_count');
   
   // Clear cookies
   // ------------------------
   
-  // 1. Define all paths where cookies might have been set
-  const paths = ['/', '/api', '/api/auth', '/api/anonymous', '/videos', ''];
+  // 1. Clear the main anonymous session cookie
+  document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   
-  // 2. The known session cookie names
-  const knownSessionCookies = [
-    SESSION_COOKIE_NAME,
-    ALT_SESSION_COOKIE_NAME,
-    'anonymous_session',
-    'x-anonymous-session'
-  ];
+  // 2. Clear the alternate cookie name used by the server
+  document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   
-  // 3. First clear the known cookie names on all paths
-  knownSessionCookies.forEach(cookieName => {
-    paths.forEach(path => {
-      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
-    });
-  });
-  
-  // 4. Then scan for and clear any cookies containing anonymous session patterns
-  const cookiePatterns = ['anon', 'anonymous', 'session'];
-  const cookies = document.cookie.split(';');
-  
-  for (const cookie of cookies) {
-    const [name] = cookie.trim().split('=');
-    if (!name) continue;
-    
-    // Check if the cookie matches any of our patterns
-    if (cookiePatterns.some(pattern => name.toLowerCase().includes(pattern))) {
-      console.log('[Anonymous Session] Clearing pattern-matched cookie:', name);
-      paths.forEach(path => {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}; SameSite=Lax`;
-      });
-    }
+  // 3. Also try to clear cookies with the domain attribute (needed in some environments)
+  const domain = window.location.hostname;
+  if (domain) {
+    document.cookie = `${SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain}; SameSite=Lax`;
+    document.cookie = `${ALT_SESSION_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain}; SameSite=Lax`;
   }
   
-  console.log('[Anonymous Session] All anonymous session storage cleared');
+  // 4. For extra safety, also try to set with null value
+  document.cookie = `${SESSION_COOKIE_NAME}=null; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${ALT_SESSION_COOKIE_NAME}=null; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   
-  // Verify clearing worked with API
-  // ------------------------
-  try {
-    // Use no-cache headers to ensure we get a fresh response
-    const verifyHeaders = new Headers({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    
-    // Make a verification request after a short delay to allow for any async operations
-    setTimeout(async () => {
-      try {
-        // Before verification, do another sweep for cookies - our most aggressive approach
-        // This is especially important for eliminating duplicate or old session cookies
-        const allCookies = document.cookie.split(';');
-        console.log('[Anonymous Session] Verification phase - checking all cookies:', allCookies);
-        
-        // Scan for and clear ANY cookie that might be related to anonymous sessions
-        for (const cookie of allCookies) {
-          const [name] = cookie.trim().split('=');
-          if (!name) continue;
-          
-          // If the cookie name includes any of these strings, remove it
-          const suspiciousParts = ['anon', 'anonymous', 'session', 'ytk'];
-          const isSuspicious = suspiciousParts.some(part => 
-            name.toLowerCase().includes(part)
-          );
-          
-          if (isSuspicious) {
-            console.log('[Anonymous Session] Verification phase: removing suspicious cookie:', name);
-            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/api; SameSite=Lax`;
-          }
-        }
-        
-        // Now make a verification API request with empty anonymous session headers
-        const response = await fetch('/api/anonymous/videos/count', {
-          headers: verifyHeaders,
-          // Ensure browser doesn't use cached response
-          cache: 'no-store' 
-        });
-        
-        const data = await response.json();
-        console.log('[Anonymous Session] Post-clearing API check:', data);
-        
-        // If we still have a count, something went wrong - force regenerate a new session
-        if (data.count > 0) {
-          console.warn('[Anonymous Session] Session data persisted after clearing! Forcing regeneration...');
-          // This will trigger the generation of a brand new session ID next time it's needed
-          localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-          
-          // More aggressive clearing of localStorage
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.toLowerCase().includes('anon')) {
-              localStorage.removeItem(key);
-            }
-          }
-        }
-        
-        // If requested, force a page reload to ensure clean state
-        if (forceReload) {
-          console.log('[Anonymous Session] Forcing page reload for clean state');
-          // Use a more direct reload approach to ensure it happens
-          window.location.href = '/';
-        }
-      } catch (error) {
-        console.error('[Anonymous Session] Error during verification check:', error);
-        // Still try to reload if that was requested
-        if (forceReload) {
-          window.location.reload();
-        }
-      }
-    }, 500); // 500ms delay to ensure other operations complete first
-  } catch (e) {
-    console.error('[Anonymous Session] Error setting up verification check:', e);
-    
-    // Still attempt reload if requested, even if verification failed
-    if (forceReload) {
-      // Use window.location.href for a more definitive reload
-      window.location.href = '/';
-    }
+  console.log('[Anonymous Session] Session data cleared - cookies after clearing:', document.cookie);
+  
+  // For some scenarios, we might want to force a page reload to ensure a clean state
+  if (forceReload) {
+    console.log('[Anonymous Session] Forcing page reload for clean state');
+    window.location.reload();
   }
 }
 
 /**
  * Gets an existing anonymous session ID or creates a new one if none exists
- * @returns The session ID, either existing or newly created
+ * @returns The session ID, either existing or newly created, or null if authenticated
  */
-export async function getOrCreateAnonymousSessionId(): Promise<string> {
-  // First check if we have a session ID in localStorage (more reliable than cookies)
+export async function getOrCreateAnonymousSessionId(): Promise<string | null> {
+  // PRIORITY 1: Check if user is authenticated - if so, don't use/create anonymous session
+  const authToken = localStorage.getItem('auth_token');
+  if (authToken) {
+    console.log('[Anonymous Session] User is authenticated - not using anonymous session');
+    // Clear any existing anonymous session data since we're now authenticated
+    clearAnonymousSession();
+    return null;
+  }
+  
+  // PRIORITY 2: Check if we have a session ID in localStorage (more reliable than cookies)
   const storedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
   if (storedSessionId) {
     console.log('[Anonymous Session] Using existing session from localStorage:', storedSessionId);
@@ -240,7 +132,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     return storedSessionId;
   }
   
-  // If not in localStorage, check cookie as fallback
+  // PRIORITY 3: If not in localStorage, check cookie as fallback
   const cookieSessionId = getAnonymousSessionId();
   if (cookieSessionId) {
     console.log('[Anonymous Session] Using existing session from cookie:', cookieSessionId);
@@ -251,6 +143,7 @@ export async function getOrCreateAnonymousSessionId(): Promise<string> {
     return cookieSessionId;
   }
   
+  // PRIORITY 4: If no existing session found, create a new one
   try {
     // Generate a new session ID using our consistent function
     const newSessionId = generateSessionId();
@@ -395,6 +288,12 @@ export function shouldSuppressAuthPrompts(): boolean {
  * @returns True if an anonymous session exists, false otherwise
  */
 export function hasAnonymousSession(): boolean {
+  // Don't report anonymous session if authenticated
+  const authToken = localStorage.getItem('auth_token');
+  if (authToken) {
+    return false;
+  }
+
   // Check localStorage first (more reliable)
   const storedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
   if (storedSessionId) {

@@ -160,9 +160,42 @@ export default function Library() {
 
       console.log('Library - Fetching videos for user:', user?.id, 'type:', typeof user?.id);
       
-      // Add anonymous session header for anonymous users
+      // First check for authentication token presence
+      const authToken = localStorage.getItem('auth_token');
+      
+      // Add appropriate headers based on auth state
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // Priority #1: Use auth token if available (even if user object isn't loaded yet)
+      if (authToken) {
+        console.log('Library - Found auth token in localStorage, using authenticated headers');
+        headers = {
+          'Authorization': `Bearer ${authToken}`
+        };
+        
+        // If the token is our custom format, extract user ID
+        if (authToken.startsWith('auth_token_')) {
+          try {
+            const parts = authToken.split('_');
+            if (parts.length >= 3) {
+              const userId = parseInt(parts[2], 10);
+              if (!isNaN(userId)) {
+                console.log('Library - Extracted user ID from auth token:', userId);
+                headers['x-user-id'] = String(userId);
+              }
+            }
+          } catch (err) {
+            console.error('Library - Error extracting user ID from auth token:', err);
+          }
+        }
+      }
+      // Priority #2: Use user object if available but no auth token
+      else if (user) {
+        console.log('Library - Using user ID from context:', user.id);
+        headers['x-user-id'] = String(user.id);
+      }
+      // Priority #3: Fall back to anonymous session only if no auth token and no user
+      else {
         try {
           // Log all cookies first to see what's happening
           console.log('Library - All cookies before getAnonymousSessionHeaders():', document.cookie);
@@ -280,9 +313,38 @@ export default function Library() {
   // Mutations
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      // Add anonymous session header for anonymous users
+      // First check for authentication token
+      const authToken = localStorage.getItem('auth_token');
+      
+      // Add appropriate headers based on auth state
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // Priority #1: Use auth token if available
+      if (authToken) {
+        console.log('[bulkDeleteMutation] Found auth token in localStorage, using authenticated headers');
+        headers = {
+          'Authorization': `Bearer ${authToken}`
+        };
+        
+        // Extract user ID from token if possible
+        if (authToken.startsWith('auth_token_')) {
+          try {
+            const parts = authToken.split('_');
+            if (parts.length >= 3) {
+              headers['x-user-id'] = parts[2];
+            }
+          } catch (err) {
+            console.error('[bulkDeleteMutation] Error extracting user ID from token:', err);
+          }
+        }
+      }
+      // Priority #2: Use user context if available
+      else if (user) {
+        console.log('[bulkDeleteMutation] Using user ID from context:', user.id);
+        headers['x-user-id'] = String(user.id);
+      }
+      // Priority #3: Fall back to anonymous session
+      else {
         // Use the helper function that properly handles the async nature of session IDs
         headers = await getAnonymousSessionHeaders();
         // Use a type assertion to access the header value
@@ -313,9 +375,38 @@ export default function Library() {
 
   const bulkToggleFavoriteMutation = useMutation({
     mutationFn: async ({ ids, isFavorite }: { ids: number[], isFavorite: boolean }) => {
-      // Add anonymous session header for anonymous users
+      // First check for authentication token
+      const authToken = localStorage.getItem('auth_token');
+      
+      // Add appropriate headers based on auth state
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // Priority #1: Use auth token if available
+      if (authToken) {
+        console.log('[bulkToggleFavoriteMutation] Found auth token in localStorage, using authenticated headers');
+        headers = {
+          'Authorization': `Bearer ${authToken}`
+        };
+        
+        // Extract user ID from token if possible
+        if (authToken.startsWith('auth_token_')) {
+          try {
+            const parts = authToken.split('_');
+            if (parts.length >= 3) {
+              headers['x-user-id'] = parts[2];
+            }
+          } catch (err) {
+            console.error('[bulkToggleFavoriteMutation] Error extracting user ID from token:', err);
+          }
+        }
+      }
+      // Priority #2: Use user context if available
+      else if (user) {
+        console.log('[bulkToggleFavoriteMutation] Using user ID from context:', user.id);
+        headers['x-user-id'] = String(user.id);
+      }
+      // Priority #3: Fall back to anonymous session
+      else {
         // Use the helper function that properly handles the async nature of session IDs
         headers = await getAnonymousSessionHeaders();
         // Use a type assertion to access the header value
@@ -346,9 +437,38 @@ export default function Library() {
 
   const addToCollectionMutation = useMutation({
     mutationFn: async ({ videoIds, collectionId }: { videoIds: number[], collectionId: number }) => {
-      // Add anonymous session header for anonymous users
+      // First check for authentication token
+      const authToken = localStorage.getItem('auth_token');
+      
+      // Add appropriate headers based on auth state
       let headers: HeadersInit = {};
-      if (!user) {
+      
+      // Priority #1: Use auth token if available
+      if (authToken) {
+        console.log('[addToCollectionMutation] Found auth token in localStorage, using authenticated headers');
+        headers = {
+          'Authorization': `Bearer ${authToken}`
+        };
+        
+        // Extract user ID from token if possible
+        if (authToken.startsWith('auth_token_')) {
+          try {
+            const parts = authToken.split('_');
+            if (parts.length >= 3) {
+              headers['x-user-id'] = parts[2];
+            }
+          } catch (err) {
+            console.error('[addToCollectionMutation] Error extracting user ID from token:', err);
+          }
+        }
+      }
+      // Priority #2: Use user context if available
+      else if (user) {
+        console.log('[addToCollectionMutation] Using user ID from context:', user.id);
+        headers['x-user-id'] = String(user.id);
+      }
+      // Priority #3: Fall back to anonymous session
+      else {
         // Use the helper function that properly handles the async nature of session IDs
         headers = await getAnonymousSessionHeaders();
         // Use a type assertion to access the header value
