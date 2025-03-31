@@ -511,15 +511,35 @@ export function extractSessionId(req: Request): string | null {
   // First check for cookie-based auth session (registered users)
   const cookieSession = req.cookies?.auth_session;
   if (cookieSession) {
+    console.log(`[Auth Service] Found auth session cookie: ${cookieSession.substring(0, 10)}...`);
     return cookieSession;
+  }
+  
+  // Then check authorization header for Bearer token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    if (token) {
+      console.log(`[Auth Service] Found Bearer token: ${token.substring(0, 10)}...`);
+      return token;
+    }
   }
   
   // Then check for anonymous session in headers
   const anonymousSession = req.headers['x-anonymous-session'];
   if (anonymousSession && typeof anonymousSession === 'string') {
+    console.log(`[Auth Service] Found anonymous session in header: ${anonymousSession.substring(0, 10)}...`);
     return anonymousSession;
   }
   
+  // As a last resort, check auth_token cookie
+  const authTokenCookie = req.cookies?.auth_token;
+  if (authTokenCookie) {
+    console.log(`[Auth Service] Found auth_token cookie: ${authTokenCookie.substring(0, 10)}...`);
+    return authTokenCookie;
+  }
+  
+  console.log('[Auth Service] No session ID found in request');
   return null;
 }
 

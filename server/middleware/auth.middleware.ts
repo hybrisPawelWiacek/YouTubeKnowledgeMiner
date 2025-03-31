@@ -86,11 +86,14 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     if (activeSessionId) {
       req.sessionId = activeSessionId;
       
-      // Check if it's a registered user session (format: not starting with ANONYMOUS_SESSION_PREFIX)
-      if (!activeSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+      // Check if it's a registered user session
+      // Accept either non-anonymous-prefix sessions OR our custom auth_token format
+      if (!activeSessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX) || activeSessionId.startsWith('auth_token_')) {
+        logger.debug(`Validating standard or custom auth token: ${activeSessionId}`);
         const userId = await validateSession(activeSessionId);
         
         if (userId) {
+          logger.debug(`Token validated successfully for user ID: ${userId}`);
           const user = await getUserById(userId);
           
           if (user) {
@@ -99,7 +102,11 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
             req.isAnonymous = false;
             
             logger.debug(`Authenticated user: ${user.username} (ID: ${user.id})`);
+          } else {
+            logger.warn(`User ID ${userId} from token validation not found in database`);
           }
+        } else {
+          logger.warn(`Token validation failed for: ${activeSessionId}`);
         }
       } 
       // Handle anonymous session (format: anon_[timestamp]_[random])
@@ -228,6 +235,38 @@ export async function requireAnyUser(req: Request, res: Response, next: NextFunc
       return next();
     }
     
+    // First check for auth token in authorization header (Bearer token)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      
+      // Check if it's our custom auth token
+      if (token.startsWith('auth_token_')) {
+        logger.debug(`[requireAnyUser] Found custom auth token in Authorization header`);
+        
+        // Validate the token
+        try {
+          const userId = await validateSession(token);
+          if (userId) {
+            logger.debug(`[requireAnyUser] Custom auth token validated for user ID: ${userId}`);
+            const user = await getUserById(userId);
+            
+            if (user) {
+              req.user = user;
+              req.isAuthenticated = true;
+              req.isAnonymous = false;
+              req.sessionId = token;
+              
+              logger.debug(`[requireAnyUser] User authenticated via auth token: ${user.username}`);
+              return next();
+            }
+          }
+        } catch (error) {
+          logger.error(`[requireAnyUser] Error validating custom auth token:`, error);
+        }
+      }
+    }
+    
     // Check for anonymous session in all possible locations
     // 1. In req.sessionId (from auth middleware)
     // 2. In x-anonymous-session header
@@ -236,9 +275,24 @@ export async function requireAnyUser(req: Request, res: Response, next: NextFunc
     let anonymousSessionId: string | null = null;
     
     // First check if already in req.sessionId from auth middleware
-    if (req.sessionId && req.sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
-      logger.debug(`[requireAnyUser] Found session ID in req.sessionId: ${req.sessionId}`);
-      anonymousSessionId = req.sessionId;
+    if (req.sessionId) {
+      if (req.sessionId.startsWith(SYSTEM.ANONYMOUS_SESSION_PREFIX)) {
+        logger.debug(`[requireAnyUser] Found anonymous session ID in req.sessionId: ${req.sessionId}`);
+        anonymousSessionId = req.sessionId;
+      } else if (req.sessionId.startsWith('auth_token_')) {
+        // Try to validate auth token format again
+        const userId = await validateSession(req.sessionId);
+        if (userId) {
+          const user = await getUserById(userId);
+          if (user) {
+            req.user = user;
+            req.isAuthenticated = true;
+            req.isAnonymous = false;
+            logger.debug(`[requireAnyUser] User authenticated via req.sessionId token: ${user.username}`);
+            return next();
+          }
+        }
+      }
     }
     
     // If not found, check the header
