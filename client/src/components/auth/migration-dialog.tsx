@@ -25,15 +25,19 @@ interface MigrationDialogProps {
   isOpen: boolean;
   onClose: () => void;
   sessionId: string;
+  authToken?: string; // Optional auth token to use directly
 }
 
 type MigrationStatus = 'idle' | 'migrating' | 'success' | 'error';
 
-export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogProps) {
+export function MigrationDialog({ isOpen, onClose, sessionId, authToken }: MigrationDialogProps) {
   const { migrateAnonymousContent } = useAuth();
   const [status, setStatus] = useState<MigrationStatus>('idle');
   const [message, setMessage] = useState<string>('');
   const [videoCount, setVideoCount] = useState<number>(0);
+  
+  // Track if we're using a directly provided auth token
+  const [usingProvidedToken, setUsingProvidedToken] = useState<boolean>(!!authToken);
 
   // Handle the migration process
   const handleMigration = useCallback(async () => {
@@ -49,7 +53,7 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
       }
 
       console.log('[MigrationDialog] Calling migrateAnonymousContent with session ID:', sessionId);
-      const result = await migrateAnonymousContent(sessionId);
+      const result = await migrateAnonymousContent(sessionId, authToken);
       console.log('[MigrationDialog] Migration result:', result);
       
       if (result.success) {
@@ -102,7 +106,7 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
       setStatus('error');
       setMessage(errorDetails);
     }
-  }, [sessionId, migrateAnonymousContent]);
+  }, [sessionId, migrateAnonymousContent, authToken]);
 
   // Start migration when dialog opens with a slight delay to ensure auth token is available
   useEffect(() => {
@@ -110,6 +114,8 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
       // Add a short delay to ensure the authentication token has been properly set
       // in cookies/localStorage before attempting the migration
       console.log('[MigrationDialog] Setting up migration with delay to ensure auth token is available');
+      console.log('[MigrationDialog] Using authToken directly:', !!authToken);
+      
       const migrationTimer = setTimeout(() => {
         console.log('[MigrationDialog] Starting migration after delay');
         handleMigration();
@@ -119,7 +125,7 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
         clearTimeout(migrationTimer);
       };
     }
-  }, [isOpen, status, handleMigration]);
+  }, [isOpen, status, handleMigration, authToken]);
 
   // Content based on migration status
   const renderContent = () => {

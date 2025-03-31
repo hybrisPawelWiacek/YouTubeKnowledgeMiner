@@ -48,7 +48,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   register: (username: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  migrateAnonymousContent: (sessionId: string) => Promise<MigrationResponse>;
+  migrateAnonymousContent: (sessionId: string, providedAuthToken?: string, retryCount?: number) => Promise<MigrationResponse>;
   refreshUser: () => Promise<void>;
 }
 
@@ -220,7 +220,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Migrate anonymous content to authenticated user
-  const migrateAnonymousContent = async (sessionId: string, retryCount = 0): Promise<MigrationResponse> => {
+  const migrateAnonymousContent = async (sessionId: string, providedAuthToken?: string, retryCount = 0): Promise<MigrationResponse> => {
     try {
       if (!isAuthenticated || !user) {
         console.error('[Auth Context] Cannot migrate content - user not authenticated');
@@ -233,7 +233,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Wait for authentication to complete and retry
           return new Promise((resolve) => {
             setTimeout(() => {
-              resolve(migrateAnonymousContent(sessionId, retryCount + 1));
+              resolve(migrateAnonymousContent(sessionId, providedAuthToken, retryCount + 1));
             }, 1000); // 1 second delay before retry
           });
         }
@@ -252,18 +252,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const allCookies = document.cookie.split('; ');
       console.log('[Auth Context] All cookies:', allCookies);
       
-      // Try to find auth token in cookies with different possible names
-      let authToken = null;
-      const cookieNames = ['auth_session', 'AuthSession', 'auth_token'];
+      // Use the provided auth token if it exists, otherwise try to find one in cookies
+      let authToken = providedAuthToken || null;
       
-      for (const cookieName of cookieNames) {
-        const found = allCookies.find(row => row.startsWith(`${cookieName}=`));
-        if (found) {
-          authToken = found.split('=')[1];
-          console.log(`[Auth Context] Found auth token in ${cookieName} cookie (first 10 chars):`, 
-            authToken.substring(0, 10) + '...');
-          break;
+      // If no token provided, look in cookies
+      if (!authToken) {
+        const cookieNames = ['auth_session', 'AuthSession', 'auth_token'];
+        
+        for (const cookieName of cookieNames) {
+          const found = allCookies.find(row => row.startsWith(`${cookieName}=`));
+          if (found) {
+            authToken = found.split('=')[1];
+            console.log(`[Auth Context] Found auth token in ${cookieName} cookie (first 10 chars):`, 
+              authToken.substring(0, 10) + '...');
+            break;
+          }
         }
+      } else {
+        console.log('[Auth Context] Using provided auth token directly');
       }
       
       // Add debugging for auth token

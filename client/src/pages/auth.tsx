@@ -37,6 +37,7 @@ export default function AuthPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [showMigrationDialog, setShowMigrationDialog] = useState(false);
   const [migrationAction, setMigrationAction] = useState<'login' | 'register'>('login');
+  const [migrationAuthToken, setMigrationAuthToken] = useState<string | null>(null);
   
   // Handle navigation when user is already authenticated
   useEffect(() => {
@@ -101,6 +102,35 @@ export default function AuthPage() {
   const handleRegisterSuccess = () => {
     // If there's an anonymous session, show migration dialog
     if (sessionId) {
+      // Try to get the auth token from cookies or localStorage
+      try {
+        // First check cookies
+        const allCookies = document.cookie.split('; ');
+        const authCookie = allCookies.find(cookie => 
+          cookie.startsWith('auth_session=') || 
+          cookie.startsWith('AuthSession=') || 
+          cookie.startsWith('auth_token=')
+        );
+        
+        let authToken = null;
+        if (authCookie) {
+          authToken = authCookie.split('=')[1];
+          console.log('[AuthPage] Found auth token in cookies for migration');
+        } else {
+          // Try localStorage
+          const localToken = localStorage.getItem('auth_token');
+          if (localToken) {
+            console.log('[AuthPage] Using token from localStorage for migration');
+            authToken = localToken;
+          }
+        }
+        
+        // Store the auth token for migration
+        setMigrationAuthToken(authToken);
+      } catch (error) {
+        console.error('[AuthPage] Error extracting auth token for migration:', error);
+      }
+      
       setMigrationAction('register');
       setShowMigrationDialog(true);
     } else {
@@ -161,6 +191,7 @@ export default function AuthPage() {
           isOpen={showMigrationDialog}
           onClose={handleCloseMigrationDialog}
           sessionId={sessionId}
+          authToken={migrationAuthToken || undefined}
         />
       )}
     </div>
