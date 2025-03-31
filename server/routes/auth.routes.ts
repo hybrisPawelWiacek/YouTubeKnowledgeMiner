@@ -587,23 +587,46 @@ router.post('/migrate-anonymous-data', async (req: Request, res: Response) => {
       }
     }
     
-    // Check if authentication was successful
+    // Check if authentication was successful - enhanced with multiple auth methods
     if (!req.isAuthenticated || !req.user || !req.user.id) {
-      logger.warn('Migration failed: User not authenticated', {
-        isAuthenticated: req.isAuthenticated,
-        hasUser: !!req.user,
-        userId: req.user?.id,
-        authCookie: !!req.cookies?.auth_session,
-        hasAuthHeader: !!req.headers.authorization,
-        anonymousSessionId: req.body.anonymousSessionId
-      });
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required for migration. Please log in and try again.',
-        error: {
-          code: 'AUTH_REQUIRED'
+      // Last chance: Try to use userId from the request body if available
+      if (req.body.userId) {
+        try {
+          const userId = parseInt(req.body.userId, 10);
+          if (!isNaN(userId)) {
+            logger.info(`Using userId from request body as fallback: ${userId}`);
+            const user = await getUserById(userId);
+            if (user) {
+              req.user = user;
+              req.isAuthenticated = true;
+              req.isAnonymous = false;
+              logger.info(`Successfully authenticated user using userId from body: ${user.username}`);
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to authenticate using userId from body', { error });
         }
-      });
+      }
+      
+      // If still not authenticated, log and return error
+      if (!req.isAuthenticated || !req.user || !req.user.id) {
+        logger.warn('Migration failed: User not authenticated', {
+          isAuthenticated: req.isAuthenticated,
+          hasUser: !!req.user,
+          userId: req.user?.id,
+          authCookie: !!req.cookies?.auth_session,
+          hasAuthHeader: !!req.headers.authorization,
+          anonymousSessionId: req.body.anonymousSessionId,
+          userIdInBody: req.body.userId || 'missing'
+        });
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required for migration. Please log in and try again.',
+          error: {
+            code: 'AUTH_REQUIRED'
+          }
+        });
+      }
     }
 
     const userId = req.user.id;

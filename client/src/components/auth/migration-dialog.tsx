@@ -104,10 +104,20 @@ export function MigrationDialog({ isOpen, onClose, sessionId }: MigrationDialogP
     }
   }, [sessionId, migrateAnonymousContent]);
 
-  // Start migration when dialog opens
+  // Start migration when dialog opens with a slight delay to ensure auth token is available
   useEffect(() => {
     if (isOpen && status === 'idle') {
-      handleMigration();
+      // Add a short delay to ensure the authentication token has been properly set
+      // in cookies/localStorage before attempting the migration
+      console.log('[MigrationDialog] Setting up migration with delay to ensure auth token is available');
+      const migrationTimer = setTimeout(() => {
+        console.log('[MigrationDialog] Starting migration after delay');
+        handleMigration();
+      }, 1000); // 1 second delay
+      
+      return () => {
+        clearTimeout(migrationTimer);
+      };
     }
   }, [isOpen, status, handleMigration]);
 

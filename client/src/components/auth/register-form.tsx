@@ -80,14 +80,39 @@ export function RegisterForm({ onSuccess, redirectTo = '/', sessionId }: Registe
     try {
       const success = await register(values.username, values.email, values.password);
       if (success) {
-        // If we have an anonymous session ID, we'd want to migrate content here
-        // This would be implemented in a real application
+        // After successful registration, we need to ensure the auth token is properly available
         
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          setLocation(redirectTo);
+        // Attempt to prepare the auth token from cookies
+        try {
+          const cookies = document.cookie.split('; ');
+          const authCookie = cookies.find(cookie => 
+            cookie.startsWith('auth_session=') || 
+            cookie.startsWith('AuthSession=') || 
+            cookie.startsWith('auth_token=')
+          );
+          
+          if (authCookie) {
+            const token = authCookie.split('=')[1];
+            console.log('[RegisterForm] Found auth token in cookies, caching to localStorage');
+            
+            // Store in localStorage as a backup mechanism
+            localStorage.setItem('auth_token', token);
+          } else {
+            console.warn('[RegisterForm] No auth token found in cookies after registration');
+          }
+        } catch (tokenError) {
+          console.error('[RegisterForm] Error caching auth token:', tokenError);
         }
+        
+        // Add a small delay to ensure the token is properly set in cookies/localStorage
+        // before proceeding with any redirects or migrations
+        setTimeout(() => {
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            setLocation(redirectTo);
+          }
+        }, 500);
       }
     } catch (error: any) {
       setRegisterError(error.message || 'An unexpected error occurred. Please try again.');

@@ -67,11 +67,37 @@ export function LoginForm({ onSuccess, redirectTo = '/' }: LoginFormProps) {
     try {
       const success = await login(values.email, values.password);
       if (success) {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          setLocation(redirectTo);
+        // Attempt to prepare the auth token from cookies before proceeding with any redirects
+        // This helps ensure the token is available for subsequent operations like migration
+        try {
+          const cookies = document.cookie.split('; ');
+          const authCookie = cookies.find(cookie => 
+            cookie.startsWith('auth_session=') || 
+            cookie.startsWith('AuthSession=') || 
+            cookie.startsWith('auth_token=')
+          );
+          
+          if (authCookie) {
+            const token = authCookie.split('=')[1];
+            console.log('[LoginForm] Found auth token in cookies, caching to localStorage');
+            
+            // Store in localStorage as a backup mechanism
+            localStorage.setItem('auth_token', token);
+          } else {
+            console.warn('[LoginForm] No auth token found in cookies after login');
+          }
+        } catch (tokenError) {
+          console.error('[LoginForm] Error caching auth token:', tokenError);
         }
+        
+        // Short delay to ensure token is properly set before proceeding
+        setTimeout(() => {
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            setLocation(redirectTo);
+          }
+        }, 500);
       }
     } catch (error: any) {
       setLoginError(error.message || 'An unexpected error occurred. Please try again.');

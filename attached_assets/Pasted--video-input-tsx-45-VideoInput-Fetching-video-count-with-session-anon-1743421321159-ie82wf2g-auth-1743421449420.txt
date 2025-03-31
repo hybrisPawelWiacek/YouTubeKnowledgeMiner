@@ -1,0 +1,95 @@
+
+video-input.tsx:45 [VideoInput] Fetching video count with session: anon_1743421321159_ie82wf2g
+auth-context.tsx:299 
+            
+            
+           POST https://df05eb6f-42c0-42ce-966f-2878645b9a8f-00-2osivr8dq5er1.kirk.replit.dev/api/auth/migrate-anonymous-data 401 (Unauthorized)
+dispatchXhrRequest @ axios.js?v=96c10521:1637
+xhr @ axios.js?v=96c10521:1517
+dispatchRequest @ axios.js?v=96c10521:1992
+_request @ axios.js?v=96c10521:2213
+request @ axios.js?v=96c10521:2104
+httpMethod @ axios.js?v=96c10521:2242
+wrap @ axios.js?v=96c10521:8
+migrateAnonymousContent @ auth-context.tsx:299
+(anonymous) @ migration-dialog.tsx:52
+(anonymous) @ migration-dialog.tsx:110
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI
+auth-context.tsx:334 [Auth Context] Migration error: AxiosError {message: 'Request failed with status code 401', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
+migrateAnonymousContent @ auth-context.tsx:334
+await in migrateAnonymousContent
+(anonymous) @ migration-dialog.tsx:52
+(anonymous) @ migration-dialog.tsx:110
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI
+auth-context.tsx:338 [Auth Context] Server response error: {status: 401, data: {…}, headers: AxiosHeaders}
+migrateAnonymousContent @ auth-context.tsx:338
+await in migrateAnonymousContent
+(anonymous) @ migration-dialog.tsx:52
+(anonymous) @ migration-dialog.tsx:110
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI
+migration-dialog.tsx:53 [MigrationDialog] Migration result: {success: false, message: 'Authentication required for migration. Please log in and try again.', error: {…}}
+migration-dialog.tsx:71 [MigrationDialog] Migration failed with message: Authentication required for migration. Please log in and try again.
+(anonymous) @ migration-dialog.tsx:71
+await in (anonymous)
+(anonymous) @ migration-dialog.tsx:110
+commitHookEffectListMount @ chunk-UPELNCPK.js?v=96c10521:16915
+commitPassiveMountOnFiber @ chunk-UPELNCPK.js?v=96c10521:18156
+commitPassiveMountEffects_complete @ chunk-UPELNCPK.js?v=96c10521:18129
+commitPassiveMountEffects_begin @ chunk-UPELNCPK.js?v=96c10521:18119
+commitPassiveMountEffects @ chunk-UPELNCPK.js?v=96c10521:18109
+flushPassiveEffectsImpl @ chunk-UPELNCPK.js?v=96c10521:19490
+flushPassiveEffects @ chunk-UPELNCPK.js?v=96c10521:19447
+performSyncWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18868
+flushSyncCallbacks @ chunk-UPELNCPK.js?v=96c10521:9119
+commitRootImpl @ chunk-UPELNCPK.js?v=96c10521:19432
+commitRoot @ chunk-UPELNCPK.js?v=96c10521:19277
+finishConcurrentRender @ chunk-UPELNCPK.js?v=96c10521:18805
+performConcurrentWorkOnRoot @ chunk-UPELNCPK.js?v=96c10521:18718
+workLoop @ chunk-UPELNCPK.js?v=96c10521:197
+flushWork @ chunk-UPELNCPK.js?v=96c10521:176
+performWorkUntilDeadline @ chunk-UPELNCPK.js?v=96c10521:384Understand this errorAI
