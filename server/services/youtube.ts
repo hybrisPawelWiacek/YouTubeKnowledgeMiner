@@ -143,8 +143,8 @@ interface TranscriptItem {
   duration: number;
 }
 
-// Function to get transcript from YouTube video
-// This implementation tries to use the youtube-transcript-api library with a fallback to legacy method
+// Main function to get transcript from YouTube video
+// This calls three different methods in order until one succeeds
 export async function getYoutubeTranscript(videoId: string) {
   try {
     // Initialize enhanced logging
@@ -169,97 +169,21 @@ export async function getYoutubeTranscript(videoId: string) {
     
     youtubeLogger.info(`[TRANSCRIPT] Extracted YouTube ID: ${extractedId}`);
     
-    // 1. Try the legacy method first
-    youtubeLogger.info(`[TRANSCRIPT] Attempting to use legacy method as primary approach`);
-    try {
-      const legacyTranscript = await getLegacyYoutubeTranscript(extractedId);
-      if (legacyTranscript) {
-        youtubeLogger.info(`[TRANSCRIPT] Successfully retrieved transcript with legacy method`);
-        return legacyTranscript;
-      } else {
-        youtubeLogger.info(`[TRANSCRIPT] Legacy method returned null, moving to next method`);
-      }
-    } catch (legacyError) {
-      youtubeLogger.error(`[TRANSCRIPT] Legacy method failed: ${legacyError}`);
-      // Legacy method failed, we'll try CJS helper script next
+    // Try each method in sequence until one succeeds
+    
+    // Method 1: Try legacy method
+    const legacyTranscript = await tryLegacyMethod(extractedId);
+    if (legacyTranscript) {
+      return legacyTranscript;
     }
     
-    // 2. Try the CommonJS helper script next
-    youtubeLogger.info(`[TRANSCRIPT] Attempting to use youtube-transcript-api via helper script`);
-    try {
-      // Use Node.js child_process to run our CommonJS helper script
-      youtubeLogger.info(`[TRANSCRIPT] Running CJS helper script with node`);
-      
-      const nodeCommand = `node scripts/get-transcript.cjs ${extractedId}`;
-      youtubeLogger.info(`[TRANSCRIPT] Command: ${nodeCommand}`);
-      
-      // Execute the command and get the output
-      const output = child_process.execSync(nodeCommand, {
-        encoding: 'utf-8',
-        timeout: 15000, // 15-second timeout
-        maxBuffer: 1024 * 1024 // 1MB buffer
-      });
-      
-      youtubeLogger.info(`[TRANSCRIPT] Successfully executed transcript helper script`);
-      
-      // Parse the output as JSON to get the transcript items
-      const result = JSON.parse(output);
-      
-      if (result === null) {
-        youtubeLogger.error(`[TRANSCRIPT] Helper script returned null result`);
-        throw new Error('No transcript data returned from helper script');
-      }
-      
-      // An empty array means the transcript was attempted but failed
-      if (Array.isArray(result) && result.length === 0) {
-        youtubeLogger.error(`[TRANSCRIPT] Helper script returned empty array - transcript unavailable`);
-        throw new Error('Transcript unavailable for this video');
-      }
-      
-      youtubeLogger.info(`[TRANSCRIPT] Successfully retrieved transcript with API`);
-      
-      // Use the result directly - convert to our TranscriptItem format
-      const transcriptItems: TranscriptItem[] = result.map((item: any) => ({
-        text: item.text,
-        start: item.start,
-        duration: item.dur || item.duration || 0
-      }));
-      youtubeLogger.info(`[TRANSCRIPT] Successfully received transcript with ${transcriptItems.length} items`);
-      
-      // Save transcript data for debugging
-      try {
-        fs.writeFileSync(`${logDir}/transcript-api-${extractedId}.json`, JSON.stringify(transcriptItems, null, 2));
-        youtubeLogger.info(`[TRANSCRIPT] Saved transcript data to ${logDir}/transcript-api-${extractedId}.json`);
-      } catch (writeError) {
-        youtubeLogger.error(`[TRANSCRIPT] Error saving transcript data: ${writeError}`);
-      }
-      
-      // Format the transcript with timestamps
-      youtubeLogger.info(`[TRANSCRIPT] Formatting transcript with timestamps`);
-      const formattedTranscript = transcriptItems.map((item: TranscriptItem, index: number) => {
-        const timestamp = formatTimestamp(item.start);
-        // Add data attributes for citation functionality
-        return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
-          <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
-          <span class="transcript-text">${item.text}</span>
-        </p>`;
-      }).join('');
-      
-      youtubeLogger.info(`[TRANSCRIPT] Successfully formatted transcript, length: ${formattedTranscript.length} characters`);
-      
-      // Log a sample of the formatted transcript
-      const formattedSample = formattedTranscript.substring(0, 500) + '... [truncated]';
-      youtubeLogger.info(`[TRANSCRIPT] Formatted transcript sample: ${formattedSample}`);
-      
-      return formattedTranscript;
-      
-    } catch (apiError) {
-      youtubeLogger.error(`[TRANSCRIPT] Error with youtube-transcript-api: ${apiError}`);
-      // CJS helper script failed, we'll try Puppeteer next
+    // Method 2: Try YouTube Transcript API via helper script
+    const apiTranscript = await tryTranscriptApi(extractedId);
+    if (apiTranscript) {
+      return apiTranscript;
     }
     
-    // 3. Try the Puppeteer method as a final fallback
-    youtubeLogger.info(`[TRANSCRIPT] Attempting to use Puppeteer method as final fallback`);
+    // Method 3: Try Puppeteer as final fallback
     return await getPuppeteerYoutubeTranscript(extractedId);
     
   } catch (error) {
@@ -279,6 +203,101 @@ export async function getYoutubeTranscript(videoId: string) {
     }
     
     return null; // Return null instead of throwing to avoid breaking the flow
+  }
+}
+
+// Method 1: Legacy method for transcript extraction
+async function tryLegacyMethod(videoId: string): Promise<string | null> {
+  youtubeLogger.info(`[TRANSCRIPT] Attempting to use legacy method as primary approach`);
+  try {
+    const legacyTranscript = await getLegacyYoutubeTranscript(videoId);
+    if (legacyTranscript) {
+      youtubeLogger.info(`[TRANSCRIPT] Successfully retrieved transcript with legacy method`);
+      return legacyTranscript;
+    } else {
+      youtubeLogger.info(`[TRANSCRIPT] Legacy method returned null, moving to next method`);
+      return null;
+    }
+  } catch (legacyError) {
+    youtubeLogger.error(`[TRANSCRIPT] Legacy method failed: ${legacyError}`);
+    return null;
+  }
+}
+
+// Method 2: YouTube Transcript API via helper script
+async function tryTranscriptApi(videoId: string): Promise<string | null> {
+  youtubeLogger.info(`[TRANSCRIPT] Attempting to use youtube-transcript-api via helper script`);
+  try {
+    // Use Node.js child_process to run our CommonJS helper script
+    youtubeLogger.info(`[TRANSCRIPT] Running CJS helper script with node`);
+    
+    const nodeCommand = `node scripts/get-transcript.cjs ${videoId}`;
+    youtubeLogger.info(`[TRANSCRIPT] Command: ${nodeCommand}`);
+    
+    // Execute the command and get the output
+    const output = child_process.execSync(nodeCommand, {
+      encoding: 'utf-8',
+      timeout: 15000, // 15-second timeout
+      maxBuffer: 1024 * 1024 // 1MB buffer
+    });
+    
+    youtubeLogger.info(`[TRANSCRIPT] Successfully executed transcript helper script`);
+    
+    // Parse the output as JSON to get the transcript items
+    const result = JSON.parse(output);
+    
+    if (result === null) {
+      youtubeLogger.error(`[TRANSCRIPT] Helper script returned null result`);
+      return null;
+    }
+    
+    // An empty array means the transcript was attempted but failed
+    if (Array.isArray(result) && result.length === 0) {
+      youtubeLogger.error(`[TRANSCRIPT] Helper script returned empty array - transcript unavailable`);
+      return null;
+    }
+    
+    youtubeLogger.info(`[TRANSCRIPT] Successfully retrieved transcript with API`);
+    
+    // Use the result directly - convert to our TranscriptItem format
+    const transcriptItems: TranscriptItem[] = result.map((item: any) => ({
+      text: item.text,
+      start: item.start,
+      duration: item.dur || item.duration || 0
+    }));
+    youtubeLogger.info(`[TRANSCRIPT] Successfully received transcript with ${transcriptItems.length} items`);
+    
+    // Save transcript data for debugging
+    try {
+      const logDir = './logs/transcript';
+      fs.writeFileSync(`${logDir}/transcript-api-${videoId}.json`, JSON.stringify(transcriptItems, null, 2));
+      youtubeLogger.info(`[TRANSCRIPT] Saved transcript data to ${logDir}/transcript-api-${videoId}.json`);
+    } catch (writeError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error saving transcript data: ${writeError}`);
+    }
+    
+    // Format the transcript with timestamps
+    youtubeLogger.info(`[TRANSCRIPT] Formatting transcript with timestamps`);
+    const formattedTranscript = transcriptItems.map((item: TranscriptItem, index: number) => {
+      const timestamp = formatTimestamp(item.start);
+      // Add data attributes for citation functionality
+      return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
+        <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
+        <span class="transcript-text">${item.text}</span>
+      </p>`;
+    }).join('');
+    
+    youtubeLogger.info(`[TRANSCRIPT] Successfully formatted transcript, length: ${formattedTranscript.length} characters`);
+    
+    // Log a sample of the formatted transcript
+    const formattedSample = formattedTranscript.substring(0, 500) + '... [truncated]';
+    youtubeLogger.info(`[TRANSCRIPT] Formatted transcript sample: ${formattedSample}`);
+    
+    return formattedTranscript;
+    
+  } catch (apiError) {
+    youtubeLogger.error(`[TRANSCRIPT] Error with youtube-transcript-api: ${apiError}`);
+    return null;
   }
 }
 
