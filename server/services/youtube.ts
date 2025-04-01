@@ -136,137 +136,106 @@ function getBestThumbnail(thumbnails: any): string {
 // Function to get transcript from YouTube video using direct URL approach
 export async function getYoutubeTranscript(videoId: string) {
   try {
-    console.log(`[TRANSCRIPT] Fetching transcript for video ID: ${videoId}`);
+    console.log(`Fetching transcript for video ID: ${videoId}`);
     
     // Extract the YouTube ID if a full URL was provided
     const extractedId = extractYoutubeId(videoId);
     if (!extractedId) {
-      console.error('[TRANSCRIPT] Invalid YouTube URL or ID');
       throw new Error('Invalid YouTube URL or ID');
     }
     
-    console.log(`[TRANSCRIPT] Extracted ID: ${extractedId}, now fetching YouTube page`);
+    // Direct fetch approach using the YouTube transcript endpoint
+    // Always use the extracted ID for consistency
+    const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    const html = response.data;
     
-    // Try every possible approach to get the transcript
+    // Use cheerio to parse the HTML
+    const $ = cheerio.load(html);
     
-    // METHOD 1: Direct fetch approach using YouTube's timedtext API
+    // Extract the transcript data using patterns found in YouTube pages
+    const scriptContent = $('script').map((i, el) => $(el).html()).get().join('');
+    
+    // Look for the captionTracks data in the script content
+    const captionRegex = /"captionTracks":\s*(\[.*?\])/;
+    const match = scriptContent.match(captionRegex);
+    
+    if (!match || !match[1]) {
+      throw new Error('No captions available for this video. The video might not have subtitles.');
+    }
+    
+    // Parse the JSON data
+    const captionTracksJson = match[1].replace(/\\"/g, '"').replace(/\\u0026/g, '&');
+    
     try {
-      console.log(`[TRANSCRIPT] Trying direct transcript API method`);
-      const transcriptListUrl = `https://www.youtube.com/api/timedtext?lang=en&v=${extractedId}`;
+      const captionTracks = JSON.parse(captionTracksJson);
       
-      const transcriptResponse = await axios.get(transcriptListUrl);
+      if (captionTracks.length === 0) {
+        throw new Error('No caption tracks available for this video.');
+      }
+      
+      // Get the first available track (preferably English)
+      let selectedTrack = captionTracks.find((track: any) => 
+        track.languageCode === 'en' || track.language === 'English'
+      );
+      
+      // If no English track, just use the first one
+      if (!selectedTrack) {
+        selectedTrack = captionTracks[0];
+      }
+      
+      if (!selectedTrack || !selectedTrack.baseUrl) {
+        throw new Error('Could not find a valid caption track.');
+      }
+      
+      // Fetch the transcript XML
+      const transcriptResponse = await axios.get(selectedTrack.baseUrl);
       const transcriptData = transcriptResponse.data;
       
-      if (transcriptData && transcriptData.length > 0) {
-        console.log(`[TRANSCRIPT] Successfully fetched transcript XML directly, length: ${transcriptData.length}`);
-        const transcriptItems = parseTranscriptXml(transcriptData);
-        
-        if (transcriptItems.length > 0) {
-          console.log(`[TRANSCRIPT] Successfully parsed ${transcriptItems.length} transcript items directly`);
-          
-          // Format the transcript with timestamps
-          const formattedTranscript = transcriptItems.map((item, index) => {
-            const timestamp = formatTimestamp(item.start);
-            return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
-              <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
-              <span class="transcript-text">${item.text}</span>
-            </p>`;
-          }).join('');
-          
-          return formattedTranscript;
-        }
-      }
-    } catch (directApiError) {
-      console.log(`[TRANSCRIPT] Direct API approach failed: ${directApiError.message}`);
-    }
-    
-    // METHOD 2: Fallback to webpage scraping
-    try {
-      console.log(`[TRANSCRIPT] Falling back to regular page scraping`);
-      const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-      const html = response.data;
-      console.log(`[TRANSCRIPT] Successfully fetched YouTube page, length: ${html.length}`);
+      // Parse the transcript XML data
+      const transcriptItems = parseTranscriptXml(transcriptData);
       
-      // Try to find any timedtext URLs in the page
-      const pageText = html.toString();
-      const timedTextMatches = pageText.includes('timedtext');
+      if (transcriptItems.length === 0) {
+        throw new Error('Transcript data was empty or could not be parsed.');
+      }
       
-      if (timedTextMatches) {
-        console.log('[TRANSCRIPT] Found timedtext references in the page, but could not extract them');
-      } else {
-        console.log('[TRANSCRIPT] No timedtext references found in the page at all');
-      }
-    } catch (error) {
-      console.log(`[TRANSCRIPT] Webpage scraping failed: ${error.message}`);
+      console.log(`Successfully parsed ${transcriptItems.length} transcript items`);
+      
+      // Format the transcript with timestamps
+      const formattedTranscript = transcriptItems.map((item, index) => {
+        const timestamp = formatTimestamp(item.start);
+        // Add data attributes for citation functionality
+        return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
+          <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
+          <span class="transcript-text">${item.text}</span>
+        </p>`;
+      }).join('');
+      
+      return formattedTranscript;
+      
+    } catch (parseError) {
+      console.error('Error parsing caption tracks:', parseError);
+      throw new Error('Failed to parse caption data.');
     }
-    
-    // METHOD 3: Last ditch attempt with additional language options
-    try {
-      for (const lang of ['en', 'en-US', 'en-GB']) {
-        console.log(`[TRANSCRIPT] Trying language: ${lang}`);
-        const url = `https://www.youtube.com/api/timedtext?v=${extractedId}&lang=${lang}`;
-        
-        const response = await axios.get(url);
-        if (response.data && response.data.length > 0) {
-          const transcriptItems = parseTranscriptXml(response.data);
-          if (transcriptItems.length > 0) {
-            // Format the transcript
-            const formattedTranscript = transcriptItems.map((item, index) => {
-              const timestamp = formatTimestamp(item.start);
-              return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
-                <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
-                <span class="transcript-text">${item.text}</span>
-              </p>`;
-            }).join('');
-            
-            return formattedTranscript;
-          }
-        }
-      }
-    } catch (error) {
-      console.log(`[TRANSCRIPT] Language-specific attempts failed: ${error.message}`);
-    }
-    
-    // All methods failed - YouTube has changed their API significantly
-    
-    // Show a more helpful error message explaining the YouTube API limitations
-    console.error('[TRANSCRIPT] All transcript extraction methods failed');
-    throw new Error(
-      'Transcript extraction is currently unavailable. YouTube has changed their API, and transcript access now requires ' +
-      'a YouTube Data API key. Please try another video or contact the administrator to set up a YouTube API key.'
-    );
     
   } catch (error) {
-    console.error('[TRANSCRIPT] Error fetching YouTube transcript:', error);
+    console.error('Error fetching YouTube transcript:', error);
     
     if (error instanceof Error) {
-      // Check if this is already our detailed API key message
-      if (error.message.includes('YouTube Data API key')) {
-        throw error; // Just rethrow it
-      }
-      
       // Provide more specific error messages
       if (error.message.includes('captions') || error.message.includes('subtitles')) {
-        console.error('[TRANSCRIPT] No captions available for this video');
         throw new Error('This video does not have captions available. Try a different video.');
       } else if (error.message.includes('network')) {
-        console.error('[TRANSCRIPT] Network error');
         throw new Error('Network error while fetching transcript. Please try again later.');
       } else if (error.message.includes('language')) {
-        console.error('[TRANSCRIPT] Language not supported');
         throw new Error('Transcript is not available in a supported language.');
       }
     }
     
-    console.error('[TRANSCRIPT] General transcript fetch failure');
-    throw new Error(
-      'Transcript extraction is currently unavailable. YouTube has changed their API, and transcript access now requires ' +
-      'a YouTube Data API key. Please try another video or contact the administrator to set up a YouTube API key.'
-    );
+    throw new Error('Failed to fetch transcript. The video may not have captions available.');
   }
 }
 
