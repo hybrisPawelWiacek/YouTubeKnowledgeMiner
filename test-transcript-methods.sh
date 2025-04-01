@@ -3,7 +3,7 @@
 # Script to test which transcript extraction method works for a specific video
 
 # The YouTube video ID to test
-VIDEO_ID="BvCOZrqGyNU"
+VIDEO_ID="dQw4w9WgXcQ"  # Rick Astley's "Never Gonna Give You Up" - Has reliable captions
 echo "🔍 Testing transcript extraction methods for video: $VIDEO_ID"
 echo
 

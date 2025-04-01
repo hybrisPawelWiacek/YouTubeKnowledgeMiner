@@ -78,5 +78,5 @@ async function testApifyMethod(videoUrl: string) {
 }
 
 // Run the test with the provided YouTube URL
-const videoUrl = 'https://youtu.be/BvCOZrqGyNU?si=mcQYgsigwY2xfDr1';
+const videoUrl = 'https://youtu.be/dQw4w9WgXcQ'; // Rick Astley - Never Gonna Give You Up
 testApifyMethod(videoUrl);
