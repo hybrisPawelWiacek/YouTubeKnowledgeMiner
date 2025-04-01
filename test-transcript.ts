@@ -1,7 +1,7 @@
 import { getYoutubeTranscript } from './server/services/youtube.js';
 
-// YouTube video with known public captions (YouTube tutorial)
-const videoUrl = 'https://www.youtube.com/watch?v=w7ejDZ8SWv8'; // React JS Crash Course by Traversy Media
+// YouTube video with known public captions (provided by user)
+const videoUrl = 'https://www.youtube.com/watch?v=SS5DYx6mPw8'; // Video that should have captions
 
 async function testTranscript() {
   try {
