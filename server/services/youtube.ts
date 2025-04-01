@@ -653,12 +653,22 @@ function formatTimestamp(seconds: number): string {
 }
 
 /**
- * Extract YouTube ID from a URL or ID string
+ * Extract YouTube video ID from various URL formats or standalone ID
+ * 
+ * This function handles various YouTube URL formats and extracts the video ID:
+ * - Standard URLs: https://www.youtube.com/watch?v=VIDEO_ID
+ * - Short URLs: https://youtu.be/VIDEO_ID
+ * - Embed URLs: https://www.youtube.com/embed/VIDEO_ID
+ * - Short format: https://www.youtube.com/shorts/VIDEO_ID
+ * - Direct IDs: If the input is already a valid 11-character YouTube ID
+ *
+ * @param url - The YouTube URL or ID to extract from
+ * @returns The extracted YouTube video ID, or null if invalid
  */
 export function extractYoutubeId(url: string): string | null {
   if (!url) return null;
   
-  // If the input is already just an ID (11 characters of letters, numbers, underscore, and dash)
+  // If the input is already just an ID (exactly 11 characters of letters, numbers, underscore, and dash)
   if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
     return url;
   }
@@ -679,6 +689,7 @@ export function extractYoutubeId(url: string): string | null {
     }
   }
   
+  // If we get here, the input isn't a valid YouTube URL or ID
   return null;
 }
 

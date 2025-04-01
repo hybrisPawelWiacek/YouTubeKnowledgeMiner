@@ -10,12 +10,19 @@
 import puppeteer from 'puppeteer';
 import * as fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { extractYoutubeId as extractId } from '../server/services/youtube';
 
+// ES Module workaround for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Create logs directory if it doesn't exist
-const logDir = './logs/transcript';
+const logDir = path.join(__dirname, '../logs/transcript');
+console.log(`Using log directory: ${logDir}`);
 try {
   if (!fs.existsSync(logDir)) {
+    console.log(`Creating log directory: ${logDir}`);
     fs.mkdirSync(logDir, { recursive: true });
   }
 } catch (error) {
@@ -47,7 +54,7 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
   // Normalize video ID (handle URLs vs IDs)
   const id = videoId.includes('youtube.com') || videoId.includes('youtu.be') 
     ? extractId(videoId) 
-    : videoId;
+    : (/^[a-zA-Z0-9_-]{11}$/.test(videoId) ? videoId : null);
   
   if (!id) {
     logToFile(`Invalid YouTube URL or ID: ${videoId}`);
@@ -57,10 +64,17 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
   logToFile(`Starting Puppeteer transcript extraction for video: ${id}`);
   
   // Launch browser
+  console.log('Launching Puppeteer browser...');
+  const chromiumPath = '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser';
+  console.log(`Using Chromium at: ${chromiumPath}`);
+  
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    timeout: 30000,
+    executablePath: chromiumPath
   });
+  console.log('Browser launched successfully');
   
   try {
     const page = await browser.newPage();
@@ -71,11 +85,21 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
     // Navigate to video
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     logToFile(`Navigating to: ${videoUrl}`);
-    await page.goto(videoUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    console.log(`Navigating to YouTube video: ${videoUrl}`);
+    await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    console.log('Page navigation completed');
     
     // Wait for video player to load
     logToFile('Waiting for video player to load');
-    await page.waitForSelector('.html5-video-container', { timeout: 10000 });
+    console.log('Waiting for video player to load...');
+    try {
+      await page.waitForSelector('.html5-video-container', { timeout: 10000 });
+      console.log('Video player loaded successfully');
+    } catch (error: any) {
+      console.log('Could not find video player, taking screenshot for debugging');
+      await page.screenshot({ path: path.join(logDir, `player-not-found-${id}.png`) });
+      throw new Error('Video player not found: ' + (error.message || 'Unknown error'));
+    }
     
     // Click on "..." button to open menu
     logToFile('Looking for More actions button');
@@ -98,8 +122,8 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
           await new Promise(resolve => setTimeout(resolve, 1000));
           break;
         }
-      } catch (error) {
-        logToFile(`Error clicking selector ${selector}: ${error}`);
+      } catch (error: any) {
+        logToFile(`Error clicking selector ${selector}: ${error?.message || 'Unknown error'}`);
       }
     }
     
@@ -163,8 +187,8 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
           if (transcriptOptionFound) break;
         }
       }
-    } catch (error) {
-      logToFile(`Error finding transcript option: ${error}`);
+    } catch (error: any) {
+      logToFile(`Error finding transcript option: ${error?.message || 'Unknown error'}`);
     }
     
     if (!transcriptOptionFound) {
@@ -271,8 +295,8 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
     
     return transcriptData;
     
-  } catch (error) {
-    logToFile(`Error in Puppeteer transcript extraction: ${error}`);
+  } catch (error: any) {
+    logToFile(`Error in Puppeteer transcript extraction: ${error?.message || 'Unknown error'}`);
     throw error;
   } finally {
     // Close browser
@@ -298,7 +322,16 @@ export async function testExtraction(videoId: string = 'SS5DYx6mPw8') {
     } else {
       console.log('No transcript segments extracted');
     }
-  } catch (error) {
-    console.error('Error:', error);
+  } catch (error: any) {
+    console.error('Error:', error?.message || 'Unknown error');
   }
+}
+
+// When script is run directly, call testExtraction with commandline arg or default
+if (process.argv[1].includes('puppeteer-transcript.ts')) {
+  const videoId = process.argv[2] || 'SS5DYx6mPw8';
+  console.log('Running as standalone script');
+  testExtraction(videoId)
+    .then(() => console.log('Test complete'))
+    .catch(err => console.error('Test failed:', err));
 }
