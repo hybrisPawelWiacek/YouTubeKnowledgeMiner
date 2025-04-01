@@ -71,7 +71,7 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    timeout: 30000,
+    timeout: 20000, // Reduce timeout to 20 seconds
     executablePath: chromiumPath
   });
   console.log('Browser launched successfully');
@@ -101,165 +101,326 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
       throw new Error('Video player not found: ' + (error.message || 'Unknown error'));
     }
     
-    // Click on "..." button to open menu
-    logToFile('Looking for More actions button');
+    // First try expanding the description (newer YouTube UI)
+    logToFile('Looking for "...more" button in description');
+    await page.screenshot({ path: path.join(logDir, `before-more-${id}.png`) });
     
-    // Need to try different selectors as YouTube's UI can vary
-    const moreButtonSelectors = [
-      'button.ytp-button.ytp-settings-button', // Settings gear icon
-      'button[aria-label="More actions"]',
-      '.ytp-right-controls button.ytp-button:nth-child(5)'
-    ];
-    
-    let moreButtonFound = false;
-    for (const selector of moreButtonSelectors) {
-      try {
-        if (await page.$(selector)) {
-          logToFile(`Found more actions button with selector: ${selector}`);
-          await page.click(selector);
-          moreButtonFound = true;
-          // Wait for menu to appear
+    // Try to expand the description if needed
+    try {
+      // Look for the "...more" button in the description
+      const expandButtonSelectors = [
+        'tp-yt-paper-button#expand',
+        'button#expand',
+        'yt-formatted-string#expand',
+        'span#expand'
+      ];
+      
+      for (const selector of expandButtonSelectors) {
+        const expandButton = await page.$(selector);
+        if (expandButton) {
+          logToFile(`Found expand button with selector: ${selector}`);
+          await expandButton.click();
+          logToFile('Clicked expand button');
+          // Wait for description to expand
           await new Promise(resolve => setTimeout(resolve, 1000));
           break;
         }
-      } catch (error: any) {
-        logToFile(`Error clicking selector ${selector}: ${error?.message || 'Unknown error'}`);
       }
+      
+      // Take screenshot after expansion attempt
+      await page.screenshot({ path: path.join(logDir, `after-more-${id}.png`) });
+      
+    } catch (error: any) {
+      logToFile(`Error expanding description: ${error?.message || 'Unknown error'}`);
+      // Continue anyway, the description might already be expanded
     }
     
-    if (!moreButtonFound) {
-      logToFile('Could not find More actions button');
-      throw new Error('Could not find More actions button');
-    }
+    // Now look for the "Show transcript" button
+    logToFile('Looking for "Show transcript" button');
     
-    // Look for "Show transcript" or "Open transcript" option
-    logToFile('Looking for transcript option in menu');
+    let transcriptButtonFound = false;
     
-    // Save screenshot for debugging
-    await page.screenshot({ path: path.join(logDir, `menu-${id}.png`) });
-    
-    // Get all menu items text
-    const menuItems = await page.evaluate(() => {
-      const items = document.querySelectorAll('.ytp-menuitem, .ytp-panel-menu .ytp-menuitem');
-      return Array.from(items).map(item => {
-        return {
-          text: item.textContent?.trim(),
-          ariaLabel: item.getAttribute('aria-label')
-        };
-      });
-    });
-    
-    logToFile(`Menu items found: ${JSON.stringify(menuItems)}`);
-    
-    // Click on "Show transcript" option if found
-    let transcriptOptionFound = false;
-    
-    // First try clicking through the settings menu to find transcript
+    // Try the new UI "Show transcript" button
     try {
-      // Need to find and click on the transcript option
-      // Various selector attempts since YouTube may change its UI
-      const transcriptSelectors = [
-        // Direct transcript button
-        'button[aria-label="Show transcript"], button[aria-label="Open transcript"]',
-        
-        // Try to find by text content containing "transcript"
-        '.ytp-menuitem:nth-child(4)', // Often the 4th item in newer YouTube UI
-        '.ytp-panel-menu button.ytp-menuitem'
+      const transcriptButtonSelectors = [
+        // Various possible selectors for the transcript button
+        'ytd-button-renderer button[aria-label="Show transcript"]',
+        'button[aria-label="Show transcript"]',
+        'ytd-button-renderer:has(span:contains("Show transcript"))',
+        'button:has(span:contains("Show transcript"))'
       ];
       
-      for (const selector of transcriptSelectors) {
-        const elements = await page.$$(selector);
+      // Use evaluate to find by text content since some selectors might not work directly
+      const transcriptButtonsByText = await page.evaluate(() => {
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        return allButtons
+          .filter(button => {
+            const text = button.textContent?.trim().toLowerCase();
+            return text && text.includes('transcript');
+          })
+          .map(button => {
+            return {
+              text: button.textContent?.trim(),
+              ariaLabel: button.getAttribute('aria-label')
+            };
+          });
+      });
+      
+      logToFile(`Found buttons by text content: ${JSON.stringify(transcriptButtonsByText)}`);
+      
+      // Try clicking each selector
+      for (const selector of transcriptButtonSelectors) {
+        try {
+          const buttons = await page.$$(selector);
+          if (buttons.length > 0) {
+            logToFile(`Found transcript button with selector: ${selector}`);
+            await buttons[0].click();
+            transcriptButtonFound = true;
+            // Wait for transcript panel to appear
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            break;
+          }
+        } catch (error: any) {
+          logToFile(`Error with selector ${selector}: ${error?.message || 'Unknown error'}`);
+        }
+      }
+      
+      // If selectors didn't work, try another approach with evaluation
+      if (!transcriptButtonFound) {
+        logToFile('Trying to find and click transcript button by text content');
         
-        if (elements.length > 0) {
-          // Check each element
-          for (const element of elements) {
-            const text = await page.evaluate(el => el.textContent, element);
-            logToFile(`Found menu item: ${text}`);
-            
-            if (text && text.toLowerCase().includes('transcript')) {
-              logToFile(`Found transcript option: ${text}`);
-              await element.click();
-              transcriptOptionFound = true;
-              break;
+        // Click button by content
+        const clickedByText = await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          for (const button of buttons) {
+            if (button.textContent?.toLowerCase().includes('transcript')) {
+              // Cast to HTMLButtonElement to access click method
+              (button as HTMLButtonElement).click();
+              return true;
             }
           }
-          
-          if (transcriptOptionFound) break;
+          return false;
+        });
+        
+        if (clickedByText) {
+          logToFile('Clicked transcript button by text content');
+          transcriptButtonFound = true;
+          // Wait for transcript panel to appear
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
     } catch (error: any) {
-      logToFile(`Error finding transcript option: ${error?.message || 'Unknown error'}`);
+      logToFile(`Error finding transcript button: ${error?.message || 'Unknown error'}`);
     }
     
-    if (!transcriptOptionFound) {
-      // Plan B: Toggle transcript with keyboard shortcut
-      logToFile('Trying keyboard shortcut to open transcript');
-      await page.keyboard.down('Control');
-      await page.keyboard.press('KeyJ');
-      await page.keyboard.up('Control');
-      
-      // Wait to see if transcript appears
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Take screenshot to check if transcript panel appeared
-      await page.screenshot({ path: path.join(logDir, `transcript-panel-${id}.png`) });
+    // Check if we found the transcript button in the new UI
+    if (!transcriptButtonFound) {
+      // Fall back to the old UI method (settings menu)
+      try {
+        logToFile('Falling back to settings menu method');
+        
+        // Click settings gear icon
+        const settingsButton = await page.$('button.ytp-button.ytp-settings-button');
+        if (settingsButton) {
+          logToFile('Found settings button');
+          await settingsButton.click();
+          // Wait for menu to appear
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Look for transcript option in menu
+          const menuItems = await page.evaluate(() => {
+            const items = document.querySelectorAll('.ytp-menuitem');
+            return Array.from(items).map(item => ({
+              text: item.textContent?.trim()
+            }));
+          });
+          
+          logToFile(`Menu items: ${JSON.stringify(menuItems)}`);
+          
+          // Click on transcript option if found
+          const clickedTranscript = await page.evaluate(() => {
+            const itemsList = document.querySelectorAll('.ytp-menuitem');
+            // Manual iteration to avoid TypeScript NodeList iteration issues
+            for (let i = 0; i < itemsList.length; i++) {
+              const item = itemsList[i];
+              if (item.textContent?.toLowerCase().includes('transcript')) {
+                // Cast to HTMLElement to access click method
+                (item as HTMLElement).click();
+                return true;
+              }
+            }
+            return false;
+          });
+          
+          if (clickedTranscript) {
+            logToFile('Clicked transcript option in settings menu');
+            transcriptButtonFound = true;
+            // Wait for transcript to appear
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      } catch (error: any) {
+        logToFile(`Error with settings menu approach: ${error?.message || 'Unknown error'}`);
+      }
     }
+    
+    // If all previous methods failed, try the keyboard shortcut
+    if (!transcriptButtonFound) {
+      logToFile('Trying keyboard shortcut for transcript');
+      try {
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyJ');
+        await page.keyboard.up('Control');
+        
+        // Wait to see if transcript appears
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        transcriptButtonFound = true;
+      } catch (error: any) {
+        logToFile(`Error with keyboard shortcut: ${error?.message || 'Unknown error'}`);
+      }
+    }
+    
+    // Take screenshot to verify transcript panel state
+    await page.screenshot({ path: path.join(logDir, `transcript-panel-${id}.png`) });
     
     // Wait for transcript panel to load
     logToFile('Waiting for transcript panel to load');
     
-    // Wait for transcript segments to appear
+    // Wait for transcript segments to appear using new YouTube UI structure
     const transcriptSelectors = [
-      'ytd-transcript-segment-renderer',
-      'yt-formatted-string.segment-text',
-      '.ytd-transcript-segment-renderer',
-      '.transcript-segment'
+      'ytd-transcript-segment-renderer', // New YouTube UI main segment element
+      'div.segment.style-scope.ytd-transcript-segment-renderer', // Inner segment div
+      'yt-formatted-string.segment-text', // Text element
+      '.ytd-transcript-segment-renderer', // General selector
+      '.transcript-segment' // Older structure
     ];
     
     let transcriptSelector = '';
     for (const selector of transcriptSelectors) {
-      if (await page.$(selector)) {
-        transcriptSelector = selector;
-        logToFile(`Found transcript segments with selector: ${selector}`);
-        break;
+      try {
+        const hasSelector = await page.$(selector);
+        if (hasSelector) {
+          transcriptSelector = selector;
+          logToFile(`Found transcript segments with selector: ${selector}`);
+          break;
+        }
+      } catch (error: any) {
+        logToFile(`Error checking selector ${selector}: ${error?.message || 'Unknown error'}`);
       }
     }
     
     if (!transcriptSelector) {
-      logToFile('Could not find transcript segments in the page');
+      logToFile('Could not find transcript segments with predefined selectors');
       
-      // Last attempt: Check if transcript is in a different part of the UI
-      // Take a screenshot to debug
-      await page.screenshot({ path: path.join(logDir, `final-state-${id}.png`) });
+      // Check for engagement panel that contains transcript
+      const hasEngagementPanel = await page.$('ytd-engagement-panel-section-list-renderer');
+      if (hasEngagementPanel) {
+        logToFile('Found engagement panel, checking for transcript content');
+        
+        // Take screenshot of the transcript panel
+        await page.screenshot({ path: path.join(logDir, `transcript-panel-found-${id}.png`) });
+        
+        // Try to determine the selector from the engagement panel
+        const panelContents = await page.evaluate(() => {
+          const panel = document.querySelector('ytd-engagement-panel-section-list-renderer');
+          if (panel) {
+            // Check if it has transcript title
+            const title = panel.querySelector('h2#title yt-formatted-string');
+            const isTranscriptPanel = title && title.textContent?.includes('Transcript');
+            
+            if (isTranscriptPanel) {
+              // Find segment containers
+              // Convert NodeList to Array explicitly for TypeScript compatibility
+              const elements = panel.querySelectorAll('*');
+              const segmentRenderers = [];
+              
+              // Manually iterate over NodeList to avoid TypeScript issues
+              for (let i = 0; i < elements.length; i++) {
+                const el = elements[i];
+                if (el.tagName.toLowerCase().includes('segment') || 
+                    (typeof el.className === 'string' && el.className.includes('segment'))) {
+                  segmentRenderers.push(el);
+                }
+              }
+              
+              // Map elements to selector strings
+              const possibleSelectors = segmentRenderers.map(el => {
+                const tagName = el.tagName.toLowerCase();
+                const id = el.id ? `#${el.id}` : '';
+                const className = typeof el.className === 'string' && el.className ? 
+                  `.${el.className.split(' ').join('.')}` : '';
+                return `${tagName}${id}${className}`;
+              }).filter(Boolean);
+              
+              return {
+                isTranscriptPanel: true,
+                possibleSelectors
+              };
+            }
+          }
+          return { isTranscriptPanel: false, possibleSelectors: [] };
+        });
+        
+        logToFile(`Panel contents: ${JSON.stringify(panelContents)}`);
+        
+        if (panelContents.isTranscriptPanel && panelContents.possibleSelectors.length > 0) {
+          transcriptSelector = panelContents.possibleSelectors[0];
+          logToFile(`Using dynamically discovered selector: ${transcriptSelector}`);
+        }
+      }
       
-      // Search entire page for anything containing transcript-related elements
-      const pageContent = await page.content();
-      fs.writeFileSync(path.join(logDir, `page-content-${id}.html`), pageContent);
-      
-      throw new Error('Transcript not found or not available for this video');
+      // If still no selector, try final approaches
+      if (!transcriptSelector) {
+        // Take a screenshot to debug
+        await page.screenshot({ path: path.join(logDir, `final-state-${id}.png`) });
+        
+        // Grab page content for debugging
+        const pageContent = await page.content();
+        fs.writeFileSync(path.join(logDir, `page-content-${id}.html`), pageContent);
+        
+        throw new Error('Transcript segments not found or not available for this video');
+      }
     }
     
     // Extract transcript segments
-    logToFile('Extracting transcript segments');
+    logToFile(`Extracting transcript segments using selector: ${transcriptSelector}`);
     
-    // Wait a moment for all transcript segments to load
+    // Wait for all segments to fully load
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Extract transcript segments
-    const transcriptData = await page.evaluate((selector) => {
-      const segments = document.querySelectorAll(selector);
-      return Array.from(segments).map(segment => {
-        // Try to find timestamp and text based on different possible structures
-        let timestampElement = segment.querySelector('.segment-timestamp') || 
-                               segment.querySelector('span[start-time]') ||
-                               segment.querySelector('.ytd-transcript-segment-renderer span');
+    // Extract transcript segments with updated approach for new YouTube UI
+    const transcriptData = await page.evaluate(() => {
+      // Find all transcript segments regardless of exact structure
+      // This is more resilient to YouTube UI changes
+      // Convert NodeList to Array explicitly to avoid iteration issues
+      const segments = Array.from(document.querySelectorAll('ytd-transcript-segment-renderer, div.segment'));
+      
+      return segments.map(segment => {
+        // Find timestamp - look for common patterns in YouTube's transcript UI
+        let timestampElement = 
+          segment.querySelector('.segment-timestamp') || // Standard class
+          segment.querySelector('div[class*="timestamp"]') || // Any element with timestamp in class
+          segment.querySelector('div:first-child div') || // First child div (often contains timestamp)
+          segment.querySelector('[start-time]'); // Element with start-time attribute
         
-        let textElement = segment.querySelector('.segment-text') || 
-                          segment.querySelector('yt-formatted-string') ||
-                          segment;
+        // Find text element - various ways YouTube might structure it
+        let textElement = 
+          segment.querySelector('.segment-text') || 
+          segment.querySelector('yt-formatted-string') ||
+          segment.querySelector('span:not([class*="timestamp"])') || // Any non-timestamp span
+          segment;
         
-        // Get the timestamp
-        let timestamp = timestampElement ? timestampElement.textContent?.trim() : '';
+        // Extract timestamp text
+        let timestamp = '';
+        if (timestampElement) {
+          timestamp = timestampElement.textContent?.trim() || '';
+        }
+        
+        // Extract text content
+        let text = '';
+        if (textElement) {
+          text = textElement.textContent?.trim() || '';
+        }
         
         // Convert timestamp to seconds
         let startSeconds = 0;
@@ -274,16 +435,13 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
           }
         }
         
-        // Get the text
-        let text = textElement ? textElement.textContent?.trim() : '';
-        
         return {
           text: text || '',
           startTime: timestamp || '',
           startSeconds: startSeconds
         };
       });
-    }, transcriptSelector);
+    });
     
     logToFile(`Extracted ${transcriptData.length} transcript segments`);
     
