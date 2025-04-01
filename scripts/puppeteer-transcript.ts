@@ -71,7 +71,7 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    timeout: 20000, // Reduce timeout to 20 seconds
+    timeout: 15000, // Reduce timeout to 15 seconds
     executablePath: chromiumPath
   });
   console.log('Browser launched successfully');
@@ -86,7 +86,7 @@ export async function extractYoutubeTranscript(videoId: string): Promise<Transcr
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     logToFile(`Navigating to: ${videoUrl}`);
     console.log(`Navigating to YouTube video: ${videoUrl}`);
-    await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     console.log('Page navigation completed');
     
     // Wait for video player to load
