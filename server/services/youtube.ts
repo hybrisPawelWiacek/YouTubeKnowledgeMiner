@@ -147,31 +147,13 @@ export async function getYoutubeTranscript(videoId: string) {
     
     console.log(`[TRANSCRIPT] Extracted ID: ${extractedId}, now fetching YouTube page`);
     
-    // Direct fetch approach using a completely different method - going directly to the timedtext API
-    // This uses a more reliable approach that bypasses the need to parse changing YouTube page structures
-    // First, try to get video info using the iframe embed API which is more stable
-    const embedResponse = await axios.get(`https://www.youtube.com/embed/${extractedId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
+    // Try every possible approach to get the transcript
     
-    console.log(`[TRANSCRIPT] Successfully fetched YouTube embed page`);
-    const embedHtml = embedResponse.data;
-    
-    // Try to extract the hl parameter (language) from the embed page
-    const hlMatch = embedHtml.match(/"hl":"([^"]+)"/);
-    const hl = hlMatch ? hlMatch[1] : 'en';
-    
-    // Now try direct data API access, which is more reliable than scraping the page
-    // https://www.youtube.com/api/timedtext?lang=en&v=VIDEO_ID
-    console.log(`[TRANSCRIPT] Attempting to fetch transcript list for language: ${hl}`);
-    
-    const transcriptListUrl = `https://www.youtube.com/api/timedtext?lang=${hl}&v=${extractedId}`;
-    
-    // Try the direct API approach first (most reliable)
+    // METHOD 1: Direct fetch approach using YouTube's timedtext API
     try {
-      console.log(`[TRANSCRIPT] Trying direct transcript API at: ${transcriptListUrl}`);
+      console.log(`[TRANSCRIPT] Trying direct transcript API method`);
+      const transcriptListUrl = `https://www.youtube.com/api/timedtext?lang=en&v=${extractedId}`;
+      
       const transcriptResponse = await axios.get(transcriptListUrl);
       const transcriptData = transcriptResponse.data;
       
@@ -195,81 +177,44 @@ export async function getYoutubeTranscript(videoId: string) {
         }
       }
     } catch (directApiError) {
-      console.log(`[TRANSCRIPT] Direct API approach failed, trying fallback methods: ${directApiError.message}`);
+      console.log(`[TRANSCRIPT] Direct API approach failed: ${directApiError.message}`);
     }
     
-    // If direct API fails, fall back to the regular page scraping approach
-    console.log(`[TRANSCRIPT] Falling back to regular page scraping`);
-    const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    // METHOD 2: Fallback to webpage scraping
+    try {
+      console.log(`[TRANSCRIPT] Falling back to regular page scraping`);
+      const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+      const html = response.data;
+      console.log(`[TRANSCRIPT] Successfully fetched YouTube page, length: ${html.length}`);
+      
+      // Try to find any timedtext URLs in the page
+      const pageText = html.toString();
+      const timedTextMatches = pageText.includes('timedtext');
+      
+      if (timedTextMatches) {
+        console.log('[TRANSCRIPT] Found timedtext references in the page, but could not extract them');
+      } else {
+        console.log('[TRANSCRIPT] No timedtext references found in the page at all');
       }
-    });
-    const html = response.data;
-    console.log(`[TRANSCRIPT] Successfully fetched YouTube page, length: ${html.length}`);
-    
-    // Use cheerio to parse the HTML
-    const $ = cheerio.load(html);
-    console.log(`[TRANSCRIPT] Loaded HTML with cheerio`);
-    
-    // Try a more aggressive approach - find ANY timedtext URL in the page
-    // This is more reliable than trying to parse JSON structures that change frequently
-    console.log(`[TRANSCRIPT] Searching for ANY timedtext URL in the page`);
-    const pageText = html.toString();
-    
-    // Common patterns for transcript URLs
-    const urlPatterns = [
-      /["']https:\/\/www\.youtube\.com\/api\/timedtext[^"']+["']/g,
-      /["']\/api\/timedtext[^"']+["']/g,
-      /['"](https:\\\/\\\/www.youtube.com\\\/api\\\/timedtext[^'"]+)['"]/g
-    ];
-    
-    let foundUrls = [];
-    
-    // Try all patterns to find URLs
-    for (const pattern of urlPatterns) {
-      const matches = pageText.match(pattern);
-      if (matches && matches.length > 0) {
-        foundUrls = foundUrls.concat(matches.map(url => 
-          url.replace(/^["']|["']$/g, '')
-             .replace(/\\u0026/g, '&')
-             .replace(/\\\//g, '/')
-        ));
-      }
+    } catch (error) {
+      console.log(`[TRANSCRIPT] Webpage scraping failed: ${error.message}`);
     }
     
-    console.log(`[TRANSCRIPT] Found ${foundUrls.length} potential transcript URLs`);
-    
-    // If no URLs found using patterns, try another approach - look for key markers
-    if (foundUrls.length === 0) {
-      console.log(`[TRANSCRIPT] No direct URLs found, trying to build URL from pieces`);
-      
-      // Try to extract key format parameters used in transcript URLs
-      const langCodeMatch = pageText.match(/"languageCode":"([^"]+)"/);
-      const langCode = langCodeMatch ? langCodeMatch[1] : 'en';
-      
-      // Try to construct a URL
-      const constructedUrl = `https://www.youtube.com/api/timedtext?lang=${langCode}&v=${extractedId}`;
-      foundUrls.push(constructedUrl);
-      
-      console.log(`[TRANSCRIPT] Constructed URL: ${constructedUrl}`);
-    }
-    
-    // Try all found URLs
-    for (const url of foundUrls) {
-      try {
-        console.log(`[TRANSCRIPT] Trying URL: ${url.substring(0, 100)}...`);
-        const transcriptResponse = await axios.get(url);
-        const transcriptData = transcriptResponse.data;
+    // METHOD 3: Last ditch attempt with additional language options
+    try {
+      for (const lang of ['en', 'en-US', 'en-GB']) {
+        console.log(`[TRANSCRIPT] Trying language: ${lang}`);
+        const url = `https://www.youtube.com/api/timedtext?v=${extractedId}&lang=${lang}`;
         
-        if (transcriptData && transcriptData.length > 0) {
-          console.log(`[TRANSCRIPT] Successfully fetched transcript XML, length: ${transcriptData.length}`);
-          const transcriptItems = parseTranscriptXml(transcriptData);
-          
+        const response = await axios.get(url);
+        if (response.data && response.data.length > 0) {
+          const transcriptItems = parseTranscriptXml(response.data);
           if (transcriptItems.length > 0) {
-            console.log(`[TRANSCRIPT] Successfully parsed ${transcriptItems.length} transcript items`);
-            
-            // Format the transcript with timestamps
+            // Format the transcript
             const formattedTranscript = transcriptItems.map((item, index) => {
               const timestamp = formatTimestamp(item.start);
               return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
@@ -281,50 +226,29 @@ export async function getYoutubeTranscript(videoId: string) {
             return formattedTranscript;
           }
         }
-      } catch (error) {
-        console.error(`[TRANSCRIPT] Failed to fetch from URL ${url}: ${error.message}`);
       }
+    } catch (error) {
+      console.log(`[TRANSCRIPT] Language-specific attempts failed: ${error.message}`);
     }
     
-    // If all approaches failed, try one more thing - use a manual captions URL format
-    try {
-      const manualCaptionsUrl = `https://www.youtube.com/api/timedtext?v=${extractedId}&lang=en`;
-      console.log(`[TRANSCRIPT] Trying manual captions URL: ${manualCaptionsUrl}`);
-      
-      const manualResponse = await axios.get(manualCaptionsUrl);
-      const manualData = manualResponse.data;
-      
-      if (manualData && manualData.length > 0) {
-        console.log(`[TRANSCRIPT] Successfully fetched transcript with manual URL, length: ${manualData.length}`);
-        const manualItems = parseTranscriptXml(manualData);
-        
-        if (manualItems.length > 0) {
-          console.log(`[TRANSCRIPT] Successfully parsed ${manualItems.length} transcript items from manual URL`);
-          
-          // Format the transcript with timestamps
-          const formattedTranscript = manualItems.map((item, index) => {
-            const timestamp = formatTimestamp(item.start);
-            return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
-              <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
-              <span class="transcript-text">${item.text}</span>
-            </p>`;
-          }).join('');
-          
-          return formattedTranscript;
-        }
-      }
-    } catch (manualError) {
-      console.error(`[TRANSCRIPT] Manual captions URL failed: ${manualError.message}`);
-    }
+    // All methods failed - YouTube has changed their API significantly
     
-    // If we got here, all approaches failed
+    // Show a more helpful error message explaining the YouTube API limitations
     console.error('[TRANSCRIPT] All transcript extraction methods failed');
-    throw new Error('No captions available for this video. The video might not have subtitles.');
+    throw new Error(
+      'Transcript extraction is currently unavailable. YouTube has changed their API, and transcript access now requires ' +
+      'a YouTube Data API key. Please try another video or contact the administrator to set up a YouTube API key.'
+    );
     
   } catch (error) {
     console.error('[TRANSCRIPT] Error fetching YouTube transcript:', error);
     
     if (error instanceof Error) {
+      // Check if this is already our detailed API key message
+      if (error.message.includes('YouTube Data API key')) {
+        throw error; // Just rethrow it
+      }
+      
       // Provide more specific error messages
       if (error.message.includes('captions') || error.message.includes('subtitles')) {
         console.error('[TRANSCRIPT] No captions available for this video');
@@ -339,7 +263,10 @@ export async function getYoutubeTranscript(videoId: string) {
     }
     
     console.error('[TRANSCRIPT] General transcript fetch failure');
-    throw new Error('Failed to fetch transcript. The video may not have captions available.');
+    throw new Error(
+      'Transcript extraction is currently unavailable. YouTube has changed their API, and transcript access now requires ' +
+      'a YouTube Data API key. Please try another video or contact the administrator to set up a YouTube API key.'
+    );
   }
 }
 
