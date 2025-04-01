@@ -136,13 +136,16 @@ function getBestThumbnail(thumbnails: any): string {
 // Function to get transcript from YouTube video using direct URL approach
 export async function getYoutubeTranscript(videoId: string) {
   try {
-    console.log(`Fetching transcript for video ID: ${videoId}`);
+    console.log(`[TRANSCRIPT] Fetching transcript for video ID: ${videoId}`);
     
     // Extract the YouTube ID if a full URL was provided
     const extractedId = extractYoutubeId(videoId);
     if (!extractedId) {
+      console.error('[TRANSCRIPT] Invalid YouTube URL or ID');
       throw new Error('Invalid YouTube URL or ID');
     }
+    
+    console.log(`[TRANSCRIPT] Extracted ID: ${extractedId}, now fetching YouTube page`);
     
     // Direct fetch approach using the YouTube transcript endpoint
     // Always use the extracted ID for consistency
@@ -152,28 +155,36 @@ export async function getYoutubeTranscript(videoId: string) {
       }
     });
     const html = response.data;
+    console.log(`[TRANSCRIPT] Successfully fetched YouTube page, length: ${html.length}`);
     
     // Use cheerio to parse the HTML
     const $ = cheerio.load(html);
+    console.log(`[TRANSCRIPT] Loaded HTML with cheerio`);
     
     // Extract the transcript data using patterns found in YouTube pages
     const scriptContent = $('script').map((i, el) => $(el).html()).get().join('');
+    console.log(`[TRANSCRIPT] Extracted script content, length: ${scriptContent.length}`);
     
     // Look for the captionTracks data in the script content
     const captionRegex = /"captionTracks":\s*(\[.*?\])/;
     const match = scriptContent.match(captionRegex);
     
     if (!match || !match[1]) {
+      console.error('[TRANSCRIPT] No caption tracks found in script content');
       throw new Error('No captions available for this video. The video might not have subtitles.');
     }
+    
+    console.log(`[TRANSCRIPT] Found caption tracks in script content, now parsing`);
     
     // Parse the JSON data
     const captionTracksJson = match[1].replace(/\\"/g, '"').replace(/\\u0026/g, '&');
     
     try {
       const captionTracks = JSON.parse(captionTracksJson);
+      console.log(`[TRANSCRIPT] Parsed caption tracks, found ${captionTracks.length} tracks`);
       
       if (captionTracks.length === 0) {
+        console.error('[TRANSCRIPT] Caption tracks array is empty');
         throw new Error('No caption tracks available for this video.');
       }
       
@@ -184,25 +195,34 @@ export async function getYoutubeTranscript(videoId: string) {
       
       // If no English track, just use the first one
       if (!selectedTrack) {
+        console.log('[TRANSCRIPT] No English track found, using first available track');
         selectedTrack = captionTracks[0];
+      } else {
+        console.log('[TRANSCRIPT] Found English track');
       }
       
       if (!selectedTrack || !selectedTrack.baseUrl) {
+        console.error('[TRANSCRIPT] Selected track has no baseUrl');
         throw new Error('Could not find a valid caption track.');
       }
+      
+      console.log(`[TRANSCRIPT] Using caption track URL: ${selectedTrack.baseUrl.substring(0, 100)}...`);
       
       // Fetch the transcript XML
       const transcriptResponse = await axios.get(selectedTrack.baseUrl);
       const transcriptData = transcriptResponse.data;
+      console.log(`[TRANSCRIPT] Successfully fetched transcript XML, length: ${transcriptData.length}`);
       
       // Parse the transcript XML data
       const transcriptItems = parseTranscriptXml(transcriptData);
+      console.log(`[TRANSCRIPT] Parsed transcript XML into ${transcriptItems.length} items`);
       
       if (transcriptItems.length === 0) {
+        console.error('[TRANSCRIPT] Transcript items array is empty after parsing');
         throw new Error('Transcript data was empty or could not be parsed.');
       }
       
-      console.log(`Successfully parsed ${transcriptItems.length} transcript items`);
+      console.log(`[TRANSCRIPT] Successfully parsed ${transcriptItems.length} transcript items`);
       
       // Format the transcript with timestamps
       const formattedTranscript = transcriptItems.map((item, index) => {
@@ -214,27 +234,32 @@ export async function getYoutubeTranscript(videoId: string) {
         </p>`;
       }).join('');
       
+      console.log(`[TRANSCRIPT] Returning formatted transcript with ${transcriptItems.length} items`);
       return formattedTranscript;
       
     } catch (parseError) {
-      console.error('Error parsing caption tracks:', parseError);
+      console.error('[TRANSCRIPT] Error parsing caption tracks:', parseError);
       throw new Error('Failed to parse caption data.');
     }
     
   } catch (error) {
-    console.error('Error fetching YouTube transcript:', error);
+    console.error('[TRANSCRIPT] Error fetching YouTube transcript:', error);
     
     if (error instanceof Error) {
       // Provide more specific error messages
       if (error.message.includes('captions') || error.message.includes('subtitles')) {
+        console.error('[TRANSCRIPT] No captions available for this video');
         throw new Error('This video does not have captions available. Try a different video.');
       } else if (error.message.includes('network')) {
+        console.error('[TRANSCRIPT] Network error');
         throw new Error('Network error while fetching transcript. Please try again later.');
       } else if (error.message.includes('language')) {
+        console.error('[TRANSCRIPT] Language not supported');
         throw new Error('Transcript is not available in a supported language.');
       }
     }
     
+    console.error('[TRANSCRIPT] General transcript fetch failure');
     throw new Error('Failed to fetch transcript. The video may not have captions available.');
   }
 }
