@@ -1,22 +1,922 @@
 [
   {
-    "text": "All right, so here we are in front of the elephants.",
+    "text": "Martin, it seems like AI is everywhere these days.",
     "startTime": "0:00",
     "startSeconds": 0
   },
   {
-    "text": "The cool thing about these guys is that they have really, really, really long trunks.",
+    "text": "Finally, we have a computer that actually understands my language instead of me having to learn its language.",
     "startTime": "0:03",
     "startSeconds": 3
   },
   {
-    "text": "And that's cool.",
+    "text": "A system that understands me.",
     "startTime": "0:08",
     "startSeconds": 8
   },
   {
-    "text": "And that's pretty much all there is to say.",
-    "startTime": "0:12",
-    "startSeconds": 12
+    "text": "For instance, what if I'm looking to buy a new car and I need to do some research on the alternatives?",
+    "startTime": "0:10",
+    "startSeconds": 10
+  },
+  {
+    "text": "Yeah, you could tell the chatbot to act as a car expert and then you can ask it,",
+    "startTime": "0:16",
+    "startSeconds": 16
+  },
+  {
+    "text": "what would be the difference in cost to operate a gas powered car versus",
+    "startTime": "0:21",
+    "startSeconds": 21
+  },
+  {
+    "text": "a hybrid car versus an EV car and then get guidance on the decision.",
+    "startTime": "0:25",
+    "startSeconds": 25
+  },
+  {
+    "text": "And if it helped me find a rebate from the power company, it could pay for itself in just one instance,",
+    "startTime": "0:29",
+    "startSeconds": 29
+  },
+  {
+    "text": "and if I enjoyed tinkering and DIY projects,",
+    "startTime": "0:36",
+    "startSeconds": 36
+  },
+  {
+    "text": "wouldn't it be cool to learn how the technology works and host my very own instance of all of this?",
+    "startTime": "0:39",
+    "startSeconds": 39
+  },
+  {
+    "text": "Yeah, very cool.",
+    "startTime": "0:44",
+    "startSeconds": 44
+  },
+  {
+    "text": "And in fact, we have a colleague,",
+    "startTime": "0:45",
+    "startSeconds": 45
+  },
+  {
+    "text": "Robert Murray, who has done just that with equipment in his own home office.",
+    "startTime": "0:47",
+    "startSeconds": 47
+  },
+  {
+    "text": "Wait, you mean without a server farm of GPUs that dim the lights every time you ask it to do something?",
+    "startTime": "0:52",
+    "startSeconds": 52
+  },
+  {
+    "text": "Absolutely.",
+    "startTime": "0:58",
+    "startSeconds": 58
+  },
+  {
+    "text": "So let's bring him in to tell us how he did it.",
+    "startTime": "0:58",
+    "startSeconds": 58
+  },
+  {
+    "text": "Today, requests to Generative AI typically connect to an AI model",
+    "startTime": "1:02",
+    "startSeconds": 62
+  },
+  {
+    "text": "hosted somewhere on a cloud,",
+    "startTime": "1:05",
+    "startSeconds": 65
+  },
+  {
+    "text": "but Robert here has built an infrastructure",
+    "startTime": "1:07",
+    "startSeconds": 67
+  },
+  {
+    "text": "to host AI models like Llama 3 and IBM's Granite",
+    "startTime": "1:10",
+    "startSeconds": 70
+  },
+  {
+    "text": "on his own personal infrastructure. So Robert, I want to understand how you did this.",
+    "startTime": "1:14",
+    "startSeconds": 74
+  },
+  {
+    "text": "Absolutely.",
+    "startTime": "1:20",
+    "startSeconds": 80
+  },
+  {
+    "text": "o let's start with this box, which represents your computer at home.",
+    "startTime": "1:20",
+    "startSeconds": 80
+  },
+  {
+    "text": "So tell me sort of the stack that you built here.",
+    "startTime": "1:25",
+    "startSeconds": 85
+  },
+  {
+    "text": "Sure. So I started with Windows 11.",
+    "startTime": "1:28",
+    "startSeconds": 88
+  },
+  {
+    "text": "All right, so it's just a straight up.",
+    "startTime": "1:31",
+    "startSeconds": 91
+  },
+  {
+    "text": "Because I have it.",
+    "startTime": "1:32",
+    "startSeconds": 92
+  },
+  {
+    "text": "Yeah, ok.",
+    "startTime": "1:34",
+    "startSeconds": 94
+  },
+  {
+    "text": "That was the reason, just because it's there.",
+    "startTime": "1:35",
+    "startSeconds": 95
+  },
+  {
+    "text": "It's there.",
+    "startTime": "1:37",
+    "startSeconds": 97
+  },
+  {
+    "text": "OK, so you've got Wins 11, and then what's on top of that?",
+    "startTime": "1:38",
+    "startSeconds": 98
+  },
+  {
+    "text": "Well, I unleashed WSL2.",
+    "startTime": "1:41",
+    "startSeconds": 101
+  },
+  {
+    "text": "Now you're gonna have to tell me what WSL2 does.",
+    "startTime": "1:45",
+    "startSeconds": 105
+  },
+  {
+    "text": "It's basically Linux on Windows.",
+    "startTime": "1:48",
+    "startSeconds": 108
+  },
+  {
+    "text": "I'm going to think that there's probably a virtualization layer coming.",
+    "startTime": "1:51",
+    "startSeconds": 111
+  },
+  {
+    "text": "Yes, there definitely is and that is Docker.",
+    "startTime": "1:54",
+    "startSeconds": 114
+  },
+  {
+    "text": "Ok, Docker is running on top of all of this.",
+    "startTime": "1:58",
+    "startSeconds": 118
+  },
+  {
+    "text": "Now, we need some AI models. So where did you get your AI models from?",
+    "startTime": "2:01",
+    "startSeconds": 121
+  },
+  {
+    "text": "I pulled them down from Ollama.com.",
+    "startTime": "2:09",
+    "startSeconds": 129
+  },
+  {
+    "text": "OK, so if we take a look at the AI models, what are some of the models that you actually took?",
+    "startTime": "2:12",
+    "startSeconds": 132
+  },
+  {
+    "text": "Oh, so I started with Granite.",
+    "startTime": "2:18",
+    "startSeconds": 138
+  },
+  {
+    "text": "Right, IBM's granite model, yeah.",
+    "startTime": "2:20",
+    "startSeconds": 140
+  },
+  {
+    "text": "Llama,",
+    "startTime": "2:22",
+    "startSeconds": 142
+  },
+  {
+    "text": "and there's so many other models that you can pull down.",
+    "startTime": "2:24",
+    "startSeconds": 144
+  },
+  {
+    "text": "Yeah.",
+    "startTime": "2:27",
+    "startSeconds": 147
+  },
+  {
+    "text": "They're there, Open source.",
+    "startTime": "2:28",
+    "startSeconds": 148
+  },
+  {
+    "text": "A whole bunch of open source models.",
+    "startTime": "2:29",
+    "startSeconds": 149
+  },
+  {
+    "text": "Okay, so we've got a Docker machine",
+    "startTime": "2:31",
+    "startSeconds": 151
+  },
+  {
+    "text": "here with Windows 11, WSL2.",
+    "startTime": "2:32",
+    "startSeconds": 152
+  },
+  {
+    "text": "You've downloaded these models from Ollama.",
+    "startTime": "2:36",
+    "startSeconds": 156
+  },
+  {
+    "text": "Is this now the solution?",
+    "startTime": "2:38",
+    "startSeconds": 158
+  },
+  {
+    "text": "Well, I actually can use this. I can run all this right from the command line.",
+    "startTime": "2:41",
+    "startSeconds": 161
+  },
+  {
+    "text": "Wow. Okay. So you can open a terminal window and then start chatting with Llama or Granite.",
+    "startTime": "2:44",
+    "startSeconds": 164
+  },
+  {
+    "text": "Yes. Very, very fast.",
+    "startTime": "2:49",
+    "startSeconds": 169
+  },
+  {
+    "text": "But most of the AM models that are cloud hosted,",
+    "startTime": "2:50",
+    "startSeconds": 170
+  },
+  {
+    "text": "you do that on a chat interface, a UI. So how are you able to add a UI to all of this?",
+    "startTime": "2:53",
+    "startSeconds": 173
+  },
+  {
+    "text": "Docker containers.",
+    "startTime": "2:59",
+    "startSeconds": 179
+  },
+  {
+    "text": "Ah, okay, all right.",
+    "startTime": "3:01",
+    "startSeconds": 181
+  },
+  {
+    "text": "So let's put some Docker containers in. What did you have for the UI?",
+    "startTime": "3:02",
+    "startSeconds": 182
+  },
+  {
+    "text": "I used Open WebUI.",
+    "startTime": "3:05",
+    "startSeconds": 185
+  },
+  {
+    "text": "It's one of the many solutions that a person could use, but I found this to be extraordinarily helpful.",
+    "startTime": "3:06",
+    "startSeconds": 186
+  },
+  {
+    "text": "Ok.",
+    "startTime": "3:13",
+    "startSeconds": 193
+  },
+  {
+    "text": "It's easy to use.",
+    "startTime": "3:13",
+    "startSeconds": 193
+  },
+  {
+    "text": "Yeah! So with Open WebUI, you can just open up a browser",
+    "startTime": "3:14",
+    "startSeconds": 194
+  },
+  {
+    "text": "and then chat with the model, pick the model you want, and send requests to it.",
+    "startTime": "3:18",
+    "startSeconds": 198
+  },
+  {
+    "text": "And there I was, and that's what I was working with for a long time right out of my home.",
+    "startTime": "3:21",
+    "startSeconds": 201
+  },
+  {
+    "text": "But what if you're on the go?",
+    "startTime": "3:26",
+    "startSeconds": 206
+  },
+  {
+    "text": "Well, that's where another container comes in.",
+    "startTime": "3:29",
+    "startSeconds": 209
+  },
+  {
+    "text": "Okay, what have you got here?",
+    "startTime": "3:32",
+    "startSeconds": 212
+  },
+  {
+    "text": "So it's a VPN container configured with my own domain.",
+    "startTime": "3:34",
+    "startSeconds": 214
+  },
+  {
+    "text": "All right, so what can access this guy?",
+    "startTime": "3:39",
+    "startSeconds": 219
+  },
+  {
+    "text": "This.",
+    "startTime": "3:44",
+    "startSeconds": 224
+  },
+  {
+    "text": "Ah, ok, your phone.",
+    "startTime": "3:45",
+    "startSeconds": 225
+  },
+  {
+    "text": "So now I am able to access my system from my phone or basically any internet connection.",
+    "startTime": "3:47",
+    "startSeconds": 227
+  },
+  {
+    "text": "It's awesome.",
+    "startTime": "3:57",
+    "startSeconds": 237
+  },
+  {
+    "text": "How very cool.",
+    "startTime": "3:58",
+    "startSeconds": 238
+  },
+  {
+    "text": "All right, well, let's say that",
+    "startTime": "3:59",
+    "startSeconds": 239
+  },
+  {
+    "text": "I wanted to actually replicate what",
+    "startTime": "4:01",
+    "startSeconds": 241
+  },
+  {
+    "text": "you've done here and build it.",
+    "startTime": "4:02",
+    "startSeconds": 242
+  },
+  {
+    "text": "I'm gonna ask you about this server itself. What are the system requirements?",
+    "startTime": "4:04",
+    "startSeconds": 244
+  },
+  {
+    "text": "So let's start with RAM. How much RAM do I need for this?",
+    "startTime": "4:08",
+    "startSeconds": 248
+  },
+  {
+    "text": "I would recommend at least 8 gigabytes.",
+    "startTime": "4:11",
+    "startSeconds": 251
+  },
+  {
+    "text": "8 gigabytes.",
+    "startTime": "4:14",
+    "startSeconds": 254
+  },
+  {
+    "text": "That's not much.",
+    "startTime": "4:16",
+    "startSeconds": 256
+  },
+  {
+    "text": "How much do you actually use?",
+    "startTime": "4:17",
+    "startSeconds": 257
+  },
+  {
+    "text": "Well, I'm using 96",
+    "startTime": "4:17",
+    "startSeconds": 257
+  },
+  {
+    "text": "OK, slightly above the minimum requirement.",
+    "startTime": "4:20",
+    "startSeconds": 260
+  },
+  {
+    "text": "Absolutely. All right, so let's RAM. What about storage?",
+    "startTime": "4:22",
+    "startSeconds": 262
+  },
+  {
+    "text": "Storage, I would recommend having at least one terabyte.",
+    "startTime": "4:26",
+    "startSeconds": 266
+  },
+  {
+    "text": "OK, because some of these models can get pretty big.",
+    "startTime": "4:29",
+    "startSeconds": 269
+  },
+  {
+    "text": "Yes, they can.",
+    "startTime": "4:32",
+    "startSeconds": 272
+  },
+  {
+    "text": "Now, these models come in different sizes. So what's parameter count sizes we're using with Granite and Llama?",
+    "startTime": "4:32",
+    "startSeconds": 272
+  },
+  {
+    "text": "I'm using anywhere between 7 and",
+    "startTime": "4:39",
+    "startSeconds": 279
+  },
+  {
+    "text": "14 billion parameters.",
+    "startTime": "4:41",
+    "startSeconds": 281
+  },
+  {
+    "text": "7 to 14 billion, okay.",
+    "startTime": "4:43",
+    "startSeconds": 283
+  },
+  {
+    "text": "I have run up to 70.",
+    "startTime": "4:46",
+    "startSeconds": 286
+  },
+  {
+    "text": "70?",
+    "startTime": "4:48",
+    "startSeconds": 288
+  },
+  {
+    "text": "How did that work out?",
+    "startTime": "4:49",
+    "startSeconds": 289
+  },
+  {
+    "text": "Slow.",
+    "startTime": "4:50",
+    "startSeconds": 290
+  },
+  {
+    "text": "I can imagine.",
+    "startTime": "4:51",
+    "startSeconds": 291
+  },
+  {
+    "text": "OK.",
+    "startTime": "4:52",
+    "startSeconds": 292
+  },
+  {
+    "text": "So the other thing that people",
+    "startTime": "4:53",
+    "startSeconds": 293
+  },
+  {
+    "text": "often talk about in terms of system requirements are GPUs.",
+    "startTime": "4:55",
+    "startSeconds": 295
+  },
+  {
+    "text": "So should I be using GPUs for this?",
+    "startTime": "4:59",
+    "startSeconds": 299
+  },
+  {
+    "text": "Well. My initial configuration.",
+    "startTime": "5:02",
+    "startSeconds": 302
+  },
+  {
+    "text": "I had no GPUs,",
+    "startTime": "5:04",
+    "startSeconds": 304
+  },
+  {
+    "text": "but",
+    "startTime": "5:06",
+    "startSeconds": 306
+  },
+  {
+    "text": "more GPUs the better",
+    "startTime": "5:08",
+    "startSeconds": 308
+  },
+  {
+    "text": "The more, the better, right.",
+    "startTime": "5:09",
+    "startSeconds": 309
+  },
+  {
+    "text": "So, we've got this self-contained",
+    "startTime": "5:11",
+    "startSeconds": 311
+  },
+  {
+    "text": "solution now, and it's got me thinking that when I talk to a large language model,",
+    "startTime": "5:13",
+    "startSeconds": 313
+  },
+  {
+    "text": "I often want to provide it documentation in order to chat with that document.",
+    "startTime": "5:17",
+    "startSeconds": 317
+  },
+  {
+    "text": "Absolutely.",
+    "startTime": "5:21",
+    "startSeconds": 321
+  },
+  {
+    "text": "Now, if I'm using a cloud-based model, I need",
+    "startTime": "5:22",
+    "startSeconds": 322
+  },
+  {
+    "text": "to take my document and upload it to somebody else's server so that the AI model can see it.",
+    "startTime": "5:24",
+    "startSeconds": 324
+  },
+  {
+    "text": "I take it that you have a better solution to that.",
+    "startTime": "5:29",
+    "startSeconds": 329
+  },
+  {
+    "text": "I do. I use my own NAS system.",
+    "startTime": "5:31",
+    "startSeconds": 331
+  },
+  {
+    "text": "Okay, so you have a NAS server setup.",
+    "startTime": "5:34",
+    "startSeconds": 334
+  },
+  {
+    "text": "And from that NAS system, I pull in my documents,",
+    "startTime": "5:37",
+    "startSeconds": 337
+  },
+  {
+    "text": "pull them into the open web UI, and chat away. And I'm doing it every single day.",
+    "startTime": "5:40",
+    "startSeconds": 340
+  },
+  {
+    "text": "So Robert, the other thing I like",
+    "startTime": "5:46",
+    "startSeconds": 346
+  },
+  {
+    "text": "about this architecture is at least",
+    "startTime": "5:48",
+    "startSeconds": 348
+  },
+  {
+    "text": "to my mind, this looks like a really secure solution.",
+    "startTime": "5:49",
+    "startSeconds": 349
+  },
+  {
+    "text": "Hold the phone there just a second, nice job AI guy, but let's really look at the security on this Robert.",
+    "startTime": "5:52",
+    "startSeconds": 352
+  },
+  {
+    "text": "First of all, I think it is a good job here and I think you've put in some features that will help preserve security and privacy,",
+    "startTime": "5:58",
+    "startSeconds": 358
+  },
+  {
+    "text": "but let's take a look at what some of those are because what you don't want is your data is our data,",
+    "startTime": "6:06",
+    "startSeconds": 366
+  },
+  {
+    "text": "we want your data is your data, not your data is our business model.",
+    "startTime": "6:13",
+    "startSeconds": 373
+  },
+  {
+    "text": "So how do we make sure that we're not falling into the same trap",
+    "startTime": "6:17",
+    "startSeconds": 377
+  },
+  {
+    "text": "that a lot of those other chatbots that are free apps on the app store that you can download aren't falling into.",
+    "startTime": "6:21",
+    "startSeconds": 381
+  },
+  {
+    "text": "Well, first off, I put it on my own hardware.",
+    "startTime": "6:28",
+    "startSeconds": 388
+  },
+  {
+    "text": "Yeah, exactly.",
+    "startTime": "6:30",
+    "startSeconds": 390
+  },
+  {
+    "text": "So I see that very clearly. It's on your hardware, so you control the infrastructure.",
+    "startTime": "6:32",
+    "startSeconds": 392
+  },
+  {
+    "text": "You can decide when to turn the thing on and off.",
+    "startTime": "6:37",
+    "startSeconds": 397
+  },
+  {
+    "text": "It's your data on your system.",
+    "startTime": "6:39",
+    "startSeconds": 399
+  },
+  {
+    "text": "So that's the first point.",
+    "startTime": "6:41",
+    "startSeconds": 401
+  },
+  {
+    "text": "Absolutely.",
+    "startTime": "6:43",
+    "startSeconds": 403
+  },
+  {
+    "text": "Yeah, and then also it looks like that you included a private data store.",
+    "startTime": "6:44",
+    "startSeconds": 404
+  },
+  {
+    "text": "So now it's not your information is training somebody else's model,",
+    "startTime": "6:49",
+    "startSeconds": 409
+  },
+  {
+    "text": "and you're pulling information that might be poisoned or anything like that.",
+    "startTime": "6:53",
+    "startSeconds": 413
+  },
+  {
+    "text": "You have some control over that as well.",
+    "startTime": "6:57",
+    "startSeconds": 417
+  },
+  {
+    "text": "Yes, and interesting enough, that's what's actually got me started on this whole path.",
+    "startTime": "6:59",
+    "startSeconds": 419
+  },
+  {
+    "text": "By having a NAS, I wanted my data to be my data.",
+    "startTime": "7:03",
+    "startSeconds": 423
+  },
+  {
+    "text": "And data is the real core of an AI system anyway, so that makes a lot of sense.",
+    "startTime": "7:07",
+    "startSeconds": 427
+  },
+  {
+    "text": "Also, I noticed some open source components.",
+    "startTime": "7:11",
+    "startSeconds": 431
+  },
+  {
+    "text": "So you've got one right here, you've got open source models here as well.",
+    "startTime": "7:14",
+    "startSeconds": 434
+  },
+  {
+    "text": "And that's a good idea, because instead of proprietary stuff, in these cases, at least we have an idea",
+    "startTime": "7:18",
+    "startSeconds": 438
+  },
+  {
+    "text": "that the worldwide open source community has had a chance to look at this and vet it.",
+    "startTime": "7:25",
+    "startSeconds": 445
+  },
+  {
+    "text": "Now granted, there's a lot of information to be vetted, so it's not trivial, no guarantees.",
+    "startTime": "7:29",
+    "startSeconds": 449
+  },
+  {
+    "text": "Maybe it's a little more secure because more people have had a chance to look at what's actually happening under the covers.",
+    "startTime": "7:35",
+    "startSeconds": 455
+  },
+  {
+    "text": "Agreed.",
+    "startTime": "7:41",
+    "startSeconds": 461
+  },
+  {
+    "text": "And then also I notice you want to be able to access this from anywhere,",
+    "startTime": "7:41",
+    "startSeconds": 461
+  },
+  {
+    "text": "which is one of the really cool aspects and we want to make sure that that access is also secured.",
+    "startTime": "7:46",
+    "startSeconds": 466
+  },
+  {
+    "text": "So I see you put a VPN over",
+    "startTime": "7:51",
+    "startSeconds": 471
+  },
+  {
+    "text": "here so that you can connect your phone in and do that securely.",
+    "startTime": "7:53",
+    "startSeconds": 473
+  },
+  {
+    "text": "And how are you making sure everybody else in the world can't connect their phone in here as well?",
+    "startTime": "7:57",
+    "startSeconds": 477
+  },
+  {
+    "text": "multi-factor.",
+    "startTime": "8:02",
+    "startSeconds": 482
+  },
+  {
+    "text": "multi-factor authentication, and now we know it's really you,",
+    "startTime": "8:04",
+    "startSeconds": 484
+  },
+  {
+    "text": "and we know the information is exchanged in a secure way.",
+    "startTime": "8:08",
+    "startSeconds": 488
+  },
+  {
+    "text": "So a lot of features that you put in here, I think it's a nice job.",
+    "startTime": "8:11",
+    "startSeconds": 491
+  },
+  {
+    "text": "Thank you.",
+    "startTime": "8:14",
+    "startSeconds": 494
+  },
+  {
+    "text": "Yeah. And one other thing to think about, because these components, we really don't know what all of them would do,",
+    "startTime": "8:15",
+    "startSeconds": 495
+  },
+  {
+    "text": "it is still possible that one of these things could be",
+    "startTime": "8:21",
+    "startSeconds": 501
+  },
+  {
+    "text": "phoning home and sending data to the mothership, even without your knowledge.",
+    "startTime": "8:25",
+    "startSeconds": 505
+  },
+  {
+    "text": "So one of the things that might be useful is put a network tap on your home network,",
+    "startTime": "8:30",
+    "startSeconds": 510
+  },
+  {
+    "text": "and then that way you could see if there are any outbound connections from this,",
+    "startTime": "8:33",
+    "startSeconds": 513
+  },
+  {
+    "text": "because there shouldn't be based upon the way you've built that.",
+    "startTime": "8:37",
+    "startSeconds": 517
+  },
+  {
+    "text": "Well, that's a really great idea,",
+    "startTime": "8:40",
+    "startSeconds": 520
+  },
+  {
+    "text": "Jeff. I'm going to have to look into that.",
+    "startTime": "8:41",
+    "startSeconds": 521
+  },
+  {
+    "text": "Okay, there you go with the improvements for version two.",
+    "startTime": "8:42",
+    "startSeconds": 522
+  },
+  {
+    "text": "Hey, Jeff.",
+    "startTime": "8:45",
+    "startSeconds": 525
+  },
+  {
+    "text": "Oh, hey, Martin. Nice to have you back.",
+    "startTime": "8:46",
+    "startSeconds": 526
+  },
+  {
+    "text": "Yeah, it seems like Robert's really done some nice work with this, don't you think?",
+    "startTime": "8:49",
+    "startSeconds": 529
+  },
+  {
+    "text": "For sure. It just goes to show that you can now run sophisticated",
+    "startTime": "8:52",
+    "startSeconds": 532
+  },
+  {
+    "text": "AI models on a home computer to build a personal chatbot.",
+    "startTime": "8:56",
+    "startSeconds": 536
+  },
+  {
+    "text": "Yeah. Something like that would have been science fiction just a few short years ago,",
+    "startTime": "9:00",
+    "startSeconds": 540
+  },
+  {
+    "text": "but now it's available to anyone who really wants to spend the time to assemble it all.",
+    "startTime": "9:05",
+    "startSeconds": 545
+  },
+  {
+    "text": "Right. and you'd like. So much more about a technology by really digging into it and getting your hands dirty with it.",
+    "startTime": "9:08",
+    "startSeconds": 548
+  },
+  {
+    "text": "Yeah, and by the looks of your hands, you've been doing a lot of digging because those things are filthy,",
+    "startTime": "9:15",
+    "startSeconds": 555
+  },
+  {
+    "text": "and the added bonus is that you end up with a better assurance that your data is your data",
+    "startTime": "9:19",
+    "startSeconds": 559
+  },
+  {
+    "text": "because you have more control and you can ensure that privacy is protected in the process.",
+    "startTime": "9:25",
+    "startSeconds": 565
+  },
+  {
+    "text": "Spoken like a true security guy that you are, Jeff.",
+    "startTime": "9:29",
+    "startSeconds": 569
+  },
+  {
+    "text": "All right, so you've seen Robert's approach.",
+    "startTime": "9:34",
+    "startSeconds": 574
+  },
+  {
+    "text": "So how would you, dear viewer, do anything differently to make the system even better?",
+    "startTime": "9:37",
+    "startSeconds": 577
+  },
+  {
+    "text": "Let us know in the comments.",
+    "startTime": "9:42",
+    "startSeconds": 582
   }
 ]
