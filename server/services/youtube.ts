@@ -165,12 +165,74 @@ export async function getYoutubeTranscript(videoId: string) {
     const scriptContent = $('script').map((i, el) => $(el).html()).get().join('');
     console.log(`[TRANSCRIPT] Extracted script content, length: ${scriptContent.length}`);
     
-    // Look for the captionTracks data in the script content
-    const captionRegex = /"captionTracks":\s*(\[.*?\])/;
-    const match = scriptContent.match(captionRegex);
+    // Try multiple regex patterns for different YouTube page structures
+    // YouTube changes their structure frequently, so we need multiple approaches
+    const regexPatterns = [
+      // Original pattern
+      /"captionTracks":\s*(\[.*?\])/,
+      // Alternative patterns for newer YouTube formats
+      /"playerCaptionsTracklistRenderer":\s*\{"captionTracks":\s*(\[.*?\])/,
+      /"captionTracks":\s*(\[.*?\]),"translationLanguages/,
+      /{"captionTracks":(\[.*?\]),"audioTracks/,
+      /"captions":\s*\{\s*"playerCaptionsTracklistRenderer":\s*\{\s*"captionTracks":\s*(\[.*?\])/,
+      /"captions":\{"playerCaptionsRenderer":{"baseUrl":"(https:\/\/www\.youtube\.com\/api\/timedtext.*?)"/
+    ];
     
-    if (!match || !match[1]) {
-      console.error('[TRANSCRIPT] No caption tracks found in script content');
+    // Try each pattern until we find a match
+    let match = null;
+    let matchedPattern = null;
+    
+    for (const pattern of regexPatterns) {
+      const result = scriptContent.match(pattern);
+      if (result && (result[1] || result[0])) {
+        match = result;
+        matchedPattern = pattern.toString();
+        console.log(`[TRANSCRIPT] Found caption data with pattern: ${matchedPattern.substring(0, 50)}...`);
+        break;
+      }
+    }
+    
+    if (!match) {
+      // Try one more approach - look for timedtext URL directly
+      const timedTextPattern = /\/api\/timedtext[^"]+/;
+      const timedTextMatch = scriptContent.match(timedTextPattern);
+      
+      if (timedTextMatch) {
+        console.log(`[TRANSCRIPT] Found timedtext URL directly: ${timedTextMatch[0].substring(0, 50)}...`);
+        // Construct a direct URL to the transcript
+        const baseUrl = `https://www.youtube.com${timedTextMatch[0].replace(/\\u0026/g, '&')}`;
+        
+        try {
+          console.log(`[TRANSCRIPT] Attempting to fetch transcript directly from: ${baseUrl.substring(0, 100)}...`);
+          const transcriptResponse = await axios.get(baseUrl);
+          const transcriptData = transcriptResponse.data;
+          
+          // If we got data, parse it
+          if (transcriptData) {
+            console.log(`[TRANSCRIPT] Successfully fetched transcript XML directly, length: ${transcriptData.length}`);
+            const transcriptItems = parseTranscriptXml(transcriptData);
+            
+            if (transcriptItems.length > 0) {
+              console.log(`[TRANSCRIPT] Successfully parsed ${transcriptItems.length} transcript items from direct URL`);
+              
+              // Format the transcript with timestamps
+              const formattedTranscript = transcriptItems.map((item, index) => {
+                const timestamp = formatTimestamp(item.start);
+                return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
+                  <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
+                  <span class="transcript-text">${item.text}</span>
+                </p>`;
+              }).join('');
+              
+              return formattedTranscript;
+            }
+          }
+        } catch (error) {
+          console.error('[TRANSCRIPT] Failed to fetch transcript from direct URL:', error);
+        }
+      }
+      
+      console.error('[TRANSCRIPT] No caption tracks found in script content with any pattern');
       throw new Error('No captions available for this video. The video might not have subtitles.');
     }
     
