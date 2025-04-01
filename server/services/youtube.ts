@@ -5,6 +5,7 @@ import { generateSummary, isOpenAIConfigured } from './openai';
 import { log } from '../vite';
 import * as cheerio from 'cheerio';
 import { createLogger } from '../services/logger';
+import fs from 'fs';
 
 // Create a dedicated logger for YouTube service
 const youtubeLogger = createLogger('youtube');
@@ -136,75 +137,192 @@ function getBestThumbnail(thumbnails: any): string {
 // Function to get transcript from YouTube video using direct URL approach
 export async function getYoutubeTranscript(videoId: string) {
   try {
-    console.log(`Fetching transcript for video ID: ${videoId}`);
+    // Initialize enhanced logging
+    youtubeLogger.info(`[TRANSCRIPT] Starting transcript extraction for video ID: ${videoId}`);
+    
+    // Create a log directory if it doesn't exist
+    const logDir = './logs/transcript';
+    try {
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+    } catch (mkdirError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error creating log directory: ${mkdirError}`);
+    }
     
     // Extract the YouTube ID if a full URL was provided
     const extractedId = extractYoutubeId(videoId);
     if (!extractedId) {
+      youtubeLogger.error(`[TRANSCRIPT] Invalid YouTube URL or ID: ${videoId}`);
       throw new Error('Invalid YouTube URL or ID');
     }
     
+    youtubeLogger.info(`[TRANSCRIPT] Extracted YouTube ID: ${extractedId}`);
+    
     // Direct fetch approach using the YouTube transcript endpoint
     // Always use the extracted ID for consistency
-    const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    youtubeLogger.info(`[TRANSCRIPT] Fetching YouTube page for video: ${extractedId}`);
+    let response;
+    try {
+      response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      youtubeLogger.info(`[TRANSCRIPT] Successfully fetched YouTube page, status: ${response.status}`);
+    } catch (error: any) {
+      youtubeLogger.error(`[TRANSCRIPT] Error fetching YouTube page: ${error}`);
+      // Log more details about the error
+      if (error.response) {
+        youtubeLogger.error(`[TRANSCRIPT] Response status: ${error.response.status}`);
+        youtubeLogger.error(`[TRANSCRIPT] Response headers: ${JSON.stringify(error.response.headers)}`);
       }
-    });
+      throw new Error(`Network error while fetching YouTube page: ${error.message}`);
+    }
+    
     const html = response.data;
     
+    // Save a sample of the HTML for debugging
+    try {
+      const htmlSample = html.substring(0, 5000) + '... [truncated]';
+      fs.writeFileSync(`${logDir}/youtube-page-${extractedId}.txt`, htmlSample);
+      youtubeLogger.info(`[TRANSCRIPT] Saved HTML sample to ${logDir}/youtube-page-${extractedId}.txt`);
+    } catch (writeError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error saving HTML sample: ${writeError}`);
+    }
+    
     // Use cheerio to parse the HTML
+    youtubeLogger.info(`[TRANSCRIPT] Parsing HTML with cheerio`);
     const $ = cheerio.load(html);
     
     // Extract the transcript data using patterns found in YouTube pages
+    youtubeLogger.info(`[TRANSCRIPT] Extracting script content from page`);
     const scriptContent = $('script').map((i, el) => $(el).html()).get().join('');
     
+    // Save script content for debugging
+    try {
+      const scriptSample = scriptContent.substring(0, 10000) + '... [truncated]';
+      fs.writeFileSync(`${logDir}/script-content-${extractedId}.txt`, scriptSample);
+      youtubeLogger.info(`[TRANSCRIPT] Saved script content sample to ${logDir}/script-content-${extractedId}.txt`);
+    } catch (writeError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error saving script content sample: ${writeError}`);
+    }
+    
     // Look for the captionTracks data in the script content
+    youtubeLogger.info(`[TRANSCRIPT] Searching for captionTracks pattern in script content`);
     const captionRegex = /"captionTracks":\s*(\[.*?\])/;
     const match = scriptContent.match(captionRegex);
     
     if (!match || !match[1]) {
+      youtubeLogger.error(`[TRANSCRIPT] No caption tracks found in script content`);
+      
+      // Try to log some context around where we would expect to find captions
+      const contextSearch = scriptContent.indexOf('caption');
+      if (contextSearch > -1) {
+        const contextStart = Math.max(0, contextSearch - 200);
+        const contextEnd = Math.min(scriptContent.length, contextSearch + 200);
+        const context = scriptContent.substring(contextStart, contextEnd);
+        youtubeLogger.info(`[TRANSCRIPT] Context around 'caption' keyword: ${context}`);
+      }
+      
       throw new Error('No captions available for this video. The video might not have subtitles.');
     }
     
+    youtubeLogger.info(`[TRANSCRIPT] Found captionTracks pattern, extracting data`);
+    
     // Parse the JSON data
     const captionTracksJson = match[1].replace(/\\"/g, '"').replace(/\\u0026/g, '&');
+    youtubeLogger.info(`[TRANSCRIPT] Extracted captionTracks JSON: ${captionTracksJson.substring(0, 200)}...`);
     
     try {
+      youtubeLogger.info(`[TRANSCRIPT] Parsing captionTracks JSON`);
       const captionTracks = JSON.parse(captionTracksJson);
       
       if (captionTracks.length === 0) {
+        youtubeLogger.error(`[TRANSCRIPT] Caption tracks array is empty`);
         throw new Error('No caption tracks available for this video.');
       }
       
+      youtubeLogger.info(`[TRANSCRIPT] Found ${captionTracks.length} caption tracks`);
+      
+      // Log available tracks for debugging
+      captionTracks.forEach((track: any, index: number) => {
+        youtubeLogger.info(`[TRANSCRIPT] Track ${index + 1}: Language=${track.languageCode || track.language || 'unknown'}, Name=${track.name?.simpleText || 'unnamed'}`);
+      });
+      
       // Get the first available track (preferably English)
+      youtubeLogger.info(`[TRANSCRIPT] Selecting preferred caption track (English if available)`);
       let selectedTrack = captionTracks.find((track: any) => 
         track.languageCode === 'en' || track.language === 'English'
       );
       
       // If no English track, just use the first one
       if (!selectedTrack) {
+        youtubeLogger.info(`[TRANSCRIPT] No English track found, using first available track`);
         selectedTrack = captionTracks[0];
+      } else {
+        youtubeLogger.info(`[TRANSCRIPT] Selected English track`);
       }
       
       if (!selectedTrack || !selectedTrack.baseUrl) {
+        youtubeLogger.error(`[TRANSCRIPT] Selected track has no baseUrl`);
         throw new Error('Could not find a valid caption track.');
       }
       
+      // Log the selected track details
+      youtubeLogger.info(`[TRANSCRIPT] Selected track details: ${JSON.stringify({
+        languageCode: selectedTrack.languageCode,
+        language: selectedTrack.language,
+        name: selectedTrack.name?.simpleText,
+        baseUrlLength: selectedTrack.baseUrl.length
+      })}`);
+      
+      // Save baseUrl for debugging
+      try {
+        fs.writeFileSync(`${logDir}/baseUrl-${extractedId}.txt`, selectedTrack.baseUrl);
+        youtubeLogger.info(`[TRANSCRIPT] Saved baseUrl to ${logDir}/baseUrl-${extractedId}.txt`);
+      } catch (writeError) {
+        youtubeLogger.error(`[TRANSCRIPT] Error saving baseUrl: ${writeError}`);
+      }
+      
       // Fetch the transcript XML
-      const transcriptResponse = await axios.get(selectedTrack.baseUrl);
+      youtubeLogger.info(`[TRANSCRIPT] Fetching transcript XML from baseUrl`);
+      let transcriptResponse;
+      try {
+        transcriptResponse = await axios.get(selectedTrack.baseUrl);
+        youtubeLogger.info(`[TRANSCRIPT] Successfully fetched transcript XML, status: ${transcriptResponse.status}`);
+      } catch (error: any) {
+        youtubeLogger.error(`[TRANSCRIPT] Error fetching transcript XML: ${error}`);
+        throw new Error(`Failed to fetch transcript XML: ${error.message}`);
+      }
+      
       const transcriptData = transcriptResponse.data;
       
+      // Save transcript data for debugging
+      try {
+        fs.writeFileSync(`${logDir}/transcript-xml-${extractedId}.txt`, typeof transcriptData === 'string' ? transcriptData : JSON.stringify(transcriptData));
+        youtubeLogger.info(`[TRANSCRIPT] Saved transcript XML to ${logDir}/transcript-xml-${extractedId}.txt`);
+      } catch (writeError) {
+        youtubeLogger.error(`[TRANSCRIPT] Error saving transcript XML: ${writeError}`);
+      }
+      
       // Parse the transcript XML data
+      youtubeLogger.info(`[TRANSCRIPT] Parsing transcript XML data`);
       const transcriptItems = parseTranscriptXml(transcriptData);
       
       if (transcriptItems.length === 0) {
+        youtubeLogger.error(`[TRANSCRIPT] Transcript data was parsed but no items were found`);
         throw new Error('Transcript data was empty or could not be parsed.');
       }
       
-      console.log(`Successfully parsed ${transcriptItems.length} transcript items`);
+      youtubeLogger.info(`[TRANSCRIPT] Successfully parsed ${transcriptItems.length} transcript items`);
+      
+      // Log a sample of transcript items
+      const sampleItems = transcriptItems.slice(0, 3);
+      youtubeLogger.info(`[TRANSCRIPT] Sample of transcript items: ${JSON.stringify(sampleItems)}`);
       
       // Format the transcript with timestamps
+      youtubeLogger.info(`[TRANSCRIPT] Formatting transcript with timestamps`);
       const formattedTranscript = transcriptItems.map((item, index) => {
         const timestamp = formatTimestamp(item.start);
         // Add data attributes for citation functionality
@@ -214,20 +332,31 @@ export async function getYoutubeTranscript(videoId: string) {
         </p>`;
       }).join('');
       
+      youtubeLogger.info(`[TRANSCRIPT] Successfully formatted transcript, length: ${formattedTranscript.length} characters`);
+      
+      // Log a sample of the formatted transcript
+      const formattedSample = formattedTranscript.substring(0, 500) + '... [truncated]';
+      youtubeLogger.info(`[TRANSCRIPT] Formatted transcript sample: ${formattedSample}`);
+      
       return formattedTranscript;
       
     } catch (parseError) {
-      console.error('Error parsing caption tracks:', parseError);
+      youtubeLogger.error(`[TRANSCRIPT] Error parsing caption tracks: ${parseError}`);
+      if (parseError instanceof Error) {
+        youtubeLogger.error(`[TRANSCRIPT] Parse error details: ${parseError.stack}`);
+      }
       throw new Error('Failed to parse caption data.');
     }
     
   } catch (error) {
-    console.error('Error fetching YouTube transcript:', error);
+    youtubeLogger.error(`[TRANSCRIPT] Error in getYoutubeTranscript: ${error}`);
     
     if (error instanceof Error) {
+      youtubeLogger.error(`[TRANSCRIPT] Error stack: ${error.stack}`);
+      
       // Provide more specific error messages
       if (error.message.includes('captions') || error.message.includes('subtitles')) {
-        throw new Error('This video does not have captions available. Try a different video.');
+        return null; // Return null instead of throwing for caption-related errors
       } else if (error.message.includes('network')) {
         throw new Error('Network error while fetching transcript. Please try again later.');
       } else if (error.message.includes('language')) {
@@ -235,7 +364,7 @@ export async function getYoutubeTranscript(videoId: string) {
       }
     }
     
-    throw new Error('Failed to fetch transcript. The video may not have captions available.');
+    return null; // Return null instead of throwing to avoid breaking the flow
   }
 }
 
