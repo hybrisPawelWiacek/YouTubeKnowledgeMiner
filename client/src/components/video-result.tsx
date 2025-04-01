@@ -132,8 +132,21 @@ export function VideoResult({ video }: VideoResultProps) {
         
         return result;
       } catch (err) {
-        console.error('❌ ERROR SAVING VIDEO:', err);
-        throw err;
+        // Improved error logging with more details
+        console.error('❌ ERROR SAVING VIDEO:', {
+          error: err,
+          errorType: typeof err,
+          errorJson: typeof err === 'object' ? JSON.stringify(err) : String(err),
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined
+        });
+        
+        // If error is empty object, convert to meaningful error
+        if (err && typeof err === 'object' && Object.keys(err).length === 0) {
+          throw new Error('Failed to save video - empty error object returned from server');
+        } else {
+          throw err;
+        }
       }
     },
     onSuccess: (data) => {
@@ -156,10 +169,29 @@ export function VideoResult({ video }: VideoResultProps) {
       }, 500); // Short delay to allow toast to show
     },
     onError: (error: any) => {
-      console.error('Error in saveVideo mutation:', error);
+      // Improved error logging with more context
+      console.error('Error in saveVideo mutation:', {
+        error,
+        errorType: typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorJson: typeof error === 'object' ? JSON.stringify(error, null, 2) : String(error)
+      });
+      
+      // If error is an empty object, use a more helpful message
+      let errorMessage = "Failed to save video";
+      
+      if (error) {
+        if (typeof error === 'object' && Object.keys(error).length === 0) {
+          errorMessage = "An unexpected error occurred while saving the video. Please try again.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error?.message || "Failed to save video",
+        title: "Error Saving Video",
+        description: errorMessage,
         variant: "destructive",
       });
     },
