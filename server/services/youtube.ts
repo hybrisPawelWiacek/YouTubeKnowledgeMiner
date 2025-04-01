@@ -133,7 +133,7 @@ function getBestThumbnail(thumbnails: any): string {
   return 'https://via.placeholder.com/480x360?text=No+Thumbnail';
 }
 
-// Function to get transcript from YouTube video using the youtube-transcript-api package
+// Function to get transcript from YouTube video using direct URL approach
 export async function getYoutubeTranscript(videoId: string) {
   try {
     console.log(`Fetching transcript for video ID: ${videoId}`);
@@ -144,26 +144,82 @@ export async function getYoutubeTranscript(videoId: string) {
       throw new Error('Invalid YouTube URL or ID');
     }
     
-    // Use the youtube-transcript-api package to fetch the transcript
-    const transcriptItems = await getYoutubeTranscriptApi(extractedId);
+    // Direct fetch approach using the YouTube transcript endpoint
+    // Always use the extracted ID for consistency
+    const response = await axios.get(`https://www.youtube.com/watch?v=${extractedId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    const html = response.data;
     
-    if (!transcriptItems || transcriptItems.length === 0) {
+    // Use cheerio to parse the HTML
+    const $ = cheerio.load(html);
+    
+    // Extract the transcript data using patterns found in YouTube pages
+    const scriptContent = $('script').map((i, el) => $(el).html()).get().join('');
+    
+    // Look for the captionTracks data in the script content
+    const captionRegex = /"captionTracks":\s*(\[.*?\])/;
+    const match = scriptContent.match(captionRegex);
+    
+    if (!match || !match[1]) {
       throw new Error('No captions available for this video. The video might not have subtitles.');
     }
     
-    console.log(`Successfully retrieved ${transcriptItems.length} transcript items using youtube-transcript-api`);
+    // Parse the JSON data
+    const captionTracksJson = match[1].replace(/\\"/g, '"').replace(/\\u0026/g, '&');
     
-    // Format the transcript with timestamps
-    const formattedTranscript = transcriptItems.map((item, index) => {
-      const timestamp = formatTimestamp(item.start);
-      // Add data attributes for citation functionality
-      return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
-        <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
-        <span class="transcript-text">${item.text}</span>
-      </p>`;
-    }).join('');
-    
-    return formattedTranscript;
+    try {
+      const captionTracks = JSON.parse(captionTracksJson);
+      
+      if (captionTracks.length === 0) {
+        throw new Error('No caption tracks available for this video.');
+      }
+      
+      // Get the first available track (preferably English)
+      let selectedTrack = captionTracks.find((track: any) => 
+        track.languageCode === 'en' || track.language === 'English'
+      );
+      
+      // If no English track, just use the first one
+      if (!selectedTrack) {
+        selectedTrack = captionTracks[0];
+      }
+      
+      if (!selectedTrack || !selectedTrack.baseUrl) {
+        throw new Error('Could not find a valid caption track.');
+      }
+      
+      // Fetch the transcript XML
+      const transcriptResponse = await axios.get(selectedTrack.baseUrl);
+      const transcriptData = transcriptResponse.data;
+      
+      // Parse the transcript XML data
+      const transcriptItems = parseTranscriptXml(transcriptData);
+      
+      if (transcriptItems.length === 0) {
+        throw new Error('Transcript data was empty or could not be parsed.');
+      }
+      
+      console.log(`Successfully parsed ${transcriptItems.length} transcript items`);
+      
+      // Format the transcript with timestamps
+      const formattedTranscript = transcriptItems.map((item, index) => {
+        const timestamp = formatTimestamp(item.start);
+        // Add data attributes for citation functionality
+        return `<p class="mb-3 transcript-line" data-timestamp="${item.start}" data-duration="${item.duration}" data-index="${index}">
+          <span class="text-gray-400 timestamp-marker" data-seconds="${item.start}">[${timestamp}]</span> 
+          <span class="transcript-text">${item.text}</span>
+        </p>`;
+      }).join('');
+      
+      return formattedTranscript;
+      
+    } catch (parseError) {
+      console.error('Error parsing caption tracks:', parseError);
+      throw new Error('Failed to parse caption data.');
+    }
     
   } catch (error) {
     console.error('Error fetching YouTube transcript:', error);
