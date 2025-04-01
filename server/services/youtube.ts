@@ -7,6 +7,7 @@ import * as cheerio from 'cheerio';
 import { createLogger } from '../services/logger';
 import fs from 'fs';
 import * as child_process from 'child_process';
+import { extractYoutubeTranscript as puppeteerExtractTranscript } from '../../scripts/puppeteer-transcript';
 
 // Create a dedicated logger for YouTube service
 const youtubeLogger = createLogger('youtube');
@@ -260,7 +261,20 @@ export async function getYoutubeTranscript(videoId: string) {
       
       // Try the legacy method as a fallback
       youtubeLogger.info(`[TRANSCRIPT] Attempting to use legacy method as fallback`);
-      return getLegacyYoutubeTranscript(extractedId);
+      try {
+        const legacyTranscript = await getLegacyYoutubeTranscript(extractedId);
+        if (legacyTranscript) {
+          return legacyTranscript;
+        }
+      } catch (legacyError) {
+        youtubeLogger.error(`[TRANSCRIPT] Legacy method failed: ${legacyError}`);
+        // Legacy method failed, we'll try Puppeteer below
+      }
+      
+      // If we reach here, either the legacy method failed or returned null
+      // Try the Puppeteer method as a final fallback
+      youtubeLogger.info(`[TRANSCRIPT] Attempting to use Puppeteer method as final fallback`);
+      return await getPuppeteerYoutubeTranscript(extractedId);
     }
     
   } catch (error) {
@@ -279,6 +293,70 @@ export async function getYoutubeTranscript(videoId: string) {
       }
     }
     
+    return null; // Return null instead of throwing to avoid breaking the flow
+  }
+}
+
+/**
+ * Puppeteer-based method for extracting YouTube transcripts
+ * This uses browser automation to interact with YouTube's UI and extract transcripts
+ */
+async function getPuppeteerYoutubeTranscript(videoId: string): Promise<string | null> {
+  try {
+    youtubeLogger.info(`[TRANSCRIPT] Using Puppeteer method for video ID: ${videoId}`);
+    const logDir = './logs/transcript';
+    
+    // Ensure log directory exists
+    try {
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+    } catch (mkdirError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error creating log directory: ${mkdirError}`);
+    }
+    
+    // Use the Puppeteer-based extractYoutubeTranscript function
+    youtubeLogger.info(`[TRANSCRIPT] Starting Puppeteer extraction for video: ${videoId}`);
+    const transcriptSegments = await puppeteerExtractTranscript(videoId);
+    
+    if (!transcriptSegments || transcriptSegments.length === 0) {
+      youtubeLogger.error(`[TRANSCRIPT] Puppeteer extraction returned no transcript segments`);
+      return null;
+    }
+    
+    youtubeLogger.info(`[TRANSCRIPT] Successfully extracted ${transcriptSegments.length} transcript segments with Puppeteer`);
+    
+    // Save transcript data for debugging
+    try {
+      fs.writeFileSync(`${logDir}/transcript-puppeteer-${videoId}.json`, JSON.stringify(transcriptSegments, null, 2));
+      youtubeLogger.info(`[TRANSCRIPT] Saved Puppeteer transcript data to ${logDir}/transcript-puppeteer-${videoId}.json`);
+    } catch (writeError) {
+      youtubeLogger.error(`[TRANSCRIPT] Error saving Puppeteer transcript data: ${writeError}`);
+    }
+    
+    // Format the transcript with timestamps
+    youtubeLogger.info(`[TRANSCRIPT] Formatting Puppeteer transcript with timestamps`);
+    const formattedTranscript = transcriptSegments.map((item, index) => {
+      // Add data attributes for citation functionality
+      return `<p class="mb-3 transcript-line" data-timestamp="${item.startSeconds}" data-duration="0" data-index="${index}">
+        <span class="text-gray-400 timestamp-marker" data-seconds="${item.startSeconds}">[${item.startTime}]</span> 
+        <span class="transcript-text">${item.text}</span>
+      </p>`;
+    }).join('');
+    
+    youtubeLogger.info(`[TRANSCRIPT] Successfully formatted Puppeteer transcript, length: ${formattedTranscript.length} characters`);
+    
+    // Log a sample of the formatted transcript
+    const formattedSample = formattedTranscript.substring(0, 500) + '... [truncated]';
+    youtubeLogger.info(`[TRANSCRIPT] Formatted Puppeteer transcript sample: ${formattedSample}`);
+    
+    return formattedTranscript;
+    
+  } catch (error) {
+    youtubeLogger.error(`[TRANSCRIPT] Error in Puppeteer transcript extraction: ${error}`);
+    if (error instanceof Error) {
+      youtubeLogger.error(`[TRANSCRIPT] Error stack: ${error.stack}`);
+    }
     return null; // Return null instead of throwing to avoid breaking the flow
   }
 }
